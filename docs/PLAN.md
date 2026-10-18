@@ -20,7 +20,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 2. Settings & scan (in progress)
 **Goal:** configure directories and inventory the incoming folder without touching it.
 **Done when:** validated directory settings save; a manual scan records every MP3/M4B with tags, duration, cover and chapter info, and a rescan skips unchanged files; dashboard shows last scan and counts; a TagLibSharp write-to-copy test proves M4B chapters and audio survive tagging.
-**Slices:** 04. Carried in: a layout shell with navigation and a not-found route (from slice 03).
+**Slices:** 04 (implemented). Carried in: a layout shell with navigation and a not-found route (from slice 03).
 
 ### 3. Grouping (not started)
 **Goal:** scanned files become proposed audiobook groups with confidence and evidence.
@@ -50,9 +50,9 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03).
+**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.
-**Done when:** end-to-end tests run against fixture audiobooks through scan → process; an interrupted job resumes or fails cleanly after restart; repeat scans don't duplicate processed books; Docker image documented and running on the home server.
+**Done when:** end-to-end tests run against fixture audiobooks through scan → process, including the backend suite inside the Docker image (its ffmpeg 6.1 vs dev's 9.0); an interrupted job resumes or fails cleanly after restart; repeat scans don't duplicate processed books; Docker image documented and running on the home server.
 **Slices:** none yet

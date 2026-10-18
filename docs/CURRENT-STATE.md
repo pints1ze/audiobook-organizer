@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: phase 2 start, 2026-10-18, commit 25dfc2c_
+_Updated: slice 04 review, 2026-10-18, commit 4968bf0_
 
 ## Branch
 `phase/2-settings-scan`
@@ -8,20 +8,22 @@ _Updated: phase 2 start, 2026-10-18, commit 25dfc2c_
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
 - **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default.
+- **Tag safety:** proven by tests. MP3 writes go through TagLibSharp and M4B writes through an ffmpeg `-c copy` remux; chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Current phase 2, Settings & scan: everything. Phase 1 merged (PR #1).
+Current phase 2, Settings & scan. Still to do: directory settings with a layout shell, the scan inventory with rescan skip, and dashboard counts with a Scan button.
 
 ## Last slice / next slice
-- Last: 03 docker-compose, Implemented (merged)
-- Next: 04 tag-roundtrip-spike
+- Last: 04 tag-roundtrip-spike, Implemented
+- Next: 05 directory-settings
 
 ## Open questions
-- Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part, ASIN (phase 8)
+- Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
+
 ## Decisions
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
 - 2026-10-18: SQLite + Dapper, not PostgreSQL. One user, one file on a mounted volume.
@@ -37,6 +39,7 @@ Current phase 2, Settings & scan: everything. Phase 1 merged (PR #1).
 - 2026-10-18 (slice 01): There's no HTTPS, auth middleware or OpenAPI in the API.
 - 2026-10-18 (slice 02): The typecheck command is `npx tsc -b --noEmit`, because Vite's root tsconfig only holds references. AGENTS.md was updated with the developer's OK.
 - 2026-10-18 (slice 03): The dev database lives at `<repo>/data/` (`../../data/audiobooks.db`) and the container uses `/data/audiobooks.db`. Unknown `/api/*` paths return 404; other paths get the SPA shell.
+- 2026-10-18 (slice 04): M4B chapters are read through ffprobe JSON, and fixtures are generated silence (`scripts/make-audio-fixtures.ps1`). A known-bug test guards the TagLibSharp `chpl` corruption.
 
 ## Verification
-Full suite: backend 6 passed / 0 failed, frontend 6 passed / 0 failed. Typecheck (`tsc -b`) and build clean. No accepted failures.
+Full suite: backend 18 passed / 0 failed, frontend 6 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1, and the M4B remux was checked by hand there.

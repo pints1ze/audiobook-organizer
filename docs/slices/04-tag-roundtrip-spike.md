@@ -63,3 +63,34 @@
 - **Size:** 5 tasks. About 13 files after the rescope: tasks 1–2 (6 files) are done and the remaining work touches about 7 (`ChapterReader.cs`, `FfmpegRunner.cs`, `ToolSettings.cs`, `appsettings.json`, `Dockerfile` and 2–3 test files). That's over the ~8 cap because of the mid-slice rescope; it's accepted rather than splitting the half-finished spike.
 - **Commit:** `feat: slice 04 tag-roundtrip-spike`.
 - **Remaining in phase 2, for the next writers:** directory settings (table, validation, API, settings page with a layout shell and navigation, carried from slice 03); scan (inventory table, `ScanRun`, recursive MP3/M4B discovery via TagLibSharp plus `ChapterReader`, unchanged-file skip on rescan, unreadable files recorded and not fatal); dashboard (last scan and counts, a "Scan" button).
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 18 passed, 0 failed | includes the known-bug test `TagLibSharp_save_corrupts_m4b_chpl_atom` (passes, so the bug still reproduces) |
+| Frontend tests | 6 passed, 0 failed | |
+| New tests | all present, passing | `ChapterReaderTests` (M4B, MP3, empty, unreadable), `TagRoundTripTests` (MP3, M4B via ffmpeg, known bug), `FfmpegRunnerTests` |
+| Manual: ffprobe in image | Passed | `docker compose run --rm --entrypoint ffprobe ...`. The image's ffprobe 6.1.1 reads the fixture's 3 chapters. The slice's command without `--entrypoint` starts the app instead. |
+| Manual: M4B remux with image ffmpeg 6.1.1 | Passed | Same `-map 0:a -map 1 -c copy -map_chapters 0` remux inside the container: 3 chapters, `attached_pic` mjpeg stream, title and composer tags, and an identical audio streamhash (sha256 `5de400…c013`) |
+| Manual: tagged M4B in VLC / Audiobookshelf | Not run | optional |
+
+## Outcome (2026-10-18, commit 4968bf0)
+
+**Status:** Implemented
+**Summary:** The spike shows that MP3 tag and cover writes through TagLibSharp and M4B writes through an ffmpeg `-c copy` remux both keep chapters, duration and audio intact. TagLibSharp 2.3.0 corrupts M4B `chpl` on save, which led to a gate-3 rescope; the developer chose ffmpeg. This slice adds the fixtures and their script, `ChapterReader` (MP3 through TagLibSharp, M4B through ffprobe JSON), `FfmpegRunner` with `ToolSettings`, and ffmpeg in the image.
+**Changed:** about 18 files. Key ones: `Services/ChapterReader.cs`, `Services/FfmpegRunner.cs`, `Configuration/ToolSettings.cs`, `Program.cs`, `appsettings.json`, `Dockerfile`, `docs/fixtures/audio/*`, `scripts/make-audio-fixtures.ps1`, plus 3 test files.
+**Deviations:**
+- The mid-slice rescope to ffmpeg for M4B is a *decision (made by the developer)*, recorded in CURRENT-STATE and AGENTS.md.
+- The remux uses `-map 0:a` instead of `-map 0`, because copying the source chapter text track fails and `-map_chapters 0` rebuilds both chapter forms. *Fine.*
+- The narrator-style key is written as `composer` (©wrt). ffmpeg's mp4 muxer can't write freeform `----` atoms, and `use_metadata_tags` writes mdta keys that TagLibSharp can't read and drops the cover. *Needs decision in phase 8*, as part of the existing Audiobookshelf tag-mapping question. It doesn't block phase 2.
+- `Program.cs` registers `ToolSettings`, `FfmpegRunner` and `ChapterReader`, and `ToolSettings.TimeoutSeconds` defaults to 300. *Fine*: it's needed for the configured tools.
+- The slice's Docker check command needed `--entrypoint ffprobe`. *Fine*: a doc error, now recorded here.
+- The image has ffmpeg 6.1.1 (Ubuntu apt) while dev has 9.0.2. *Debt:* the automated tests run only against dev's ffmpeg. The key remux was checked by hand in the image. Phase 9 should run the backend tests inside the image.
+**Follow-ups:**
+- Phase 8: M4B custom fields (narrator, series, ASIN) under ffmpeg's limits. Check whether Audiobookshelf maps `composer` to narrator, or whether a post-ffmpeg TagLibSharp write of freeform atoms only (without saving `chpl`) is safe.
+- Phase 9: run the test suite in the container image.
