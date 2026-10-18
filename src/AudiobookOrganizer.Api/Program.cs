@@ -24,6 +24,9 @@ builder.Services.AddSingleton<SettingsService>();
 builder.Services.Configure<ToolSettings>(builder.Configuration.GetSection(ToolSettings.SectionName));
 builder.Services.AddSingleton<FfmpegRunner>();
 builder.Services.AddSingleton<ChapterReader>();
+builder.Services.AddSingleton<AudioFileReader>();
+builder.Services.AddSingleton<ScanRepository>();
+builder.Services.AddSingleton<ScanService>();
 
 builder.Services.AddControllers();
 
