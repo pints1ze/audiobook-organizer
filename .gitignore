@@ -7,7 +7,9 @@ publish/
 src/AudiobookOrganizer.Api/wwwroot/
 
 # Local state
-# SQLite files (data/ itself is not ignored: on case-insensitive git it would also hide the Data/ source folders)
+# /data/ and /docker/ are anchored to the repo root: an unanchored data/ would also hide the Data/ source folders on case-insensitive git
+/data/
+/docker/
 *.db
 *.db-shm
 *.db-wal

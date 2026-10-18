@@ -15,7 +15,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 1. Foundation (in progress)
 **Goal:** project runs locally and in Docker with tests and a health check.
 **Done when:** four checks pass; API health endpoint returns 200; `docker compose up` serves the client and API with a SQLite file on a mounted volume.
-**Slices:** 01 (implemented), 02 (implemented). Planned: 03 Docker + database path fix + health 503 test.
+**Slices:** 01 (implemented), 02 (implemented), 03.
 
 ### 2. Settings & scan (not started)
 **Goal:** configure directories and inventory the incoming folder without touching it.

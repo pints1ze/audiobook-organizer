@@ -24,6 +24,12 @@ var app = builder.Build();
 
 app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
+// Client routes get the SPA shell; unknown /api paths stay 404 (the more specific pattern wins).
+app.MapFallback("/api/{**path}", () => Results.NotFound());
+app.MapFallbackToFile("index.html");
 
 app.Run();

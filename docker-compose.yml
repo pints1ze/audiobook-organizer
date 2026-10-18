@@ -1,0 +1,10 @@
+services:
+  audiobook-organizer:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${DATA_DIR:-./docker/data}:/data
+      - ${INCOMING_DIR:-./docker/incoming}:/incoming
+      - ${LIBRARY_DIR:-./docker/library}:/library
+    restart: unless-stopped
