@@ -12,15 +12,15 @@
 
 Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 
-### 1. Foundation (not started)
+### 1. Foundation (done)
 **Goal:** project runs locally and in Docker with tests and a health check.
 **Done when:** four checks pass; API health endpoint returns 200; `docker compose up` serves the client and API with a SQLite file on a mounted volume.
-**Slices:** none yet
+**Slices:** 01 (implemented), 02 (implemented), 03 (implemented).
 
 ### 2. Settings & scan (not started)
 **Goal:** configure directories and inventory the incoming folder without touching it.
 **Done when:** validated directory settings save; a manual scan records every MP3/M4B with tags, duration, cover and chapter info, and a rescan skips unchanged files; dashboard shows last scan and counts; a TagLibSharp write-to-copy test proves M4B chapters and audio survive tagging.
-**Slices:** none yet
+**Slices:** none yet. Carried in: a layout shell with navigation and a not-found route (from slice 03).
 
 ### 3. Grouping (not started)
 **Goal:** scanned files become proposed audiobook groups with confidence and evidence.
@@ -50,7 +50,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** none yet
+**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.

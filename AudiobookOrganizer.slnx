@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AudiobookOrganizer.Api.Tests/AudiobookOrganizer.Api.Tests.csproj" />
+    <Project Path="src/AudiobookOrganizer.Api/AudiobookOrganizer.Api.csproj" />
+  </Folder>
+</Solution>

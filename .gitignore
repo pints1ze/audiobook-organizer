@@ -1,0 +1,24 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+publish/
+src/AudiobookOrganizer.Api/wwwroot/
+
+# Local state
+# /data/ and /docker/ are anchored to the repo root: an unanchored data/ would also hide the Data/ source folders on case-insensitive git
+/data/
+/docker/
+*.db
+*.db-shm
+*.db-wal
+logs/
+
+# Node
+node_modules/
+dist/
+
+# Secrets
+.env
+secrets.local.*
