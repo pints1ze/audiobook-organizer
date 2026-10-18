@@ -1,0 +1,22 @@
+# .NET
+bin/
+obj/
+*.user
+.vs/
+publish/
+src/AudiobookOrganizer.Api/wwwroot/
+
+# Local state
+# SQLite files (data/ itself is not ignored: on case-insensitive git it would also hide the Data/ source folders)
+*.db
+*.db-shm
+*.db-wal
+logs/
+
+# Node
+node_modules/
+dist/
+
+# Secrets
+.env
+secrets.local.*

@@ -3,7 +3,7 @@
 _Updated: project plan, 2026-10-18, commit none_
 
 ## Branch
-none yet (`/itc-next` creates `phase/1-foundation`)
+`phase/1-foundation`
 
 ## Where things stand
 Planning only. PRD and PLAN are written; no code exists yet.
