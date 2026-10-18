@@ -1,19 +1,21 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 02 review, 2026-10-18, commit 08d522b_
+_Updated: slice 03 review, 2026-10-18, commit c893295_
 
 ## Branch
-`phase/1-foundation`
+`phase/1-foundation` (phase done; PR to `main` open, waiting for the developer to verify and merge)
 
 ## Where things stand
-The API runs on port 5070 (`scripts/start-api.ps1`), creates its SQLite file and serves `GET /api/health`. The React client runs on port 5173 (`scripts/start-client.ps1`), proxies `/api` and shows the API and database status on its dashboard. Both test projects exist. There's no Docker setup yet.
+- **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
+- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default.
+- **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Current phase 1, Foundation. Still to do: Docker Compose with mounted volumes, plus the database path fix and the health 503 test (03).
+Phase 1, Foundation: done and awaiting merge. Phase 2, Settings & scan, starts after the merge.
 
 ## Last slice / next slice
-- Last: 02 client-scaffold, Implemented
-- Next: 03 docker-compose
+- Last: 03 docker-compose, Implemented
+- Next: 04, the first slice of phase 2 (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part, ASIN (phase 8)
@@ -33,6 +35,7 @@ Current phase 1, Foundation. Still to do: Docker Compose with mounted volumes, p
 - 2026-10-18 (slice 01): `.gitignore` uses `*.db*` patterns instead of `data/`, because case-insensitive git would also ignore the `Data/` source folders.
 - 2026-10-18 (slice 01): There's no HTTPS, auth middleware or OpenAPI in the API.
 - 2026-10-18 (slice 02): The typecheck command is `npx tsc -b --noEmit`, because Vite's root tsconfig only holds references. AGENTS.md was updated with the developer's OK.
+- 2026-10-18 (slice 03): The dev database lives at `<repo>/data/` (`../../data/audiobooks.db`) and the container uses `/data/audiobooks.db`. Unknown `/api/*` paths return 404; other paths get the SPA shell.
 
 ## Verification
-Full suite: backend 3 passed / 0 failed, frontend 6 passed / 0 failed. The typecheck (`tsc -b`) passes. No accepted failures.
+Full suite: backend 6 passed / 0 failed, frontend 6 passed / 0 failed. Typecheck (`tsc -b`) and build clean. No accepted failures.

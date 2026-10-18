@@ -52,3 +52,36 @@
 - **Size:** 5 tasks, about 8 files (`HealthControllerTests.cs`, the new static-files test, `appsettings.json`, `.gitignore`, `Program.cs`, `Dockerfile`, `.dockerignore`, `docker-compose.yml`).
 - Docker Desktop (Linux engine) is available on the dev machine.
 - **Commit:** `chore: slice 03 docker-compose` (Foundation scaffold). This slice should complete phase 1's Done when.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 6 passed, 0 failed | |
+| Frontend tests | 6 passed, 0 failed | |
+| New tests | 2 of 2 present, passing | Health 503 test; `StaticFilesTests` has 2 tests (`/api/*` 404, client route serves `index.html`) |
+| Manual: `docker compose up --build -d`, health | Passed | `GET :8080/api/health` returns 200 ok/ok |
+| Manual: dashboard at :8080 | Passed | Playwright: h1 plus "API: ok" / "Database: ok" |
+| Manual: `/api/does-not-exist` | Passed | 404 |
+| Manual: volumes | Passed | `/data`, `/incoming` and `/library` exist in the container; `/data/audiobooks.db` matches host `./docker/data/audiobooks.db` |
+| Manual: persistence across down/up | Passed | file still there, health 200 after restart |
+| Manual: deep link `/anything` | Passed (implementer run) | Serves the shell. The client has no matching route, so the body is empty; client routing is out of scope |
+
+`docker compose down` run afterwards. `./docker/` left in place (git-ignored).
+
+## Outcome (2026-10-18, commit c893295)
+
+**Status:** Implemented
+**Summary:** This slice adds a multi-stage Dockerfile (node 22 client build, .NET 10 publish, aspnet runtime with the client in `wwwroot`) and `docker-compose.yml` on 8080 with the `/data`, `/incoming` and `/library` bind mounts. The API now serves static files with an SPA fallback, and unknown `/api/*` paths return 404. The dev database moved to the repo-root `data/`, and the health 503 path is tested. All five Done when items are met.
+**Changed:** 8 code/config files plus 2 docs. Key files: `Dockerfile`, `docker-compose.yml`, `.dockerignore`, `Program.cs`, `appsettings.json`, `.gitignore`, `StaticFilesTests.cs`, `HealthControllerTests.cs`.
+**Deviations:**
+- `StaticFilesTests` uses a temp web root with an `index.html` and includes a positive fallback test. *Improvement.* Without it, the 404 test would pass even with an unrestricted fallback.
+- The `/api` fallback is restricted through a separate `MapFallback("/api/{**path}", NotFound)` rather than a pattern constraint. *Fine.*
+- `.dockerignore` uses `**/` patterns and excludes `docker/`. *Fine.*
+**Follow-ups:**
+- The container runs as root, and the files on the mounts are root-owned. Decide on a user or PUID/PGID before processing writes to `/library` (phase 8; already listed as out of scope here).
+- Client routes beyond `/` render empty. A not-found or layout shell is needed when the next screens arrive (phase 2).
