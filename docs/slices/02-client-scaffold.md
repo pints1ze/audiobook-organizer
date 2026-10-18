@@ -46,3 +46,35 @@
 - **Size:** 5 tasks. About 14 files, mostly scaffold (`package.json`, `tsconfig*.json`, `index.html`, `vite.config.ts`). There are 7 hand-written files: `api.ts`, `health.ts`, `DashboardPage.tsx`, `App.tsx`, `main.tsx`, `index.css` and the setup file, plus two test files and the script.
 - **Commit:** `chore: slice 02 client-scaffold` (Foundation scaffold).
 - **Still in phase 1:** slice 03 covers the Docker multi-stage build (client into `wwwroot`, API serves the static files with an SPA fallback), Compose with the `/data`, `/incoming` and `/library` volumes on port 8080, a default `Database:Path` that can't collide with `Data/` (slice 01 bug), and a test for the health 503 path.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | `dotnet build src/AudiobookOrganizer.Api`: 0 warnings, 0 errors |
+| Typecheck | Passed, but ineffective | `npx tsc --noEmit` exits 0 yet covers 0 files: the root `tsconfig.json` has `files: []` plus project references. `npx tsc -b --noEmit` also exits 0 and does check the app and node configs. |
+| Backend tests | 3 passed, 0 failed | |
+| Frontend tests | 6 passed, 0 failed | `npm test` (2 files) |
+| New tests | 4 of 4 present, passing | plus 1 extra: `getHealth` throws on 500 |
+| Manual: page with API running | Passed | Playwright: h1 "Audiobook Organizer", status shows "API: ok" / "Database: ok"; `/api/health` via 5173 proxy returns 200 |
+| Manual: page with API stopped | Passed | Status shows "API unreachable"; 2 console errors (the failed proxied fetch), no crash |
+| Manual: keyboard tab-through | Not run | No focusable controls yet |
+
+**Data:** none.
+
+## Outcome (2026-10-18, commit 08d522b)
+
+**Status:** Implemented
+**Summary:** This slice adds the Vite 8 + React 19 + TypeScript 6 + Tailwind 4 client, with Vitest and Testing Library on jsdom. `services/api.ts` has `getHealth()` and there's a dashboard page that shows the API and database status, or "API unreachable". It also adds the `/api` → 5070 dev proxy on port 5173 (strict) and `scripts/start-client.ps1`. All four checks pass and both manual checks pass.
+**Changed:** 19 code/config files plus 2 docs. Key files: `src/services/api.ts`, `src/pages/DashboardPage.tsx`, `src/setupTests.ts`, `vite.config.ts`, `src/index.css`, `scripts/start-client.ps1`.
+**Deviations:**
+- The AGENTS.md typecheck command `npx tsc --noEmit` checked 0 files (Vite root tsconfig is references only). *Resolved:* developer approved changing the command to `npx tsc -b --noEmit`; AGENTS.md updated.
+- The template's oxlint script and config, the demo assets and the template README were removed. *Fine.* oxlint isn't in the stack.
+- `@testing-library/user-event` was left out. *Fine.* It isn't used yet, as the slice Notes allowed.
+- `setupTests.ts` calls `cleanup()` explicitly. *Fine.* Vitest globals are off.
+- There's one extra test (`getHealth` throws on a 500). *Improvement.*
+- Colour tokens are defined in `:root` and exposed through `@theme inline`, all at 6.5:1 contrast or better on white. *Fine.*
+**Follow-ups:**
+- Slice 03: Docker, the default database path fix, and the health 503 test (carried over from slice 01).

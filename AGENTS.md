@@ -163,7 +163,7 @@ reference/          read-only reference material, never import from it
 
 - **Build:** `dotnet build src/AudiobookOrganizer.Api`
 - **Test (backend):** `dotnet test src/AudiobookOrganizer.Api.Tests`
-- **Typecheck:** `npx tsc --noEmit` in `src/AudiobookOrganizer.Client`
+- **Typecheck:** `npx tsc -b --noEmit` in `src/AudiobookOrganizer.Client` (`-b` follows the project references; plain `tsc --noEmit` checks nothing)
 - **Test (frontend):** `npm test` in `src/AudiobookOrganizer.Client`
 - **Run locally:** `scripts/start-api.ps1` (API) and `scripts/start-client.ps1` (Vite, proxies `/api` to the API)
 - **Ports:** API 5070, client 5173, container 8080
