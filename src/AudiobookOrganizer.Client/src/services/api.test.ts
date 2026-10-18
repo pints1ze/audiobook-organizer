@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getHealth, getSettings, saveSettings } from './api'
+import { getDashboard, getHealth, getLatestScan, getSettings, saveSettings, startScan } from './api'
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -82,5 +82,78 @@ describe('settings', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(saveSettings(settings)).rejects.toThrow()
+  })
+})
+
+describe('scans', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const run = {
+    id: 1,
+    startedAt: '2026-10-18T10:00:00Z',
+    finishedAt: null,
+    status: 'Running',
+    filesFound: 0,
+    filesAdded: 0,
+    filesUpdated: 0,
+    filesUnchanged: 0,
+    filesMissing: 0,
+    filesFailed: 0,
+    error: null,
+  }
+
+  it('getDashboard returns the parsed body', async () => {
+    const dashboard = { incomingPath: '/in', libraryPath: '/lib', lastScan: null, audioFileCount: 3, filesWithErrors: 1 }
+    const fetchMock = mockFetch(200, dashboard)
+
+    await expect(getDashboard()).resolves.toEqual(dashboard)
+    expect(fetchMock).toHaveBeenCalledWith('/api/dashboard')
+  })
+
+  it('getLatestScan returns the run on a 200', async () => {
+    const fetchMock = mockFetch(200, run)
+
+    await expect(getLatestScan()).resolves.toEqual(run)
+    expect(fetchMock).toHaveBeenCalledWith('/api/scans/latest')
+  })
+
+  it('getLatestScan returns null on a 204', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    await expect(getLatestScan()).resolves.toBeNull()
+  })
+
+  it('startScan returns started with the run on a 202', async () => {
+    const fetchMock = mockFetch(202, run)
+
+    await expect(startScan()).resolves.toEqual({ started: true, run })
+    expect(fetchMock).toHaveBeenCalledWith('/api/scans', { method: 'POST' })
+  })
+
+  it('startScan returns the problem detail on a 409', async () => {
+    mockFetch(409, {
+      title: 'A scan is already running.',
+      detail: 'Wait for the current scan to finish, then start another.',
+      status: 409,
+    })
+
+    await expect(startScan()).resolves.toEqual({
+      started: false,
+      message: 'Wait for the current scan to finish, then start another.',
+    })
+  })
+
+  it('startScan falls back to the problem title on a 409 without detail', async () => {
+    mockFetch(409, { title: 'A scan is already running.', status: 409 })
+
+    await expect(startScan()).resolves.toEqual({ started: false, message: 'A scan is already running.' })
+  })
+
+  it('startScan throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(startScan()).rejects.toThrow()
   })
 })
