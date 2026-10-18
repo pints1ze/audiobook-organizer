@@ -70,3 +70,34 @@
 - **Remaining in phase 2:**
   - 07 scan inventory. Backend: `AudioFile` and `ScanRun` tables; a recursive MP3/M4B scan of the configured incoming directory using TagLibSharp for tags, duration and cover presence, plus `ChapterReader`; unchanged files (same path, size and mtime) skipped on rescan; unreadable files recorded, not fatal; read-only.
   - 08 scan API and dashboard. `POST /api/scans` runs in the background, plus a status endpoint; the dashboard shows the configured directories, last scan time and counts, with a "Scan incoming" button.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 40 passed, 0 failed | |
+| Frontend tests | 20 passed, 0 failed | 4 files |
+| New tests | 5 of 5 behaviours present, passing | api `saveSettings`; `AppLayout` aria-current and not-found; `SettingsPage` load, save, 400 focus; dashboard heading |
+| Manual: settings load and valid save | Passed | Playwright on :5173. Saved values loaded; Save shows "Settings saved." in `role="status"` |
+| Manual: library inside incoming | Passed | Focus moves to "Library directory" with `aria-invalid="true"`. `aria-describedby` reads the hint plus "The library directory can't be inside the incoming directory." |
+| Manual: keyboard | Passed | The first Tab lands on a visible skip link; Enter moves focus to `main#main`. Order: skip, home, Dashboard, Settings (`aria-current`), Incoming, Library, checkbox, Save. Focus outline is solid |
+| Manual: `/nope` | Passed | "Page not found" h1 with a "Back to the dashboard" link |
+
+**Data:** deleted the stale dev database `data/audiobooks.db` (git-ignored, test values only). It's recreated empty on the next API start.
+
+## Outcome (2026-10-18, commit 3738ec4)
+
+**Status:** Implemented
+**Summary:** This slice adds the layout shell: skip link, header home link, `nav aria-label="Main"` with `NavLink` and `aria-current`, and `<main id="main">`. It adds a not-found route and the Settings page, which loads and saves through `getSettings` and `saveSettings`. The page shows field-level API errors with `aria-invalid`, `aria-describedby` and focus on the first invalid field, and the "Settings saved." status. All Done when items are met.
+**Changed:** 12 code files plus 2 docs. Key ones: `components/layout/AppLayout.tsx`, `pages/SettingsPage.tsx`, `pages/NotFoundPage.tsx`, `App.tsx` (`AppRoutes`), `services/api.ts`.
+**Deviations:**
+- The dashboard's own `<main>` was removed, since the layout provides it, and `main` has `tabIndex={-1}` as the skip-link target. *Fine.*
+- A global `:focus-visible` outline rule was added to `index.css` using the existing token. *Improvement*: it covers the visible-focus requirement.
+- The status region is always rendered, so announcements are reliable. *Improvement.*
+- A 400 without field errors falls back to the general alert. *Improvement.*
+- The hint wording differs from the slice. *Fine.*
+**Follow-ups:** none new.
