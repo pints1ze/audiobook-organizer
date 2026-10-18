@@ -16,7 +16,7 @@ Current phase 2, Settings & scan. Still to do: directory settings with a layout 
 
 ## Last slice / next slice
 - Last: 04 tag-roundtrip-spike, Implemented
-- Next: 05 directory-settings
+- Next: 05 directory-settings-api
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)

@@ -18,6 +18,8 @@ builder.Services.AddSingleton(services =>
     return new SqliteConnectionFactory(Path.GetFullPath(settings.Path, contentRoot));
 });
 builder.Services.AddSingleton<DatabaseInitializer>();
+builder.Services.AddSingleton<SettingsRepository>();
+builder.Services.AddSingleton<SettingsService>();
 
 builder.Services.Configure<ToolSettings>(builder.Configuration.GetSection(ToolSettings.SectionName));
 builder.Services.AddSingleton<FfmpegRunner>();
