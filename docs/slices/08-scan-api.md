@@ -61,3 +61,36 @@
 - **Split:** the planned "08 scan API and dashboard" was about 16 files, so it's split. This slice is the backend; slice 09 is the dashboard page (directories, last scan, counts, the "Scan incoming" button with progress polling, and the link to Settings when nothing's configured).
 - **Size:** 4 tasks, about 11 files. Changed: `ScanService.cs`, `ScanRepository.cs`, `DatabaseInitializer.cs` (or `Program.cs`), `Program.cs`. New: `ScanRunner.cs`, `ScanRunDto.cs`, `DashboardDto.cs`, `ScansController.cs`, `DashboardController.cs`, 2 or 3 test files. That's above the ~8 guide, but the two DTOs and two controllers are thin pass-throughs.
 - **Commit:** `feat: slice 08 scan-api`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 59 passed, 0 failed | 10 new |
+| Frontend tests | 20 passed, 0 failed | |
+| New tests | 5 of 5 behaviours present, passing | plus 1 extra (`FailInterruptedRuns`) |
+| Manual: fresh DB | Passed | `GET /api/scans/latest` returns 204; dashboard returns null paths, `lastScan: null`, 0 counts |
+| Manual: scan of 62 files (1 M4B, 60 MP3s in `book one/disc 1/`, 1 corrupt) | Passed | `POST` returns 202 Running. Completed in about 3.6 s with found 62, added 61, failed 1 |
+| Manual: second POST during scan | Passed | 409 "A scan is already running." |
+| Manual: dashboard after scan | Passed | `audioFileCount: 62`, `filesWithErrors: 1`, `lastScan` Completed |
+| Manual: rescan | Passed | About 0.05 s with 61 unchanged; the corrupt file was retried (failed 1), as intended |
+| Manual: progress during scan | Partly | The `latest` call right after start showed 0 counts. The first 25-file save hadn't happened yet, and the scan finished before the next poll. Covered by the automated test |
+| Manual: restart interruption | Not run | Timing is impractical by hand. Covered by the automated test |
+
+**Data:** test folders and the dev database `data/audiobooks.db` deleted afterwards.
+
+## Outcome (2026-10-18, commit 1c6d531)
+
+**Status:** Implemented
+**Summary:** This slice adds `ScanRunner`, which runs one background scan at a time on the app-stopping token and fails the run on unexpected errors. It adds `POST /api/scans` (202, or 409), `GET /api/scans/latest` (200, or 204), and `GET /api/dashboard`. Progress is saved every 25 files, interrupted runs are failed at startup, and previously failed files are retried. All Done when items are met.
+**Changed:** 13 code files plus 3 docs. Key ones: `Services/ScanRunner.cs`, `Controllers/ScansController.cs`, `Controllers/DashboardController.cs`, `Services/ScanService.cs` (`Start` and `Execute`), `Data/ScanRepository.cs`.
+**Deviations:**
+- The dashboard query logic lives in `DashboardController` (one settings call plus three repository calls) rather than in a service. *Fine for now.* Move it to a service when phase 3 adds group counts.
+- `AudioFileReader.Read` was made `virtual` for a gated test fake. *Fine.*
+- While a scan is running, the dashboard counts can briefly drop, because unchanged files only get the new run id at the end. *Debt (cosmetic):* slice 09 should show the counts from the last *completed* run, labelled as such, while a scan runs.
+**Follow-ups:**
+- Slice 09: the dashboard UI. It uses `GET /api/dashboard`, polls `GET /api/scans/latest` while `Running`, and keeps showing the completed-run counts during a scan.
