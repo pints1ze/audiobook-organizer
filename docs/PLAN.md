@@ -20,7 +20,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 2. Settings & scan (in progress)
 **Goal:** configure directories and inventory the incoming folder without touching it.
 **Done when:** validated directory settings save; a manual scan records every MP3/M4B with tags, duration, cover and chapter info, and a rescan skips unchanged files; dashboard shows last scan and counts; a TagLibSharp write-to-copy test proves M4B chapters and audio survive tagging.
-**Slices:** 04 (implemented), 05 (implemented), 06 (implemented), 07.
+**Slices:** 04 (implemented), 05 (implemented), 06 (implemented), 07 (implemented).
 
 ### 3. Grouping (not started)
 **Goal:** scanned files become proposed audiobook groups with confidence and evidence.

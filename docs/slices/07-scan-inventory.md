@@ -72,3 +72,30 @@
   - `POST /api/scans` starts a background scan (409 if one is already running) and `GET /api/scans/latest` returns its status and counts.
   - `GET /api/dashboard` (or similar) returns the configured directories, last scan time and file counts.
   - The dashboard shows them with a "Scan incoming" button and the scan's progress.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 49 passed, 0 failed | 9 new |
+| Frontend tests | 20 passed, 0 failed | |
+| New tests | 5 of 5 behaviours present, passing | plus 1 extra (DI wiring against real tables) |
+| Manual: real audiobooks scan | Not run | Optional. There's no endpoint until slice 08, which makes this a one-click check |
+
+**Data (verification queries for the developer):** `SELECT Status, FilesFound, FilesAdded, FilesUpdated, FilesUnchanged, FilesMissing, FilesFailed, Error FROM ScanRun ORDER BY Id DESC LIMIT 1;` and `SELECT FileName, Title, Artist, DurationMs, ChapterCount, HasCover, ScanError FROM AudioFile;`
+
+## Outcome (2026-10-18, commit 793d301)
+
+**Status:** Implemented
+**Summary:** This slice adds the `ScanRun` and `AudioFile` tables, `ScanRepository`, `AudioFileReader` (TagLibSharp read-only tags and cover, plus ffprobe duration and chapter count) and `ScanService`. The scan is recursive and symlink-skipping, with case-insensitive `.mp3`/`.m4b` matching. Unchanged files are skipped by size and mtime, and added, updated, missing and failed files are counted. A corrupt file gets a `ScanError` row and never ends the scan. A test proves that incoming bytes and timestamps are untouched. All Done when items are met.
+**Changed:** 9 code files plus 2 docs. Key ones: `Services/ScanService.cs`, `Services/AudioFileReader.cs`, `Data/ScanRepository.cs`, `Data/DatabaseInitializer.cs`.
+**Deviations:**
+- Duration comes from ffprobe rather than TagLibSharp. *Improvement*: TagLibSharp read the 22.05 kHz MPEG-2 MP3 fixture as 17.2 s instead of 30 s, and MPEG-2 is a common audiobook encoding. This costs one extra ffprobe per new or changed file. It's also worth knowing for phase 8's verify step: use ffprobe for duration checks there too.
+- A file that failed earlier and is unchanged on disk isn't retried on rescan. *Debt*: a transient failure, such as a file still being copied, would stick until the file changes. Fix in slice 08: treat rows with `ScanError` as changed.
+- Timestamps are compared as exact ISO "O" strings, the path prefix match is ordinal, and a cancelled run is `Failed`. *Fine.*
+**Follow-ups:**
+- Slice 08: retry previously failed files on rescan.
