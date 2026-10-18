@@ -1,19 +1,19 @@
 # Current state: AudiobookOrganizer
 
-_Updated: project plan, 2026-10-18, commit none_
+_Updated: slice 01 review, 2026-10-18, commit ff73449_
 
 ## Branch
 `phase/1-foundation`
 
 ## Where things stand
-Planning only. PRD and PLAN are written; no code exists yet.
+The API runs locally on port 5070 through `scripts/start-api.ps1`. It creates its SQLite file on startup and `GET /api/health` returns 200. The backend test project exists with 3 passing tests. There's no client or Docker setup yet.
 
 ## Phase
-Current phase 1, Foundation: everything.
+Current phase 1, Foundation. Still to do: the React client with frontend tests (02), and Docker Compose with mounted volumes (03).
 
 ## Last slice / next slice
-- Last: none
-- Next: 01 Foundation
+- Last: 01 api-scaffold-health, Implemented
+- Next: 02 client-scaffold
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part, ASIN (phase 8)
@@ -31,6 +31,8 @@ Current phase 1, Foundation: everything.
 - 2026-10-18: Covers can come from the embedded image, a provider download or an upload. The chosen file is embedded in every output file.
 - 2026-10-18: Custom tags follow Audiobookshelf conventions.
 - 2026-10-18: Genres are entered by hand in v1. Provider genres come later.
+- 2026-10-18 (slice 01): `.gitignore` uses `*.db*` patterns instead of `data/`, because case-insensitive git would also ignore the `Data/` source folders.
+- 2026-10-18 (slice 01): There's no HTTPS, auth middleware or OpenAPI in the API.
 
 ## Verification
-Full suite: no tests yet.
+Full suite: 3 passed / 0 failed (backend only; there's no frontend project yet). No accepted failures.

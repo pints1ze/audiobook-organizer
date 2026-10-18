@@ -43,3 +43,35 @@
 - **Size:** 5 tasks. About 12 files, which is over the ~8 cap only because of scaffold boilerplate (`.slnx`, two `.csproj`, `launchSettings.json`, `appsettings*.json`). There are 5 hand-written code files.
 - **Split from phase 1:** 02 client scaffold (Vite, React 19, Tailwind 4, Vitest, `/api` proxy, a page showing health status, `start-client.ps1`). 03 Docker (multi-stage Dockerfile building the client into `wwwroot`, Compose with `/data`, `/incoming` and `/library` volumes, port 8080, `Database:Path=/data/audiobooks.db`).
 - **Commit:** `chore: slice 01 api-scaffold-health`. AGENTS.md section 8 reserves `chore:` for the Foundation scaffold.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | `dotnet build src/AudiobookOrganizer.Api`: 0 warnings, 0 errors |
+| Typecheck | No client project | Arrives in slice 02 (planned gap, not a failure) |
+| Backend tests | 3 passed, 0 failed | `dotnet test src/AudiobookOrganizer.Api.Tests` |
+| Frontend tests | No test project | Arrives in slice 02 (planned gap) |
+| New tests | 3 of 3 present, passing | health 200 body; db file exists; nested directory created |
+| Manual: start-api.ps1 + GET /api/health | Passed | `{"status":"ok","database":"ok"}` 200 on http://localhost:5070 |
+| Manual: db file created and ignored by git | Passed, with finding | Default `data/audiobooks.db` resolved into the source folder `src/AudiobookOrganizer.Api/Data/` because Windows paths are case-insensitive, so the database sits next to `DatabaseInitializer.cs`. `*.db` keeps it out of git. Test file deleted after the check. |
+
+**Finding for review:** the default `Database:Path` collides with the `Data/` source folder on Windows (the same root cause as the `.gitignore` `data/` deviation). Suggested fix: a default outside the source tree, e.g. `App_Data/audiobooks.db` or a repo-level path, with Docker overriding to `/data/audiobooks.db` in slice 03.
+**Untested branch:** the `HealthController` 503 "degraded" path has no test (AGENTS.md section 5 asks for one on every branch).
+**Data:** no tables yet; no queries to verify.
+
+## Outcome (2026-10-18, commit ff73449)
+
+**Status:** Implemented
+**Summary:** This slice adds the .NET 10 API with Serilog, a SQLite connection factory and a startup initializer that creates the database file and its folder. It also adds `GET /api/health` (200 ok, or 503 when the database fails), the xUnit test project with `AudiobookOrganizerWebApplicationFactory` on a temp database, and `scripts/start-api.ps1` on port 5070. Every Done when item is met.
+**Changed:** 17 code/config files plus 3 docs. Key files: `Program.cs`, `Data/SqliteConnectionFactory.cs`, `Data/DatabaseInitializer.cs`, `Controllers/HealthController.cs`, `Models/Api/HealthResponse.cs`, `AudiobookOrganizerWebApplicationFactory.cs`, `.gitignore`.
+**Deviations:**
+- `.gitignore` leaves out `data/`. *Fine.* Git is case-insensitive here, so that pattern also hid the `Data/` source folders. `*.db*` patterns cover the database instead.
+- The default `Database:Path` (`data/audiobooks.db`) resolves into the `src/AudiobookOrganizer.Api/Data/` source folder on Windows. *Bug (dev only, file is git-ignored).* Change the default to a folder that can't collide, e.g. `App_Data/audiobooks.db`, in slice 03 alongside the Docker override `/data/audiobooks.db`.
+- `Models/Api/HealthResponse.cs` is a file the slice didn't list. *Fine.* It follows the layout in AGENTS.md.
+- HTTPS redirect, the `https` profile, `UseAuthorization` and OpenAPI were removed. *Fine.* There's no TLS and no auth by decision, and OpenAPI isn't in the stack.
+- The 503 path in `HealthController` has no test. *Debt.* Cover it when slice 03 touches the database path, e.g. by pointing the factory at a path that can't be opened.
+**Follow-ups:**
+- Slice 03: change the default database path and test the health 503 path.
