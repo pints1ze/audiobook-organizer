@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 03 review, 2026-10-18, commit c893295_
+_Updated: phase 2 start, 2026-10-18, commit 25dfc2c_
 
 ## Branch
-`phase/1-foundation` (phase done; PR to `main` open, waiting for the developer to verify and merge)
+`phase/2-settings-scan`
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -11,11 +11,11 @@ _Updated: slice 03 review, 2026-10-18, commit c893295_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 1, Foundation: done and awaiting merge. Phase 2, Settings & scan, starts after the merge.
+Current phase 2, Settings & scan: everything. Phase 1 merged (PR #1).
 
 ## Last slice / next slice
-- Last: 03 docker-compose, Implemented
-- Next: 04, the first slice of phase 2 (not written yet)
+- Last: 03 docker-compose, Implemented (merged)
+- Next: 04 tag-roundtrip-spike
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part, ASIN (phase 8)
@@ -25,7 +25,8 @@ Phase 1, Foundation: done and awaiting merge. Phase 2, Settings & scan, starts a
 ## Decisions
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
 - 2026-10-18: SQLite + Dapper, not PostgreSQL. One user, one file on a mounted volume.
-- 2026-10-18: TagLibSharp is the only tag/audio dependency. ffprobe only if it proves necessary.
+- 2026-10-18: TagLibSharp handles tag reading and MP3 writes.
+- 2026-10-18 (slice 04, gate 3): TagLibSharp 2.3.0 corrupts the M4B `chpl` chapter atom when it saves. The developer chose ffmpeg/ffprobe, installed in the image, for M4B tag and cover writes (`-c copy`) and for M4B chapter reads. AGENTS.md is updated.
 - 2026-10-18: Audible catalog search is the primary provider, with Open Library as fallback. Matches are never auto-applied.
 - 2026-10-18: Sources are copied, the copy is tagged and verified, then the source is deleted. The "keep source files" setting defaults to off.
 - 2026-10-18: Template syntax is `%token%`, `%token:N%` padding and `[optional]` sections only.

@@ -126,7 +126,8 @@ Product detail lives in `docs/PRD.md`. UI rules will go in `docs/UIUX.md` once i
 - **Tests:** xUnit + `WebApplicationFactory` (backend), Vitest + Testing Library (frontend)
 - **State:** React built-ins plus `services/api.ts`. No Redux, Zustand, React Query, etc.
 - **Styling:** CSS custom properties and utility classes in `src/index.css`, including shadcn's theme tokens. No `tailwind.config.js` or `postcss.config.js`.
-- **Extra packages for this project:** TagLibSharp (MP3/M4B tag read and write, duration, covers). No auth packages: the app runs without login on a trusted LAN.
+- **Extra packages for this project:** TagLibSharp (tag reading for both formats; MP3 tag and cover writing). No auth packages: the app runs without login on a trusted LAN.
+- **External tools:** ffmpeg/ffprobe, installed in the Docker image and required on PATH in dev and for tests. They handle M4B tag and cover writes (stream copy, `-c copy`, never re-encode) and M4B chapter reads. Don't save M4B files with TagLibSharp: it corrupts the Nero `chpl` chapter atom (slice 04). Call the tools only through `Services/FfmpegRunner.cs`, passing an argument list rather than a shell string.
 - **Metadata providers:** the Audible catalog API (`api.audible.com/1.0/catalog/products`, unofficial, keyless) is primary and Open Library is the fallback. There's one client per provider in `Services/`, behind a shared provider interface.
 
 ### Layout

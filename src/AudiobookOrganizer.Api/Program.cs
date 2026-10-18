@@ -1,5 +1,6 @@
 using AudiobookOrganizer.Api.Configuration;
 using AudiobookOrganizer.Api.Data;
+using AudiobookOrganizer.Api.Services;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -17,6 +18,10 @@ builder.Services.AddSingleton(services =>
     return new SqliteConnectionFactory(Path.GetFullPath(settings.Path, contentRoot));
 });
 builder.Services.AddSingleton<DatabaseInitializer>();
+
+builder.Services.Configure<ToolSettings>(builder.Configuration.GetSection(ToolSettings.SectionName));
+builder.Services.AddSingleton<FfmpegRunner>();
+builder.Services.AddSingleton<ChapterReader>();
 
 builder.Services.AddControllers();
 

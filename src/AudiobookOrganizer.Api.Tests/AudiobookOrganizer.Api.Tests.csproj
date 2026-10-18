@@ -20,6 +20,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\docs\fixtures\audio\*.m4b;..\..\docs\fixtures\audio\*.mp3"
+             Link="fixtures\audio\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\AudiobookOrganizer.Api\AudiobookOrganizer.Api.csproj" />
   </ItemGroup>
 
