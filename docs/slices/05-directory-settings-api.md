@@ -57,3 +57,35 @@
 - **Size:** 4 tasks, 8 files: `DatabaseInitializer.cs`, `SettingsRepository.cs`, `SettingsService.cs`, `SettingsController.cs`, `SettingsDto.cs`, `Program.cs` and 2 test files.
 - **Commit:** `feat: slice 05 directory-settings-api`.
 - **Remaining in phase 2 after 06:** scan (the inventory table, `ScanRun`, recursive MP3/M4B discovery through TagLibSharp and `ChapterReader`, the unchanged-file skip on rescan, unreadable files recorded rather than fatal); dashboard (last scan and counts, a Scan button).
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 40 passed, 0 failed | 22 new |
+| Frontend tests | 6 passed, 0 failed | |
+| New tests | 5 of 5 behaviours present, passing | `SettingsServiceTests`, `SettingsControllerTests` (incl. restart over same DB file) |
+| Manual: GET on fresh dev DB | Passed | `{"incomingPath":null,"libraryPath":null,"keepSourceFiles":false}` |
+| Manual: valid PUT | Passed | 200 with the saved values; library left empty (probe deleted); incoming untouched |
+| Manual: library nested in incoming (existing folder) | Passed | 400 `errors.libraryPath`: "The library directory can't be inside the incoming directory." The nested folder stayed empty |
+| Manual: relative and empty paths | Passed | 400 with errors on both fields |
+| Manual: values kept after invalid PUT | Passed | |
+| Manual: API restart | Passed | the values are still returned |
+
+**Data:** `data/audiobooks.db` (the dev database) now holds settings that point at deleted scratch folders. Re-save from the settings page (slice 06), or delete the git-ignored file to reset. Verification query for the developer: `SELECT Key, Value FROM ApplicationSetting;`
+
+## Outcome (2026-10-18, commit d067bde)
+
+**Status:** Implemented
+**Summary:** This slice adds the `ApplicationSetting` table (created idempotently at startup), `SettingsRepository` (a transactional upsert), `SettingsService` and the thin `SettingsController` at `GET`/`PUT /api/settings`. The service checks each path is required, absolute, an existing directory and readable. It rejects same or nested paths and probes that the library is writable. It never writes into incoming. All Done when items are met.
+**Changed:** 8 code files plus 3 docs. Key ones: `Services/SettingsService.cs`, `Data/SettingsRepository.cs`, `Controllers/SettingsController.cs`, `Data/DatabaseInitializer.cs`.
+**Deviations:**
+- The overlap check runs before the write probe, so the probe can never land in incoming. *Improvement.*
+- All overlap errors, including "incoming inside library", are keyed `libraryPath`. *Fine*: the UI shows the message on the library field.
+- The implementer didn't run the manual checks; this test step ran them. *Fine.*
+**Follow-ups:**
+- Slice 06: the settings page shows these field errors and has a layout shell with navigation and a not-found route.
