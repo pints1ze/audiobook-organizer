@@ -27,12 +27,16 @@ builder.Services.AddSingleton<ChapterReader>();
 builder.Services.AddSingleton<AudioFileReader>();
 builder.Services.AddSingleton<ScanRepository>();
 builder.Services.AddSingleton<ScanService>();
+builder.Services.AddSingleton<ScanRunner>();
 
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
 app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
+// Nothing can still be scanning at startup, so a Running row is left over from a stopped or crashed process.
+app.Services.GetRequiredService<ScanRepository>()
+    .FailInterruptedRuns("Interrupted by an application restart.", DateTime.UtcNow.ToString("O"));
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

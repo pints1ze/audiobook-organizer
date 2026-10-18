@@ -23,7 +23,8 @@ public record AudioFileMetadata(
 /// </summary>
 public class AudioFileReader(ChapterReader chapters, FfmpegRunner ffmpeg)
 {
-    public AudioFileMetadata Read(string path)
+    // Virtual so tests can substitute a gated fake that holds a scan open.
+    public virtual AudioFileMetadata Read(string path)
     {
         using var file = TagLib.File.Create(path);
         var tag = file.Tag;

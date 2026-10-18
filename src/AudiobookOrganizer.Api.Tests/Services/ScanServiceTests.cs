@@ -131,6 +131,54 @@ public class ScanServiceTests : IDisposable
     }
 
     [Fact]
+    public void Previously_failed_file_unchanged_on_disk_is_read_again()
+    {
+        ConfigureIncoming();
+        File.WriteAllBytes(Path.Combine(_incoming, "broken.mp3"), RandomNumberGenerator.GetBytes(4096));
+        _service.Run(CancellationToken.None);
+
+        var second = _service.Run(CancellationToken.None);
+
+        Assert.Equal((3, 2, 1), (second.FilesFound, second.FilesUnchanged, second.FilesFailed));
+        var broken = Rows()["broken.mp3"];
+        Assert.False(string.IsNullOrWhiteSpace(broken.ScanError));
+        Assert.Equal(second.Id, broken.LastSeenScanId);
+    }
+
+    [Fact]
+    public async Task Running_scan_persists_its_counts_every_25_files()
+    {
+        ConfigureIncoming();
+        for (var i = 0; i < 28; i++) File.WriteAllBytes(Path.Combine(_incoming, $"file{i:00}.mp3"), [0]);
+        var reader = new GatedAudioFileReader(blockAfter: 25);
+        var service = new ScanService(_settings, _repository, reader, NullLogger<ScanService>.Instance);
+        var run = service.Start();
+
+        var scan = Task.Run(() => service.Execute(run, CancellationToken.None));
+        reader.WaitUntilBlocked();
+        var midway = _repository.GetRun(run.Id)!;
+        reader.Release();
+        var result = await scan.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(("Running", 25, 25), (midway.Status, midway.FilesFound, midway.FilesAdded));
+        Assert.Equal(("Completed", 30, 30), (result.Status, result.FilesFound, result.FilesAdded));
+    }
+
+    [Fact]
+    public void FailInterruptedRuns_fails_only_running_rows()
+    {
+        var running = _repository.InsertRun("2026-10-18T00:00:00.0000000Z");
+        var done = _service.Run(CancellationToken.None); // fails: incoming isn't configured
+
+        _repository.FailInterruptedRuns("Interrupted by an application restart.", "2026-10-18T01:00:00.0000000Z");
+
+        var interrupted = _repository.GetRun(running.Id)!;
+        Assert.Equal(("Failed", "Interrupted by an application restart.", "2026-10-18T01:00:00.0000000Z"),
+            (interrupted.Status, interrupted.Error, interrupted.FinishedAt));
+        Assert.Equal(done.Error, _repository.GetRun(done.Id)!.Error);
+    }
+
+    [Fact]
     public void Scan_leaves_every_incoming_file_byte_and_timestamp_identical()
     {
         ConfigureIncoming();

@@ -14,11 +14,11 @@ _Updated: slice 07 review, 2026-10-18, commit 793d301_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Current phase 2, Settings & scan. Still to do: the scan API with dashboard counts and a Scan button (08).
+Current phase 2, Settings & scan. Still to do: the scan and dashboard API (08), and the dashboard UI with a Scan button (09).
 
 ## Last slice / next slice
 - Last: 07 scan-inventory, Implemented
-- Next: 08 scan-api-dashboard
+- Next: 08 scan-api
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)

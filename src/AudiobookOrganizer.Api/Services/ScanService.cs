@@ -23,9 +23,17 @@ public class ScanService(
         AttributesToSkip = FileAttributes.ReparsePoint, // skips symlinks and junctions
     };
 
-    public ScanRun Run(CancellationToken cancellationToken)
+    private const int ProgressInterval = 25;
+
+    /// <summary>Starts and runs a scan on the calling thread.</summary>
+    public ScanRun Run(CancellationToken cancellationToken) => Execute(Start(), cancellationToken);
+
+    /// <summary>Records a new Running run without scanning.</summary>
+    public ScanRun Start() => repository.InsertRun(Now());
+
+    /// <summary>Scans incoming into <paramref name="run"/>, persisting its counts every 25 files and when it finishes.</summary>
+    public ScanRun Execute(ScanRun run, CancellationToken cancellationToken)
     {
-        var run = repository.InsertRun(Now());
         try
         {
             var incoming = settings.Get().IncomingPath;
@@ -48,6 +56,7 @@ public class ScanService(
                 known.TryGetValue(path, out var existing);
                 if (existing is not null) seenKnown.Add(existing.Id);
                 ScanFile(run, path, existing, unchanged);
+                if (run.FilesFound % ProgressInterval == 0) repository.UpdateRun(run);
             }
 
             repository.MarkSeen(unchanged, run.Id);
@@ -88,7 +97,8 @@ public class ScanService(
             return;
         }
 
-        if (existing is not null && existing.SizeBytes == row.SizeBytes && existing.ModifiedAtUtc == row.ModifiedAtUtc)
+        // A row that failed before is re-read even when unchanged: the failure may have been transient.
+        if (existing is { ScanError: null } && existing.SizeBytes == row.SizeBytes && existing.ModifiedAtUtc == row.ModifiedAtUtc)
         {
             run.FilesUnchanged++;
             unchanged.Add(existing.Id);

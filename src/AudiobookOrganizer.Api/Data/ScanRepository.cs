@@ -22,6 +22,28 @@ public class ScanRepository(SqliteConnectionFactory connections)
         return connection.QuerySingleOrDefault<ScanRun>($"SELECT {RunColumns} FROM ScanRun WHERE Id = @id", new { id });
     }
 
+    public ScanRun? GetLatestRun()
+    {
+        using var connection = connections.Open();
+        return connection.QuerySingleOrDefault<ScanRun>($"SELECT {RunColumns} FROM ScanRun ORDER BY Id DESC LIMIT 1");
+    }
+
+    public ScanRun? GetLatestCompletedRun()
+    {
+        using var connection = connections.Open();
+        return connection.QuerySingleOrDefault<ScanRun>(
+            $"SELECT {RunColumns} FROM ScanRun WHERE Status = @completed ORDER BY Id DESC LIMIT 1",
+            new { completed = ScanRun.Completed });
+    }
+
+    /// <summary>Files whose last sighting was <paramref name="scanId"/>, and how many of them have a ScanError.</summary>
+    public (int Files, int WithErrors) CountFilesSeenIn(long scanId)
+    {
+        using var connection = connections.Open();
+        return connection.QuerySingle<(int, int)>(
+            "SELECT COUNT(*), COUNT(ScanError) FROM AudioFile WHERE LastSeenScanId = @scanId", new { scanId });
+    }
+
     /// <summary>Writes the run's status, counts, error and finish time.</summary>
     public void UpdateRun(ScanRun run)
     {
@@ -34,6 +56,15 @@ public class ScanRepository(SqliteConnectionFactory connections)
             WHERE Id = @Id
             """,
             run);
+    }
+
+    /// <summary>Marks runs left Running by a previous process as Failed.</summary>
+    public void FailInterruptedRuns(string message, string finishedAt)
+    {
+        using var connection = connections.Open();
+        connection.Execute(
+            "UPDATE ScanRun SET Status = @failed, Error = @message, FinishedAt = @finishedAt WHERE Status = @running",
+            new { failed = ScanRun.Failed, running = ScanRun.Running, message, finishedAt });
     }
 
     /// <summary>Rows whose SourcePath starts with <paramref name="directory"/> plus a separator (exact, case-sensitive match).</summary>
