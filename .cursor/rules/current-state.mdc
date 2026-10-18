@@ -1,0 +1,8 @@
+---
+description: Injects docs/CURRENT-STATE.md at the start of every session so the agent knows the branch, last slice and next slice before doing anything.
+alwaysApply: true
+---
+
+Read this before anything else. It is `docs/CURRENT-STATE.md`, the one-page "you are here" for the slice workflow in `AGENTS.md` section 3. If it's missing, run `/itc-plan-project` before any slice work.
+
+@docs/CURRENT-STATE.md

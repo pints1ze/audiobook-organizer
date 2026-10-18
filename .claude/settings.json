@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f \"$CLAUDE_PROJECT_DIR/docs/CURRENT-STATE.md\" ]; then echo '--- docs/CURRENT-STATE.md (read this first) ---'; cat \"$CLAUDE_PROJECT_DIR/docs/CURRENT-STATE.md\"; else echo 'No docs/CURRENT-STATE.md yet. Run /itc-plan-project before any slice work.'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
