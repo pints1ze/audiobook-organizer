@@ -26,8 +26,8 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <main className="mx-auto max-w-3xl p-6">
-      <h1 className="text-2xl font-semibold">Audiobook Organizer</h1>
+    <>
+      <h1 className="text-2xl font-semibold">Dashboard</h1>
       <div role="status" className="mt-4">
         {state.kind === 'loading' && <p className="text-muted">Checking API…</p>}
         {state.kind === 'loaded' && (
@@ -43,6 +43,6 @@ export default function DashboardPage() {
           </p>
         )}
       </div>
-    </main>
+    </>
   )
 }

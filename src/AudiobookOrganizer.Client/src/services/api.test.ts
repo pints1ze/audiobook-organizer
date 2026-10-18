@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getHealth } from './api'
+import { getHealth, getSettings, saveSettings } from './api'
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -37,5 +37,50 @@ describe('getHealth', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(getHealth()).rejects.toThrow()
+  })
+})
+
+describe('settings', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const settings = { incomingPath: '/incoming', libraryPath: '/library', keepSourceFiles: false }
+
+  it('getSettings returns the parsed body', async () => {
+    const fetchMock = mockFetch(200, settings)
+
+    await expect(getSettings()).resolves.toEqual(settings)
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings')
+  })
+
+  it('getSettings throws for a non-200 status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(getSettings()).rejects.toThrow()
+  })
+
+  it('saveSettings returns ok with the saved settings on a 200', async () => {
+    const fetchMock = mockFetch(200, settings)
+
+    await expect(saveSettings(settings)).resolves.toEqual({ ok: true, settings })
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(settings),
+    })
+  })
+
+  it('saveSettings returns the field errors on a 400 problem body', async () => {
+    const errors = { libraryPath: ["The library directory can't be inside the incoming directory."] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(saveSettings(settings)).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('saveSettings throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(saveSettings(settings)).rejects.toThrow()
   })
 })

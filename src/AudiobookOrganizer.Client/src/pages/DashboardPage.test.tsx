@@ -17,7 +17,7 @@ describe('DashboardPage', () => {
 
     render(<DashboardPage />)
 
-    expect(screen.getByRole('heading', { level: 1, name: 'Audiobook Organizer' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
     expect(await screen.findByText('API: ok')).toBeInTheDocument()
     expect(screen.getByText('Database: ok')).toBeInTheDocument()
   })
