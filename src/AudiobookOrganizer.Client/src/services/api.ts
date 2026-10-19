@@ -15,10 +15,13 @@ import type {
 import type { HealthResponse } from '../types/health'
 import type {
   BookMatch,
+  BookMetadata,
   MetadataCandidate,
   MetadataSearchResult,
   PickMatchResult,
+  SaveMetadataResult,
   SearchMetadataResult,
+  UpdateBookMetadataFields,
 } from '../types/metadata'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
@@ -241,4 +244,31 @@ export async function pickMatch(groupId: number, candidate: MetadataCandidate): 
     return { ok: false, notFound: true }
   }
   throw new Error(`Saving the match failed with status ${response.status}`)
+}
+
+export async function getMetadata(groupId: number): Promise<BookMetadata> {
+  const response = await fetch(`/api/groups/${groupId}/metadata`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the metadata failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookMetadata
+}
+
+export async function saveMetadata(groupId: number, fields: UpdateBookMetadataFields): Promise<SaveMetadataResult> {
+  const response = await fetch(`/api/groups/${groupId}/metadata`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  })
+  if (response.status === 200) {
+    return { ok: true, metadata: (await response.json()) as BookMetadata }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: Record<string, string[]> }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Saving the metadata failed with status ${response.status}`)
 }

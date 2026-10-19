@@ -8,7 +8,9 @@ import {
   getHealth,
   getLatestScan,
   getMatch,
+  getMetadata,
   pickMatch,
+  saveMetadata,
   getSettings,
   saveSettings,
   searchMetadata,
@@ -520,5 +522,78 @@ describe('match', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(pickMatch(4, candidate)).rejects.toThrow()
+  })
+})
+
+describe('metadata', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const field = <T,>(value: T, origin: 'file' | 'provider' | 'user' | null = null, provider: string | null = null) => ({
+    value,
+    origin,
+    provider,
+  })
+  const metadata = {
+    groupId: 4,
+    fields: {
+      title: field('Project Hail Mary', 'file'),
+      subtitle: field(null),
+      authors: field(['Andy Weir'], 'file'),
+      narrators: field(['A', 'B'], 'user'),
+      series: field(null),
+      seriesPart: field(null),
+      publisher: field('', 'user'),
+      releaseDate: field(null),
+      language: field(null),
+      format: field(null),
+      asin: field(null),
+      isbn: field(null),
+    },
+  }
+
+  it('getMetadata returns the parsed body on a 200', async () => {
+    const fetchMock = mockFetch(200, metadata)
+
+    await expect(getMetadata(4)).resolves.toEqual(metadata)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/metadata')
+  })
+
+  it('getMetadata throws for any other status', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getMetadata(4)).rejects.toThrow()
+  })
+
+  it('saveMetadata sends a PUT with { fields } and returns the metadata on a 200', async () => {
+    const fetchMock = mockFetch(200, metadata)
+    const fields = { narrators: ['A', 'B'], publisher: '' }
+
+    await expect(saveMetadata(4, fields)).resolves.toEqual({ ok: true, metadata })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/metadata', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    })
+  })
+
+  it('saveMetadata returns the field errors on a 400', async () => {
+    const errors = { title: ['The title is required.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(saveMetadata(4, { title: '' })).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('saveMetadata returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(saveMetadata(4, { title: 'x' })).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('saveMetadata throws for any other status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(saveMetadata(4, { title: 'x' })).rejects.toThrow()
   })
 })

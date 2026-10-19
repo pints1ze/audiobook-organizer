@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
+import MetadataEditor, { providerNames } from '../components/book/MetadataEditor'
 import { getGroup, getMatch, pickMatch, searchMetadata } from '../services/api'
 import type { GroupDetail } from '../types/groups'
 import type { BookMatch, MetadataCandidate, MetadataSearchResult } from '../types/metadata'
@@ -58,6 +59,7 @@ type MatchState = { kind: 'loading' } | { kind: 'loaded'; match: BookMatch | nul
 function BookContent({ group }: { group: GroupDetail }) {
   const [matchState, setMatchState] = useState<MatchState>({ kind: 'loading' })
   const [savedMessage, setSavedMessage] = useState('')
+  const [metadataReloadKey, setMetadataReloadKey] = useState(0)
   const chosenHeading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -77,6 +79,7 @@ function BookContent({ group }: { group: GroupDetail }) {
   function handlePicked(match: BookMatch) {
     setMatchState({ kind: 'loaded', match })
     setSavedMessage(`Match saved: ${match.match.title ?? 'Untitled'}`)
+    setMetadataReloadKey((key) => key + 1)
     chosenHeading.current?.focus()
   }
 
@@ -120,6 +123,7 @@ function BookContent({ group }: { group: GroupDetail }) {
           </div>
         )}
       </section>
+      <MetadataEditor groupId={group.id} match={currentMatch} reloadKey={metadataReloadKey} />
       <CatalogSearch
         initialKeywords={[group.title, group.author].filter((part) => part?.trim()).join(' ')}
         groupId={group.id}
@@ -294,8 +298,6 @@ function CatalogSearch({ initialKeywords, groupId, currentMatch, onPicked }: Cat
     </section>
   )
 }
-
-const providerNames: Record<string, string> = { audible: 'Audible', openlibrary: 'Open Library' }
 
 type CandidateItemProps = {
   candidate: MetadataCandidate

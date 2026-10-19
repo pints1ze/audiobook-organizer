@@ -2,15 +2,17 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../App'
-import { getGroup, getMatch, pickMatch, searchMetadata } from '../services/api'
+import { getGroup, getMatch, getMetadata, pickMatch, saveMetadata, searchMetadata } from '../services/api'
 import type { GroupDetail } from '../types/groups'
-import type { BookMatch, MetadataCandidate, PickMatchResult } from '../types/metadata'
+import type { BookMatch, BookMetadata, MetadataCandidate, PickMatchResult } from '../types/metadata'
 import { formatDateTime } from '../utils/formatDateTime'
 
 vi.mock('../services/api', () => ({
   getGroup: vi.fn(),
   getMatch: vi.fn(),
+  getMetadata: vi.fn(),
   pickMatch: vi.fn(),
+  saveMetadata: vi.fn(),
   searchMetadata: vi.fn(),
 }))
 
@@ -18,6 +20,34 @@ const getGroupMock = vi.mocked(getGroup)
 const searchMock = vi.mocked(searchMetadata)
 const getMatchMock = vi.mocked(getMatch)
 const pickMock = vi.mocked(pickMatch)
+const getMetadataMock = vi.mocked(getMetadata)
+const saveMetadataMock = vi.mocked(saveMetadata)
+
+function metadataWith(title: string, origin: 'file' | 'provider', narrators: string[]): BookMetadata {
+  const empty = { value: null, origin: null, provider: null }
+  const provider = origin === 'provider' ? 'audible' : null
+  return {
+    groupId: 4,
+    fields: {
+      title: { value: title, origin, provider },
+      subtitle: empty,
+      authors: { value: ['Andy Weir'], origin, provider },
+      narrators: narrators.length ? { value: narrators, origin, provider } : { value: [], origin: null, provider: null },
+      series: empty,
+      seriesPart: empty,
+      publisher: empty,
+      releaseDate: empty,
+      language: empty,
+      format: empty,
+      asin: empty,
+      isbn: empty,
+    },
+  }
+}
+
+function metadataSection() {
+  return screen.getByRole('heading', { level: 2, name: 'Metadata' }).closest('section')!
+}
 
 const group: GroupDetail = {
   id: 4,
@@ -105,6 +135,31 @@ describe('BookPage', () => {
     getMatchMock.mockReset()
     getMatchMock.mockResolvedValue(null)
     pickMock.mockReset()
+    getMetadataMock.mockReset()
+    getMetadataMock.mockResolvedValue(metadataWith('Project Hail Mary', 'file', []))
+    saveMetadataMock.mockReset()
+  })
+
+  it('shows the Metadata section between Chosen match and Catalog search', async () => {
+    await loadedPage()
+
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
+    expect(headings).toEqual(['Chosen match', 'Metadata', 'Catalog search'])
+    expect(await within(metadataSection()).findAllByText('From files')).toHaveLength(2)
+  })
+
+  it('reloads the metadata after "Use this match" succeeds', async () => {
+    pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    await loadedPage()
+    await within(metadataSection()).findAllByText('From files')
+    await searchFor([openLibrary, audible])
+
+    getMetadataMock.mockResolvedValue(metadataWith('Project Hail Mary', 'provider', ['Ray Porter']))
+    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+
+    expect(await within(metadataSection()).findByText('Ray Porter')).toBeInTheDocument()
+    expect(within(metadataSection()).getAllByText('From Audible').length).toBeGreaterThan(0)
+    expect(getMetadataMock).toHaveBeenCalledTimes(2)
   })
 
   it('loads the group, prefills the keywords, searches and lists a candidate', async () => {
@@ -220,7 +275,7 @@ describe('BookPage', () => {
     await loadedPage()
 
     expect(getMatchMock).toHaveBeenCalledWith(4)
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Catalog search'])
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Metadata', 'Catalog search'])
     const section = chosenSection()
     expect(await within(section).findByRole('heading', { level: 3, name: 'Project Hail Mary' })).toBeInTheDocument()
     expect(within(section).getByText('Open Library')).toBeInTheDocument()
