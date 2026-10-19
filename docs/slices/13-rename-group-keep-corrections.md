@@ -57,3 +57,33 @@
 - **Split:** the full "set title/author from the UI" piece was about 14 files. This slice is the API and persistence; slice 14 is the Incoming page edit form (`types/groups.ts`, `services/api.ts` and its test, `IncomingPage.tsx` and its test).
 - **Size:** 4 tasks, about 9 files: `DatabaseInitializer.cs` and its test, `GroupRepository.cs`, `FileGroup.cs`, `GroupingService.cs` and its test, `GroupsController.cs` and its test, `GroupDtos.cs`.
 - **Commit:** `feat: slice 13 rename-group-keep-corrections`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 90 passed, 0 failed | 85 before plus 5 new |
+| Frontend tests | 51 passed, 0 failed | 7 files; no frontend change in this slice |
+| New tests | 5 of 5 present, passing | `Initialize_adds_UserCorrected_to_an_existing_FileGroup_table_without_losing_rows`, `Renamed_group_keeps_its_id_title_author_and_files_after_a_rescan`, `After_a_rename_new_files_are_still_grouped_and_uncorrected_groups_are_replaced`, `Put_trims_the_title_stores_a_blank_author_as_null_and_marks_the_group_corrected`, `Put_returns_404_for_an_unknown_id_and_400_for_a_too_long_title_without_changing_anything` |
+| Manual: old database upgrades on startup | Passed | The pre-slice API (commit 25f0dfa, in a temp worktree on :5071) created a scratch DB and scanned a scenario-A folder plus one M4B: 2 groups. The slice 13 API on :5070, pointed at the same DB with `Database__Path`, started cleanly and returned both groups with `userCorrected: false` |
+| Manual: rename survives a rescan | Passed | `PUT /api/groups/2` with `"  Renamed Book  "` returned 200, trimmed, `userCorrected: true`. A rescan (3 unchanged) kept group 2 with the new title, author and 2 files. The uncorrected M4B group was replaced (id 1 became 3). Unresolved stayed empty. `PUT /api/groups/999` returned 404 |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the worktree and all scratch data were removed afterwards.
+
+## Outcome (2026-10-18, commit 37a5036)
+
+**Status:** Implemented
+**Summary:** This slice adds `PUT /api/groups/{id}`, which sets a group's title and author (trimmed, blank as null, 500-character limit) and marks the group user-corrected. The `FileGroup.UserCorrected` column is added for new databases and, through a guarded `ALTER TABLE`, for existing ones. Regrouping now withholds corrected groups' files from the engine and replaces only uncorrected groups, which retires the slice 11 shortcut. All Done when items are met.
+**Changed:** 9 code files plus 3 docs. Key ones: `Data/GroupRepository.cs`, `Services/Grouping/GroupingService.cs`, `Data/DatabaseInitializer.cs`, `Controllers/GroupsController.cs`, `Models/Api/GroupDtos.cs`.
+**Deviations:**
+- `Rename` returns a `GroupRenameResult(Group, Errors)` modelled on `SettingsSaveResult`, rather than a DTO or null. *Fine:* the controller needs to tell a 400 from a 404.
+- Added `GroupRepository.GetGroup(id)` to return the updated group. *Fine.*
+- Renamed the existing test `ReplaceAll_rolls_back_when_an_insert_fails` to match `ReplaceProposed`. *Fine.*
+**Follow-ups:**
+- **Group id reuse (debt):** `FileGroup.Id` is `INTEGER PRIMARY KEY` without `AUTOINCREMENT`. When the deleted uncorrected group had the highest id, a rescan can give that id to a different group, so a client holding a stale id could rename the wrong book. Slice 14 should refetch groups after any scan and before each edit, and a later correction slice should decide whether ids need to be stable (for example a table rebuild with `AUTOINCREMENT`).
+- A corrected group's file count and duration aren't recalculated when its files change or go missing. This is handled with move/exclude.
+- Slice 14: the Incoming page edit form for title and author, with a "corrected" indicator.
