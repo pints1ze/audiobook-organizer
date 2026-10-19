@@ -1,17 +1,43 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEntry, getEntries, updateEntry } from '../services/api'
-import type { CanonicalEntry } from '../types/names'
+import { createEntry, getEntries, getSuggestions, mergeEntry, updateEntry } from '../services/api'
+import type { CanonicalEntry, MergeSuggestion } from '../types/names'
 import NamesPage from './NamesPage'
 
-vi.mock('../services/api', () => ({ getEntries: vi.fn(), createEntry: vi.fn(), updateEntry: vi.fn() }))
+vi.mock('../services/api', () => ({
+  getEntries: vi.fn(),
+  createEntry: vi.fn(),
+  updateEntry: vi.fn(),
+  getSuggestions: vi.fn(),
+  mergeEntry: vi.fn(),
+}))
 
 const getEntriesMock = vi.mocked(getEntries)
 const createEntryMock = vi.mocked(createEntry)
 const updateEntryMock = vi.mocked(updateEntry)
+const getSuggestionsMock = vi.mocked(getSuggestions)
+const mergeEntryMock = vi.mocked(mergeEntry)
 
 const king: CanonicalEntry = { id: 1, name: 'Stephen King', aliases: ['John Swithen', 'Richard Bachman'] }
 const pratchett: CanonicalEntry = { id: 2, name: 'Terry Pratchett', aliases: [] }
+const sKing: CanonicalEntry = { id: 4, name: 'S. King', aliases: [] }
+const kingSuggestion: MergeSuggestion = { keep: king, merge: sKing, reason: 'Matching initials' }
+const mergedKing: CanonicalEntry = {
+  id: 1,
+  name: 'Stephen King',
+  aliases: ['John Swithen', 'Richard Bachman', 'S. King'],
+}
+
+function duplicates() {
+  return screen.getByRole('region', { name: 'Possible duplicates' })
+}
+
+function row(name: string) {
+  const items = within(screen.getByRole('list', { name: 'People' })).getAllByRole('listitem')
+  const item = items.find((element) => within(element).queryByText(name, { selector: 'span' }))
+  if (!item) throw new Error(`No row for ${name}`)
+  return item
+}
 
 function addForm() {
   return screen.getByRole('region', { name: 'New person' })
@@ -22,6 +48,9 @@ describe('NamesPage', () => {
     getEntriesMock.mockReset()
     createEntryMock.mockReset()
     updateEntryMock.mockReset()
+    getSuggestionsMock.mockReset()
+    getSuggestionsMock.mockResolvedValue([])
+    mergeEntryMock.mockReset()
   })
 
   it('lists people in the API order with their aliases', async () => {
@@ -163,5 +192,156 @@ describe('NamesPage', () => {
     expect(await screen.findByText('Also called: Sci-Fi')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add a genre' })).toBeInTheDocument()
     expect(getEntriesMock).toHaveBeenCalledWith('genres')
+  })
+
+  it('lists possible duplicates with their reason and a merge button', async () => {
+    getEntriesMock.mockResolvedValue([king, pratchett, sKing])
+    getSuggestionsMock.mockResolvedValue([kingSuggestion])
+
+    render(<NamesPage kind="people" />)
+
+    await screen.findByText('Matching initials')
+    const section = duplicates()
+    expect(within(section).getByRole('heading', { level: 2, name: 'Possible duplicates' })).toBeInTheDocument()
+    expect(within(section).getByRole('button', { name: 'Merge S. King into Stephen King' })).toBeInTheDocument()
+    expect(getSuggestionsMock).toHaveBeenCalledWith('people')
+  })
+
+  it('says "No possible duplicates." when there are none', async () => {
+    getEntriesMock.mockResolvedValue([king])
+
+    render(<NamesPage kind="people" />)
+
+    await screen.findByText('Stephen King')
+    expect(within(duplicates()).getByText('No possible duplicates.')).toBeInTheDocument()
+  })
+
+  it('shows an alert in the duplicates section when suggestions fail, and still lists entries', async () => {
+    getEntriesMock.mockResolvedValue([king, pratchett])
+    getSuggestionsMock.mockRejectedValue(new Error('boom'))
+
+    render(<NamesPage kind="people" />)
+
+    expect(await screen.findByRole('button', { name: 'Edit Terry Pratchett' })).toBeInTheDocument()
+    expect(await within(duplicates()).findByRole('alert')).toHaveTextContent("Possible duplicates couldn't be loaded.")
+    expect(screen.getAllByRole('alert')).toHaveLength(1)
+  })
+
+  it('confirms a suggested merge before sending, then reloads, announces and focuses the kept entry', async () => {
+    getEntriesMock.mockResolvedValueOnce([king, pratchett, sKing]).mockResolvedValueOnce([mergedKing, pratchett])
+    getSuggestionsMock.mockResolvedValueOnce([kingSuggestion]).mockResolvedValueOnce([])
+    mergeEntryMock.mockResolvedValue({ ok: true, entry: mergedKing })
+    render(<NamesPage kind="people" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge S. King into Stephen King' }))
+
+    const section = duplicates()
+    expect(section).toHaveTextContent(
+      'Merge S. King into Stephen King? S. King and its aliases become aliases of Stephen King.',
+    )
+    expect(within(section).getByRole('button', { name: 'Confirm merge' })).toHaveFocus()
+    expect(mergeEntryMock).not.toHaveBeenCalled()
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Confirm merge' }))
+
+    expect(await screen.findByText('Merged S. King into Stephen King.')).toHaveAttribute('role', 'status')
+    expect(mergeEntryMock).toHaveBeenCalledWith('people', 1, 4)
+    expect(getEntriesMock).toHaveBeenCalledTimes(2)
+    expect(getSuggestionsMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('Also known as: John Swithen, Richard Bachman, S. King')).toBeInTheDocument()
+    expect(within(duplicates()).getByText('No possible duplicates.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Edit Stephen King' })).toHaveFocus()
+  })
+
+  it('offers only the other entries in the row merge control, and Cancel sends nothing and refocuses Merge', async () => {
+    getEntriesMock.mockResolvedValue([king, pratchett, sKing])
+    render(<NamesPage kind="people" />)
+    await screen.findByRole('button', { name: 'Edit S. King' })
+
+    const sKingRow = row('S. King')
+    const select = within(sKingRow).getByLabelText('Merge S. King into')
+    const options = within(select)
+      .getAllByRole('option')
+      .map((option) => option.textContent)
+    expect(options).toEqual(['Choose…', 'Stephen King', 'Terry Pratchett'])
+    const merge = within(sKingRow).getByRole('button', { name: 'Merge' })
+    expect(merge).toBeDisabled()
+
+    fireEvent.change(select, { target: { value: '1' } })
+    expect(merge).toBeEnabled()
+    fireEvent.click(merge)
+
+    expect(sKingRow).toHaveTextContent(
+      'Merge S. King into Stephen King? S. King and its aliases become aliases of Stephen King.',
+    )
+    expect(within(sKingRow).getByRole('button', { name: 'Confirm merge' })).toHaveFocus()
+    fireEvent.click(within(sKingRow).getByRole('button', { name: 'Cancel' }))
+
+    expect(within(sKingRow).queryByRole('button', { name: 'Confirm merge' })).not.toBeInTheDocument()
+    expect(within(sKingRow).getByRole('button', { name: 'Merge' })).toHaveFocus()
+    expect(mergeEntryMock).not.toHaveBeenCalled()
+  })
+
+  it('merges through the row control', async () => {
+    getEntriesMock.mockResolvedValueOnce([king, pratchett, sKing]).mockResolvedValueOnce([mergedKing, pratchett])
+    mergeEntryMock.mockResolvedValue({ ok: true, entry: mergedKing })
+    render(<NamesPage kind="people" />)
+    await screen.findByRole('button', { name: 'Edit S. King' })
+
+    const sKingRow = row('S. King')
+    fireEvent.change(within(sKingRow).getByLabelText('Merge S. King into'), { target: { value: '1' } })
+    fireEvent.click(within(sKingRow).getByRole('button', { name: 'Merge' }))
+    fireEvent.click(within(sKingRow).getByRole('button', { name: 'Confirm merge' }))
+
+    expect(await screen.findByText('Merged S. King into Stephen King.')).toBeInTheDocument()
+    expect(mergeEntryMock).toHaveBeenCalledWith('people', 1, 4)
+    expect(screen.getByRole('button', { name: 'Edit Stephen King' })).toHaveFocus()
+  })
+
+  it('shows "That entry no longer exists." on a 404 and reloads', async () => {
+    getEntriesMock.mockResolvedValueOnce([king, pratchett, sKing]).mockResolvedValueOnce([king, pratchett])
+    getSuggestionsMock.mockResolvedValueOnce([kingSuggestion]).mockResolvedValueOnce([])
+    mergeEntryMock.mockResolvedValue({ ok: false, notFound: true })
+    render(<NamesPage kind="people" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge S. King into Stephen King' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm merge' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('That entry no longer exists.')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Edit S. King' })).not.toBeInTheDocument())
+    expect(getEntriesMock).toHaveBeenCalledTimes(2)
+    expect(getSuggestionsMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('status')).toHaveTextContent('')
+  })
+
+  it('shows an alert and keeps the list when the merge throws', async () => {
+    getEntriesMock.mockResolvedValue([king, pratchett, sKing])
+    getSuggestionsMock.mockResolvedValue([kingSuggestion])
+    mergeEntryMock.mockRejectedValue(new Error('500'))
+    render(<NamesPage kind="people" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Merge S. King into Stephen King' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm merge' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("S. King couldn't be merged into Stephen King.")
+    expect(getEntriesMock).toHaveBeenCalledTimes(1)
+    expect(getSuggestionsMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Edit S. King' })).toBeInTheDocument()
+  })
+
+  it('shows an alert and keeps the list on a 400', async () => {
+    getEntriesMock.mockResolvedValue([king, pratchett, sKing])
+    mergeEntryMock.mockResolvedValue({ ok: false, errors: {} })
+    render(<NamesPage kind="people" />)
+    await screen.findByRole('button', { name: 'Edit S. King' })
+
+    const sKingRow = row('S. King')
+    fireEvent.change(within(sKingRow).getByLabelText('Merge S. King into'), { target: { value: '1' } })
+    fireEvent.click(within(sKingRow).getByRole('button', { name: 'Merge' }))
+    fireEvent.click(within(sKingRow).getByRole('button', { name: 'Confirm merge' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("S. King couldn't be merged into Stephen King.")
+    expect(getEntriesMock).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Edit S. King' })).toBeInTheDocument()
   })
 })

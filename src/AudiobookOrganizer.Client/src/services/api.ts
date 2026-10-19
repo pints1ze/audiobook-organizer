@@ -26,7 +26,14 @@ import type {
   SearchMetadataResult,
   UpdateBookMetadataFields,
 } from '../types/metadata'
-import type { CanonicalEntry, EntryFieldErrors, EntryRequest, NameKind, SaveEntryResult } from '../types/names'
+import type {
+  CanonicalEntry,
+  EntryFieldErrors,
+  EntryRequest,
+  MergeSuggestion,
+  NameKind,
+  SaveEntryResult,
+} from '../types/names'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -369,4 +376,22 @@ export async function updateEntry(kind: NameKind, id: number, request: EntryRequ
     body: JSON.stringify(request),
   })
   return toSaveEntryResult(response, 200, 'Saving the entry')
+}
+
+export async function getSuggestions(kind: NameKind): Promise<MergeSuggestion[]> {
+  const response = await fetch(`/api/${kind}/suggestions`)
+  if (response.status !== 200) {
+    throw new Error(`Loading ${kind} suggestions failed with status ${response.status}`)
+  }
+  return (await response.json()) as MergeSuggestion[]
+}
+
+/** Folds `fromId` into `keepId`: its name and aliases become aliases of the kept entry. */
+export async function mergeEntry(kind: NameKind, keepId: number, fromId: number): Promise<SaveEntryResult> {
+  const response = await fetch(`/api/${kind}/${keepId}/merge`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fromId }),
+  })
+  return toSaveEntryResult(response, 200, 'Merging the entry')
 }

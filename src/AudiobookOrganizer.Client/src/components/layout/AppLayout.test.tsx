@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../App'
-import { getDashboard, getEntries, getGroups, getHealth, getSettings } from '../../services/api'
+import { getDashboard, getEntries, getGroups, getHealth, getSettings, getSuggestions } from '../../services/api'
 
 vi.mock('../../services/api', () => ({
   getHealth: vi.fn(),
@@ -15,6 +15,8 @@ vi.mock('../../services/api', () => ({
   getEntries: vi.fn(),
   createEntry: vi.fn(),
   updateEntry: vi.fn(),
+  getSuggestions: vi.fn(),
+  mergeEntry: vi.fn(),
 }))
 
 function renderAt(path: string) {
@@ -43,6 +45,7 @@ describe('AppLayout', () => {
     })
     vi.mocked(getGroups).mockResolvedValue({ groups: [], unresolved: [], excluded: [] })
     vi.mocked(getEntries).mockResolvedValue([])
+    vi.mocked(getSuggestions).mockResolvedValue([])
   })
 
   it('renders the skip link first, the header and the main landmark', async () => {

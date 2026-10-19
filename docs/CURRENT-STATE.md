@@ -22,7 +22,7 @@ Phase 6, Normalization: in progress (phase 5 merged, PR #5). People and genres A
 
 ## Last slice / next slice
 - Last: 42 names-page, Implemented
-- Next: 43, merge and suggestions on the names pages (not written)
+- Next: 43 merge-on-names-page (written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)

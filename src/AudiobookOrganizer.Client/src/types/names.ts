@@ -20,3 +20,9 @@ export type SaveEntryResult =
   | { ok: true; entry: CanonicalEntry }
   | { ok: false; errors: EntryFieldErrors }
   | { ok: false; notFound: true }
+
+export interface MergeSuggestion {
+  keep: CanonicalEntry
+  merge: CanonicalEntry
+  reason: string
+}
