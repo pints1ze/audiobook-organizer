@@ -197,6 +197,25 @@ public class GroupingServiceTests : IDisposable
         Assert.Empty(_grouping.List().Unresolved);
     }
 
+    [Fact]
+    public void Reordered_group_keeps_its_order_after_a_rescan_of_unchanged_files()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var id = GroupIdOf("book a/track1.mp3");
+        var ids = _grouping.GetDetail(id)!.Files.Select(f => f.FileId).Reverse().ToList();
+
+        var reordered = _grouping.Reorder(id, new ReorderGroupDto(ids));
+        Assert.Empty(reordered.Errors);
+        Assert.True(reordered.Group!.UserCorrected);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        Assert.Contains(["book a/track2.mp3", "book a/track1.mp3"], StoredGroups());
+        Assert.Equal([1, 2], Positions("book a/track1.mp3"));
+        Assert.Equal(ids, _grouping.GetDetail(id)!.Files.Select(f => f.FileId));
+    }
+
     private sealed class ThrowingGroupingService(SettingsService settings, ScanRepository scans, GroupRepository groups)
         : GroupingService(settings, scans, groups)
     {

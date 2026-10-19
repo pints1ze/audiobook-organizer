@@ -118,6 +118,110 @@ public class GroupsControllerTests : IDisposable
         Assert.Equal(before, (await GetGroups(client)).GetProperty("groups").GetRawText());
     }
 
+    /// <summary>Scans with a two-file "book" folder plus the root M4B; returns the book's id and the M4B group's id.</summary>
+    private async Task<(long BookId, long OtherId)> ScanTwoFileBook(HttpClient client)
+    {
+        var book = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "book")).FullName;
+        File.Move(Path.Combine(_folders.Incoming, "chapters.mp3"), Path.Combine(book, "track1.mp3"));
+        File.Copy(ChapterReaderTests.Fixture("chapters.mp3"), Path.Combine(book, "track2.mp3"));
+        await Scan(client);
+
+        var groups = (await GetGroups(client)).GetProperty("groups").EnumerateArray().ToList();
+        return (groups.Single(g => g.GetProperty("fileCount").GetInt32() == 2).GetProperty("id").GetInt64(),
+            groups.Single(g => g.GetProperty("fileCount").GetInt32() == 1).GetProperty("id").GetInt64());
+    }
+
+    private static async Task<JsonElement> GetDetail(HttpClient client, long id)
+    {
+        var response = await client.GetAsync($"/api/groups/{id}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ScansControllerTests.ReadJson(response);
+    }
+
+    private static List<string?> Paths(JsonElement detail) =>
+        detail.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("relativePath").GetString()).ToList();
+
+    private static List<long> FileIds(JsonElement detail) =>
+        detail.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("fileId").GetInt64()).ToList();
+
+    [Fact]
+    public async Task Get_by_id_returns_the_group_with_its_files_in_order_and_404_for_an_unknown_id()
+    {
+        var client = _factory.CreateClient();
+        var (bookId, _) = await ScanTwoFileBook(client);
+
+        var detail = await GetDetail(client, bookId);
+
+        Assert.Equal(bookId, detail.GetProperty("id").GetInt64());
+        Assert.Equal(2, detail.GetProperty("fileCount").GetInt32());
+        Assert.False(detail.GetProperty("userCorrected").GetBoolean());
+        Assert.Equal(["book/track1.mp3", "book/track2.mp3"], Paths(detail));
+        var files = detail.GetProperty("files").EnumerateArray().ToList();
+        Assert.Equal([1, 2], files.Select(f => f.GetProperty("position").GetInt32()));
+        Assert.All(files, f =>
+        {
+            Assert.True(f.GetProperty("fileId").GetInt64() > 0);
+            Assert.InRange(f.GetProperty("durationMs").GetInt64(), 29_500, 30_500);
+            Assert.True(f.TryGetProperty("disc", out _));
+            Assert.True(f.TryGetProperty("track", out _));
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/groups/999999")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_order_reverses_the_files_and_marks_the_group_corrected()
+    {
+        var client = _factory.CreateClient();
+        var (bookId, _) = await ScanTwoFileBook(client);
+        var ids = FileIds(await GetDetail(client, bookId));
+        ids.Reverse();
+
+        var response = await client.PutAsJsonAsync($"/api/groups/{bookId}/order", new { fileIds = ids });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await ScansControllerTests.ReadJson(response);
+        Assert.True(updated.GetProperty("userCorrected").GetBoolean());
+        Assert.Equal(["book/track2.mp3", "book/track1.mp3"], Paths(updated));
+        Assert.Equal([1, 2], updated.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("position").GetInt32()));
+
+        var reread = await GetDetail(client, bookId);
+        Assert.Equal(ids, FileIds(reread));
+        Assert.True(reread.GetProperty("userCorrected").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Put_order_rejects_a_bad_list_with_400_without_changing_anything_and_404s_an_unknown_group()
+    {
+        var client = _factory.CreateClient();
+        var (bookId, otherId) = await ScanTwoFileBook(client);
+        var before = (await GetDetail(client, bookId)).GetRawText();
+        var ids = FileIds(await GetDetail(client, bookId));
+        var otherFile = FileIds(await GetDetail(client, otherId)).Single();
+
+        object[] bad =
+        [
+            new { fileIds = Array.Empty<long>() },
+            new { },
+            new { fileIds = new[] { ids[0], ids[0] } },
+            new { fileIds = new[] { ids[0] } },
+            new { fileIds = new[] { ids[0], otherFile } },
+            new { fileIds = new[] { ids[0], ids[1], otherFile } },
+        ];
+        foreach (var body in bad)
+        {
+            var response = await client.PutAsJsonAsync($"/api/groups/{bookId}/order", body);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var problem = await ScansControllerTests.ReadJson(response);
+            Assert.True(problem.GetProperty("errors").TryGetProperty("fileIds", out _), problem.GetRawText());
+        }
+
+        Assert.Equal(before, (await GetDetail(client, bookId)).GetRawText());
+
+        var missing = await client.PutAsJsonAsync("/api/groups/999999/order", new { fileIds = ids });
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
     public void Dispose()
     {
         _factory.Dispose();

@@ -92,6 +92,36 @@ public class GroupRepository(SqliteConnectionFactory connections)
             new { id, title, author }) > 0;
     }
 
+    /// <summary>The group's files in position order. Empty when the group is unknown or has no files.</summary>
+    public IReadOnlyList<GroupFileRow> GetGroupFiles(long groupId)
+    {
+        using var connection = connections.Open();
+        return connection.Query<GroupFileRow>(
+            """
+            SELECT gf.AudioFileId AS FileId, a.SourcePath, gf.Position, gf.Disc, gf.Track, a.DurationMs
+            FROM FileGroupFile gf JOIN AudioFile a ON a.Id = gf.AudioFileId
+            WHERE gf.GroupId = @groupId
+            ORDER BY gf.Position, gf.AudioFileId
+            """,
+            new { groupId }).ToList();
+    }
+
+    /// <summary>
+    /// Sets each file's position to its 1-based index in <paramref name="fileIds"/> and marks the group
+    /// user-corrected, in one transaction. The caller has checked the ids are exactly the group's files.
+    /// </summary>
+    public void SetOrder(long groupId, IReadOnlyList<long> fileIds)
+    {
+        using var connection = connections.Open();
+        using var transaction = connection.BeginTransaction();
+        connection.Execute(
+            "UPDATE FileGroupFile SET Position = @Position WHERE GroupId = @GroupId AND AudioFileId = @FileId",
+            fileIds.Select((fileId, i) => new { GroupId = groupId, FileId = fileId, Position = i + 1 }),
+            transaction);
+        connection.Execute("UPDATE FileGroup SET UserCorrected = 1 WHERE Id = @groupId", new { groupId }, transaction);
+        transaction.Commit();
+    }
+
     /// <summary>Files seen in <paramref name="scanId"/>, read without error, that are in no group.</summary>
     public IReadOnlyList<AudioFile> GetUngroupedFiles(long scanId)
     {
@@ -105,4 +135,15 @@ public class GroupRepository(SqliteConnectionFactory connections)
             """,
             new { scanId }).ToList();
     }
+}
+
+/// <summary>One row of <see cref="GroupRepository.GetGroupFiles"/>.</summary>
+public class GroupFileRow
+{
+    public long FileId { get; init; }
+    public string SourcePath { get; init; } = "";
+    public int Position { get; init; }
+    public int? Disc { get; init; }
+    public int? Track { get; init; }
+    public long? DurationMs { get; init; }
 }

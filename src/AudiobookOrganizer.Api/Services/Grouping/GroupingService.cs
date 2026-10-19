@@ -8,6 +8,9 @@ namespace AudiobookOrganizer.Api.Services.Grouping;
 /// <summary>The renamed group, or errors keyed by JSON field name. No group and no errors means the id is unknown.</summary>
 public record GroupRenameResult(GroupSummaryDto? Group, IReadOnlyDictionary<string, string[]> Errors);
 
+/// <summary>The reordered group, or errors keyed by JSON field name. No group and no errors means the id is unknown.</summary>
+public record GroupReorderResult(GroupDetailDto? Group, IReadOnlyDictionary<string, string[]> Errors);
+
 /// <summary>Runs the grouping engine over a scan's files and stores the result; lists the stored groups for the API.</summary>
 public class GroupingService(SettingsService settings, ScanRepository scans, GroupRepository groups)
 {
@@ -43,6 +46,43 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
         if (errors.Count > 0 || !groups.UpdateTitleAuthor(id, title, author)) return new GroupRenameResult(null, errors);
 
         return new GroupRenameResult(ToSummary(groups.GetGroup(id)!), errors);
+    }
+
+    /// <summary>The group with its files in position order; null when no group has <paramref name="id"/>.</summary>
+    public GroupDetailDto? GetDetail(long id)
+    {
+        var group = groups.GetGroup(id);
+        if (group is null) return null;
+
+        var root = IncomingRoot();
+        var files = groups.GetGroupFiles(id)
+            .Select(f => new GroupFileDto(f.FileId, RelativePath(root, f.SourcePath), f.Position, f.Disc, f.Track, f.DurationMs))
+            .ToList();
+        var s = ToSummary(group);
+        return new GroupDetailDto(s.Id, s.Title, s.Author, s.Confidence, s.Evidence, s.FileCount, s.TotalDurationMs,
+            s.UserCorrected, files);
+    }
+
+    /// <summary>
+    /// Sets the group's file order to <paramref name="request"/>'s ids, which must be exactly the group's files with no
+    /// duplicates, and marks the group user-corrected.
+    /// </summary>
+    public GroupReorderResult Reorder(long id, ReorderGroupDto request)
+    {
+        var noErrors = new Dictionary<string, string[]>();
+        if (groups.GetGroup(id) is null) return new GroupReorderResult(null, noErrors);
+
+        var fileIds = request.FileIds ?? [];
+        var current = groups.GetGroupFiles(id).Select(f => f.FileId).ToHashSet();
+        string? error =
+            fileIds.Count == 0 ? "List every file in the group, in the new order."
+            : fileIds.Distinct().Count() != fileIds.Count ? "Each file can appear only once."
+            : !current.SetEquals(fileIds) ? "The list must contain exactly the group's files."
+            : null;
+        if (error is not null) return new GroupReorderResult(null, new Dictionary<string, string[]> { ["fileIds"] = [error] });
+
+        groups.SetOrder(id, fileIds);
+        return new GroupReorderResult(GetDetail(id), noErrors);
     }
 
     /// <summary>The stored groups, and the files from the latest completed scan that are in none of them.</summary>
