@@ -2,8 +2,11 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AudiobookOrganizer.Api.Data;
+using AudiobookOrganizer.Api.Services;
 using AudiobookOrganizer.Api.Tests.Services;
 using Dapper;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AudiobookOrganizer.Api.Tests.Controllers;
 
@@ -17,8 +20,43 @@ public class GroupCoverControllerTests : IDisposable
     private static readonly byte[] CoverJpeg = Convert.FromBase64String(
         "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYzLjEuMTAyAP/bAEMACBQUFxQXGxsbGxsbIB4gISEhICAgICEhISQkJCoqKiQkJCEhJCQoKCoqLi8uKysqKy8vMjIyPDw5OUZGSFZWZ//EAEoAAQAAAAAAAAAAAAAAAAAAAAABAQAAAAAAAAAAAAAAAAAAAAAQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCAAIAAgDASIAAhEAAxEA/9oADAMBAAIRAxEAPwAAD//Z");
 
+    private const string AudibleCoverUrl = "https://m.media-amazon.com/images/I/test.jpg";
+
     private readonly AudiobookOrganizerWebApplicationFactory _factory = new();
     private readonly ScanTestFolders _folders = new();
+
+    // What the fake image CDN answers; every test's downloads go through it, so none reaches the network.
+    private Func<HttpRequestMessage, HttpResponseMessage> _cdn = _ => Image(CoverJpeg, "image/jpeg");
+    private readonly FakeHttpMessageHandler _cdnHandler;
+
+    public GroupCoverControllerTests() => _cdnHandler = new FakeHttpMessageHandler(request => _cdn(request));
+
+    private HttpClient Client() =>
+        _factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+                services.AddHttpClient<CoverDownloadClient>().ConfigurePrimaryHttpMessageHandler(() => _cdnHandler)))
+            .CreateClient();
+
+    private static HttpResponseMessage Image(byte[] bytes, string contentType)
+    {
+        var content = new ByteArrayContent(bytes);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+    }
+
+    /// <summary>Picks an Audible candidate with <paramref name="coverUrl"/> as the group's match.</summary>
+    private static async Task PickMatch(HttpClient client, long groupId, string? coverUrl)
+    {
+        var response = await client.PutAsJsonAsync($"/api/groups/{groupId}/match", new
+        {
+            provider = "audible",
+            asin = "B0TEST0001",
+            title = "The Test Book",
+            authors = new[] { "Ann Author" },
+            narrators = new[] { "Ned Narrator" },
+            coverUrl,
+        });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
 
     /// <summary>
     /// The scanned books: "book" (track1 with a PNG, track2 without a cover) and "other" (track1 with a JPEG), plus with
@@ -103,7 +141,7 @@ public class GroupCoverControllerTests : IDisposable
     [Fact]
     public async Task Get_cover_lists_only_the_files_with_an_embedded_cover_and_no_choice_and_404s_an_unknown_group()
     {
-        var client = _factory.CreateClient();
+        var client = Client();
         var books = await ScanBooks(client);
 
         var cover = await GetCover(client, books.BookId);
@@ -119,7 +157,7 @@ public class GroupCoverControllerTests : IDisposable
     [Fact]
     public async Task Get_file_cover_returns_the_exact_picture_bytes_and_never_changes_the_source_file()
     {
-        var client = _factory.CreateClient();
+        var client = Client();
         var books = await ScanBooks(client);
         var source = Path.Combine(_folders.Incoming, "book", "track1.mp3");
         var bytesBefore = await File.ReadAllBytesAsync(source);
@@ -144,7 +182,7 @@ public class GroupCoverControllerTests : IDisposable
     [Fact]
     public async Task Get_file_cover_serves_only_jpeg_or_png_whatever_type_the_tag_claims()
     {
-        var client = _factory.CreateClient();
+        var client = Client();
         var books = await ScanBooks(client, odd: true);
         var (htmlId, jpgId) = (books.FileIds["odd/gif.mp3"], books.FileIds["odd/huge.mp3"]);
         Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/groups/{books.BookId}/files",
@@ -166,7 +204,7 @@ public class GroupCoverControllerTests : IDisposable
     [Fact]
     public async Task Put_cover_stores_the_embedded_picture_marks_the_group_corrected_and_a_second_pick_replaces_it()
     {
-        var client = _factory.CreateClient();
+        var client = Client();
         var books = await ScanBooks(client);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/groups/{books.BookId}/cover/image")).StatusCode);
 
@@ -206,7 +244,7 @@ public class GroupCoverControllerTests : IDisposable
     [Fact]
     public async Task Put_cover_returns_400_with_the_field_for_bad_choices_and_404_for_an_unknown_group_storing_nothing()
     {
-        var client = _factory.CreateClient();
+        var client = Client();
         var books = await ScanBooks(client, odd: true);
         // Move the GIF and the over-10-MB files into the book, so only their pictures make them invalid.
         var (gifId, hugeId) = (books.FileIds["odd/gif.mp3"], books.FileIds["odd/huge.mp3"]);
@@ -238,6 +276,123 @@ public class GroupCoverControllerTests : IDisposable
         Assert.Equal(0, CoverCount());
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/groups/{books.BookId}/cover/image")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/groups/999999/cover/image")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Get_cover_offers_the_matchs_cover_and_put_provider_downloads_and_stores_it()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+        Assert.Equal(JsonValueKind.Null, (await GetCover(client, books.BookId)).GetProperty("provider").ValueKind);
+        await PickMatch(client, books.BookId, AudibleCoverUrl);
+
+        var offered = (await GetCover(client, books.BookId)).GetProperty("provider");
+        Assert.Equal("audible", offered.GetProperty("provider").GetString());
+        Assert.Equal(AudibleCoverUrl, offered.GetProperty("coverUrl").GetString());
+        Assert.Single((await GetCover(client, books.BookId)).GetProperty("embedded").EnumerateArray());
+        Assert.Empty(_cdnHandler.Requests);
+
+        // The CDN's content type is ignored: the bytes say JPEG. A fileId in the body is ignored too.
+        _cdn = _ => Image(CoverJpeg, "binary/octet-stream");
+        var put = await Choose(client, books.BookId, new { source = "provider", fileId = books.PngFileId });
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var body = await ScansControllerTests.ReadJson(put);
+        var chosen = body.GetProperty("chosen");
+        Assert.Equal("provider", chosen.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, chosen.GetProperty("fileId").ValueKind);
+        Assert.Equal("image/jpeg", chosen.GetProperty("mimeType").GetString());
+        Assert.Equal(body.GetRawText(), (await GetCover(client, books.BookId)).GetRawText());
+        var image = await client.GetAsync($"/api/groups/{books.BookId}/cover/image");
+        Assert.Equal("image/jpeg", image.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(CoverJpeg, await image.Content.ReadAsByteArrayAsync());
+        Assert.Equal(new Uri(AudibleCoverUrl), Assert.Single(_cdnHandler.Requests).RequestUri);
+        Assert.Equal(1, CoverCount());
+
+        // A PNG from the CDN replaces it, whatever the header says.
+        _cdn = _ => Image(CoverPng, "image/jpeg");
+        Assert.Equal(HttpStatusCode.OK, (await Choose(client, books.BookId, new { source = "provider" })).StatusCode);
+        Assert.Equal("image/png", (await GetCover(client, books.BookId)).GetProperty("chosen").GetProperty("mimeType").GetString());
+        Assert.Equal(1, CoverCount());
+    }
+
+    [Fact]
+    public async Task Put_provider_marks_the_group_corrected()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+        await PickMatch(client, books.OtherId, AudibleCoverUrl);
+        // Picking the match already corrected the group; reset it so only the cover choice can set it.
+        using (var connection = new SqliteConnectionFactory(_factory.DatabasePath).Open())
+            connection.Execute("UPDATE FileGroup SET UserCorrected = 0 WHERE Id = @id", new { id = books.OtherId });
+
+        Assert.Equal(HttpStatusCode.OK, (await Choose(client, books.OtherId, new { source = "provider" })).StatusCode);
+
+        Assert.True((await ScansControllerTests.ReadJson(await client.GetAsync($"/api/groups/{books.OtherId}")))
+            .GetProperty("userCorrected").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Put_provider_returns_400_for_no_cover_url_an_unknown_host_or_bad_bytes_storing_nothing()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+        const string noCover = "Choose a match with a cover first.";
+        const string unknownHost = "The cover URL isn't from a known catalog.";
+
+        async Task ExpectError(long groupId, string message)
+        {
+            var response = await Choose(client, groupId, new { source = "provider" });
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var problem = await ScansControllerTests.ReadJson(response);
+            Assert.True(problem.GetProperty("errors").TryGetProperty("source", out var messages), problem.GetRawText());
+            Assert.Equal(message, messages[0].GetString());
+        }
+
+        await ExpectError(books.BookId, noCover);
+        await PickMatch(client, books.BookId, null);
+        await ExpectError(books.BookId, noCover);
+        Assert.Equal(JsonValueKind.Null, (await GetCover(client, books.BookId)).GetProperty("provider").ValueKind);
+        foreach (var url in new[]
+                 {
+                     "https://192.168.1.10/x.jpg", "http://m.media-amazon.com/images/I/test.jpg",
+                     "https://m.media-amazon.com.evil.example/x.jpg", "https://localhost/x.jpg",
+                 })
+        {
+            await PickMatch(client, books.BookId, url);
+            await ExpectError(books.BookId, unknownHost);
+        }
+        Assert.Empty(_cdnHandler.Requests);
+
+        await PickMatch(client, books.BookId, "https://covers.openlibrary.org/b/id/1-L.jpg");
+        _cdn = _ => Image("<html><script>alert(1)</script></html>"u8.ToArray(), "image/jpeg");
+        await ExpectError(books.BookId, "The cover must be a JPEG or PNG.");
+        var huge = new byte[CoverService.MaxCoverBytes + 1];
+        CoverJpeg.CopyTo(huge, 0);
+        _cdn = _ => Image(huge, "image/jpeg");
+        await ExpectError(books.BookId, "The cover can be at most 10 MB.");
+
+        Assert.Equal(0, CoverCount());
+    }
+
+    [Fact]
+    public async Task Put_provider_returns_502_when_the_download_fails_and_the_embedded_source_still_works()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+        await PickMatch(client, books.BookId, AudibleCoverUrl);
+        _cdn = _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+
+        var response = await Choose(client, books.BookId, new { source = "provider" });
+
+        Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+        Assert.Equal("The cover couldn't be downloaded. Try again later.",
+            (await ScansControllerTests.ReadJson(response)).GetProperty("detail").GetString());
+        Assert.Equal(0, CoverCount());
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Choose(client, books.BookId, new { source = "embedded", fileId = books.PngFileId })).StatusCode);
+        Assert.Equal(1, CoverCount());
     }
 
     public void Dispose()

@@ -7,15 +7,26 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/groups")]
-public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers) : ControllerBase
+public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers,
+    ILogger<GroupsController> logger) : ControllerBase
 {
     [HttpGet("{id:long}/cover")]
     public ActionResult<BookCoverDto> GetCover(long id) => covers.GetCovers(id) is { } cover ? cover : NotFound();
 
     [HttpPut("{id:long}/cover")]
-    public ActionResult<BookCoverDto> PutCover(long id, ChooseCoverDto request)
+    public async Task<ActionResult<BookCoverDto>> PutCover(long id, ChooseCoverDto request, CancellationToken ct)
     {
-        var result = covers.ChooseCover(id, request);
+        ChooseCoverResult result;
+        try
+        {
+            result = await covers.ChooseCoverAsync(id, request, ct);
+        }
+        catch (CoverDownloadException ex)
+        {
+            logger.LogWarning(ex, "Cover download for group {GroupId} failed", id);
+            return Problem(statusCode: StatusCodes.Status502BadGateway,
+                detail: "The cover couldn't be downloaded. Try again later.");
+        }
         if (result.Cover is not null) return result.Cover;
         return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
     }

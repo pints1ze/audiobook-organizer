@@ -65,14 +65,21 @@ public record UpdateBookMetadataFieldsDto(
 /// <summary>The body of PUT /api/groups/{id}/metadata: <c>{ fields: { name: value, ... } }</c>.</summary>
 public record UpdateBookMetadataDto(UpdateBookMetadataFieldsDto Fields);
 
-/// <summary>A book's chosen cover. Source is "embedded" (FileId is the file it was read from).</summary>
+/// <summary>A book's chosen cover. Source is "embedded" (FileId is the file it was read from) or "provider" (FileId null).</summary>
 public record ChosenCoverDto(string Source, long? FileId, string MimeType, DateTimeOffset ChosenAtUtc);
 
 /// <summary>A file of the book whose scan found an embedded cover.</summary>
 public record EmbeddedCoverDto(long FileId, string RelativePath);
 
-/// <summary>A book's (a group's) chosen cover, if any, and the embedded covers it can choose from, in file order.</summary>
-public record BookCoverDto(long GroupId, ChosenCoverDto? Chosen, IReadOnlyList<EmbeddedCoverDto> Embedded);
+/// <summary>The current match's cover, which PUT .../cover with source "provider" downloads.</summary>
+public record ProviderCoverDto(string Provider, string CoverUrl);
 
-/// <summary>The body of PUT /api/groups/{id}/cover: <c>{ source: "embedded", fileId }</c>.</summary>
+/// <summary>
+/// A book's (a group's) chosen cover, if any, and the covers it can choose from: the embedded ones in file order and
+/// the current match's (null when there's no match or it has no cover URL).
+/// </summary>
+public record BookCoverDto(long GroupId, ChosenCoverDto? Chosen, IReadOnlyList<EmbeddedCoverDto> Embedded,
+    ProviderCoverDto? Provider);
+
+/// <summary>The body of PUT /api/groups/{id}/cover: <c>{ source: "embedded", fileId }</c> or <c>{ source: "provider" }</c>.</summary>
 public record ChooseCoverDto(string? Source, long? FileId);
