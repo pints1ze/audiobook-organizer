@@ -48,3 +48,32 @@
 - With this slice, phase 6's done-when lines ("aliases map variants to one canonical entry; the app suggests but never auto-merges aliases; a management screen lets the user create, merge and edit canonical entries") should be met, so the review should end the phase (gate 5).
 - For the developer at the end of the phase: nothing yet links a book's `authors`, `narrators` (and later genres) to canonical entries or marks values `normalized`. The PRD wants normalization "before final metadata writing and file organization", so it likely belongs at the start of phase 7 or 8; that's a PLAN.md change for the developer to approve (gate 4). Dismissing suggestions is the other candidate follow-up.
 - Conflict check: matches the slice 40 merge semantics (`keep` = URL id, `merge` = `fromId`), the slice 41 suggestion shape, and the "never auto-merge" PRD rule.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 243 passed, 0 failed | Unchanged (no API changes) |
+| Frontend tests | 215 passed, 0 failed | Was 206 |
+| New tests | 4 of 4 present, passing | `NamesPage.test.tsx` now 18 tests (9 new: duplicates list, empty, suggestions failure, suggestion confirm + merge + status + focus, row select and disabled Merge, Cancel focus, row merge, 404 reload, 400 and thrown alerts) |
+| Manual: Stephen King / S. King suggestion merged, alias shows; genre row merge | Not run | API (5070) and client (5173) not running. Start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+| Manual: keyboard Cancel/Confirm focus, screen reader announces merge | Not run | Same; needs a screen reader |
+
+Data checks for the developer (not run): `SELECT p.Id, p.Name, a.Alias FROM Person p LEFT JOIN PersonAlias a ON a.PersonId = p.Id;` after a merge (the merged row is gone, its name is an alias).
+
+## Outcome (2026-10-19, commit df7ae25)
+
+**Status:** Implemented
+**Summary:** The People and Genres pages show a "Possible duplicates" section from the suggestions endpoint and a "Merge into…" select on each row. Both paths go through an inline `MergeConfirm` ("Confirm merge" / "Cancel") before calling the merge endpoint, then reload, announce "Merged … into …" and focus the kept entry's Edit button; 404, 400 and thrown errors show alerts.
+**Changed:** 7 code files: `components/names/MergeConfirm.tsx`, `components/names/MergeSuggestions.tsx` (new), `pages/NamesPage.tsx`, `pages/NamesPage.test.tsx` (9 new tests), `services/api.ts` (`getSuggestions`, `mergeEntry`), `types/names.ts` (`MergeSuggestion`), `components/layout/AppLayout.test.tsx`. Plus this slice file, `docs/PLAN.md` and `docs/CURRENT-STATE.md`.
+**Deviations:**
+- `AppLayout.test.tsx` (not listed) needed `getSuggestions` and `mergeEntry` in its api mock because the names pages now call them; nothing weakened: *fine*.
+- On a row, the confirmation appears below the still-visible control (so Cancel focuses "Merge"); in the suggestions list it replaces the button. The row control shows only when there are at least two entries: *fine*.
+- Merge errors use a page-level `role="alert"` under the status region, and focus returns to the opener on failure: *fine*.
+**Follow-ups:**
+- Linking book values to canonical entries, and dismissing suggestions: both raised as open questions for the developer (not in phase 6's done-when lines).
+- Manual checks for 42–43 not run.
