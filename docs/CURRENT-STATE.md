@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 12 review, 2026-10-18, commit 5934d2c_
+_Updated: slice 26 review, 2026-10-18, commit 76cfbd9_
 
 ## Branch
-`phase/3-grouping` (phase done; PR to `main` open, waiting for the developer to verify and merge)
+`phase/4-group-corrections` (off `main` after the phase 3 merge, PR #3)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -12,14 +12,15 @@ _Updated: slice 12 review, 2026-10-18, commit 5934d2c_
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
 - **Grouping engine:** the pure `GroupingEngine.Group` proposes book groups from scanned file facts, with confidence, evidence and an estimated title and author; scenarios A–E pass. Every completed scan regroups the files it saw into `FileGroup` and `FileGroupFile` (replacing all groups), and `GET /api/groups` lists the groups (least confident first) and the unresolved files. The Incoming page (`/incoming`) shows them with confidence and evidence.
+- **Corrections:** `PUT /api/groups/{id}` sets a group's title and author and marks it `UserCorrected`. Rescans keep corrected groups and their files untouched and regroup only the rest. The Incoming page edits title and author in place and marks corrected books "Edited" (slice 14). `GET /api/groups/{id}` lists a group's files in order and `PUT /api/groups/{id}/order` reorders them (slice 15). Each Incoming row has a "Files" disclosure with keyboard-accessible Move up and Move down (slice 16). `POST /api/groups/{id}/files` moves files into a group and `POST /api/groups` creates a group from files; together they give move, merge and split (slice 17). Each Files list has checkboxes and a "Move selected to" bar that moves files to another book or a new book (slice 18). The Unresolved section has the same selection and move bar (slice 19, shared `MoveBar`). `POST /api/groups/excluded` and `POST /api/groups/unresolved` set a file's `UserState`, and `GET /api/groups` lists `excluded` (slice 20). The move bar also offers "Unresolved files" and "Excluded files", and an Excluded section sends files back (slice 21).
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 3, Grouping: done and awaiting merge. The developer checks grouping against a copy of the real collection during verification. Phase 4, Group corrections, starts after the merge.
+Phase 4, Group corrections: done, including the reopened leftovers; PR #4 is open for review. Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts (slices 22–23), group ids are never reused (24), books the user changed say "Corrected by the user" (25), and the Incoming page polish is in (26).
 
 ## Last slice / next slice
-- Last: 12 incoming-screen, Implemented
-- Next: 13, the first slice of phase 4 (not written yet)
+- Last: 26 incoming-polish, Implemented
+- Next: none until the developer verifies phase 4 and merges PR #4. Then phase 5, Metadata
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -48,6 +49,12 @@ Phase 3, Grouping: done and awaiting merge. The developer checks grouping agains
 - 2026-10-18 (slice 08): Only one scan runs at a time (409 otherwise). Runs still `Running` at startup are marked `Failed`. Dashboard counts come from the latest completed run.
 - 2026-10-18 (slice 10): Grouping is deterministic and rule-based within one container folder. Confidence is the number of agreeing signals (2+ High, 1 Medium, conflict Low). Untagged root files with no shared stem are unresolved.
 - 2026-10-18 (slice 11): Groups are fully replaced after each completed scan (a shortcut until phase 4). SQLite foreign keys are enforced on every connection.
+- 2026-10-18 (slice 13): Any user correction marks the whole group `UserCorrected`, which freezes its membership; rescans skip its files. New columns on existing tables are added by a guarded `ALTER TABLE ... ADD COLUMN` in `DatabaseInitializer`.
+- 2026-10-18 (slice 17): Merge and split aren't separate endpoints. Merge moves all of B's files into A (B is deleted when empty); split creates a user-made group (`High`, "Grouped by the user") from the chosen files.
+- 2026-10-18 (slice 18, developer): An excluded file stays excluded until the user undoes it, survives rescans, and can be sent back to unresolved. Unresolved files stay unresolved across rescans.
+- 2026-10-18 (slice 20): The exclude and keep-unresolved states live in `AudioFile.UserState`. The grouping engine skips any file with a state; placing a file in a group clears it, and undoing an exclude sends the file to unresolved.
+- 2026-10-18 (developer): Phase 4 is reopened for its leftovers. The grouping-rule tweaks are dropped (no real-collection list). Group ids must stay stable: never reused after a group is deleted. (Done in slice 24: `FileGroup` is `AUTOINCREMENT`, and old databases are rebuilt once at startup.)
+- 2026-10-18 (slice 18): A bug found by a manual check inside a slice gets its own `fix: slice NN` commit, with the developer's OK.
 
 ## Verification
-Full suite: backend 85 passed / 0 failed, frontend 51 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1, and the M4B remux was checked by hand there.
+Full suite: backend 117 passed / 0 failed, frontend 129 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.

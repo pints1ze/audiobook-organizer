@@ -1,5 +1,17 @@
 import type { Dashboard, ScanRun, StartScanResult } from '../types/dashboard'
-import type { GroupsResponse } from '../types/groups'
+import type {
+  CreateGroupRequest,
+  CreateGroupResult,
+  FileListResult,
+  GroupDetail,
+  GroupFieldErrors,
+  GroupSummary,
+  GroupsResponse,
+  MoveFilesResult,
+  ReorderGroupResult,
+  UpdateGroupRequest,
+  UpdateGroupResult,
+} from '../types/groups'
 import type { HealthResponse } from '../types/health'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
@@ -73,4 +85,109 @@ export async function getGroups(): Promise<GroupsResponse> {
     throw new Error(`Loading groups failed with status ${response.status}`)
   }
   return (await response.json()) as GroupsResponse
+}
+
+export async function updateGroup(id: number, request: UpdateGroupRequest): Promise<UpdateGroupResult> {
+  const response = await fetch(`/api/groups/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (response.status === 200) {
+    return { ok: true, group: (await response.json()) as GroupSummary }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: GroupFieldErrors }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Saving the group failed with status ${response.status}`)
+}
+
+export async function getGroup(id: number): Promise<GroupDetail> {
+  const response = await fetch(`/api/groups/${id}`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the group failed with status ${response.status}`)
+  }
+  return (await response.json()) as GroupDetail
+}
+
+export async function reorderGroup(id: number, fileIds: number[]): Promise<ReorderGroupResult> {
+  const response = await fetch(`/api/groups/${id}/order`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileIds }),
+  })
+  if (response.status === 200) {
+    return { ok: true, group: (await response.json()) as GroupDetail }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Reordering the group failed with status ${response.status}`)
+}
+
+export async function moveFilesToGroup(id: number, fileIds: number[]): Promise<MoveFilesResult> {
+  const response = await fetch(`/api/groups/${id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileIds }),
+  })
+  if (response.status === 200) {
+    return { ok: true, group: (await response.json()) as GroupDetail }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Moving the files failed with status ${response.status}`)
+}
+
+export async function createGroup(request: CreateGroupRequest): Promise<CreateGroupResult> {
+  const response = await fetch('/api/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (response.status === 201) {
+    return { ok: true, group: (await response.json()) as GroupDetail }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[]; title?: string[]; author?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  throw new Error(`Creating the group failed with status ${response.status}`)
+}
+
+async function postFileList(url: string, fileIds: number[], action: string): Promise<FileListResult> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileIds }),
+  })
+  if (response.status === 200) {
+    return { ok: true, list: (await response.json()) as GroupsResponse }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  throw new Error(`${action} failed with status ${response.status}`)
+}
+
+export function excludeFiles(fileIds: number[]): Promise<FileListResult> {
+  return postFileList('/api/groups/excluded', fileIds, 'Excluding the files')
+}
+
+export function unresolveFiles(fileIds: number[]): Promise<FileListResult> {
+  return postFileList('/api/groups/unresolved', fileIds, 'Sending the files to unresolved')
 }

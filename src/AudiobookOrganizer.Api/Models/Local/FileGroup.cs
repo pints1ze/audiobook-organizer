@@ -1,6 +1,6 @@
 namespace AudiobookOrganizer.Api.Models.Local;
 
-/// <summary>A proposed book: files the grouping engine put together after a scan. Replaced on every completed scan.</summary>
+/// <summary>A book: files the grouping engine put together after a scan. Replaced on every completed scan unless UserCorrected.</summary>
 public class FileGroup
 {
     public long Id { get; set; }
@@ -11,4 +11,5 @@ public class FileGroup
     public int FileCount { get; set; }
     public long TotalDurationMs { get; set; }
     public long ScanRunId { get; set; }
+    public bool UserCorrected { get; set; }
 }

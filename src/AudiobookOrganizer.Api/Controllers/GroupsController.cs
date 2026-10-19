@@ -10,4 +10,60 @@ public class GroupsController(GroupingService grouping) : ControllerBase
 {
     [HttpGet]
     public ActionResult<GroupListDto> Get() => grouping.List();
+
+    [HttpGet("{id:long}")]
+    public ActionResult<GroupDetailDto> GetById(long id) => grouping.GetDetail(id) is { } detail ? detail : NotFound();
+
+    [HttpPut("{id:long}")]
+    public ActionResult<GroupSummaryDto> Put(long id, UpdateGroupDto request)
+    {
+        var result = grouping.Rename(id, request);
+        if (result.Group is not null) return result.Group;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    [HttpPut("{id:long}/order")]
+    public ActionResult<GroupDetailDto> PutOrder(long id, ReorderGroupDto request)
+    {
+        var result = grouping.Reorder(id, request);
+        if (result.Group is not null) return result.Group;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    [HttpPost]
+    public ActionResult<GroupDetailDto> Post(CreateGroupDto request)
+    {
+        var result = grouping.CreateGroup(request);
+        if (result.Group is not null) return CreatedAtAction(nameof(GetById), new { id = result.Group.Id }, result.Group);
+        return Invalid(result.Errors);
+    }
+
+    [HttpPost("{id:long}/files")]
+    public ActionResult<GroupDetailDto> PostFiles(long id, MoveFilesDto request)
+    {
+        var result = grouping.MoveFiles(id, request);
+        if (result.Group is not null) return result.Group;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    [HttpPost("excluded")]
+    public ActionResult<GroupListDto> PostExcluded(MoveFilesDto request)
+    {
+        var result = grouping.Exclude(request);
+        return result.List is not null ? result.List : Invalid(result.Errors);
+    }
+
+    [HttpPost("unresolved")]
+    public ActionResult<GroupListDto> PostUnresolved(MoveFilesDto request)
+    {
+        var result = grouping.Unresolve(request);
+        return result.List is not null ? result.List : Invalid(result.Errors);
+    }
+
+    private ActionResult Invalid(IReadOnlyDictionary<string, string[]> errors)
+    {
+        foreach (var (field, messages) in errors)
+            foreach (var message in messages) ModelState.AddModelError(field, message);
+        return ValidationProblem(ModelState);
+    }
 }
