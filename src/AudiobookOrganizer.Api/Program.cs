@@ -33,6 +33,13 @@ builder.Services.AddSingleton<ScanService>();
 builder.Services.AddSingleton<ScanRunner>();
 builder.Services.AddSingleton<DashboardService>();
 
+builder.Services.AddHttpClient<AudibleClient>(http =>
+{
+    http.BaseAddress = new Uri("https://api.audible.com/");
+    http.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<AudibleClient>());
+
 builder.Services.AddControllers();
 
 var app = builder.Build();

@@ -23,6 +23,9 @@
     <Content Include="..\..\docs\fixtures\audio\*.m4b;..\..\docs\fixtures\audio\*.mp3"
              Link="fixtures\audio\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\fixtures\audible\*.json"
+             Link="fixtures\audible\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
