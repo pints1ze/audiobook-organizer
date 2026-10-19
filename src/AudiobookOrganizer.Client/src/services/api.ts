@@ -1,5 +1,11 @@
 import type { Dashboard, ScanRun, StartScanResult } from '../types/dashboard'
-import type { GroupsResponse } from '../types/groups'
+import type {
+  GroupFieldErrors,
+  GroupSummary,
+  GroupsResponse,
+  UpdateGroupRequest,
+  UpdateGroupResult,
+} from '../types/groups'
 import type { HealthResponse } from '../types/health'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
@@ -73,4 +79,23 @@ export async function getGroups(): Promise<GroupsResponse> {
     throw new Error(`Loading groups failed with status ${response.status}`)
   }
   return (await response.json()) as GroupsResponse
+}
+
+export async function updateGroup(id: number, request: UpdateGroupRequest): Promise<UpdateGroupResult> {
+  const response = await fetch(`/api/groups/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (response.status === 200) {
+    return { ok: true, group: (await response.json()) as GroupSummary }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: GroupFieldErrors }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Saving the group failed with status ${response.status}`)
 }

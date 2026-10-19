@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDashboard, getGroups, getHealth, getLatestScan, getSettings, saveSettings, startScan } from './api'
+import {
+  getDashboard,
+  getGroups,
+  getHealth,
+  getLatestScan,
+  getSettings,
+  saveSettings,
+  startScan,
+  updateGroup,
+} from './api'
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -166,7 +175,7 @@ describe('groups', () => {
   it('getGroups returns the parsed body on a 200', async () => {
     const body = {
       groups: [
-        { id: 1, title: 'T', author: null, confidence: 'High', evidence: ['e'], fileCount: 2, totalDurationMs: 1000 },
+        { id: 1, title: 'T', author: null, confidence: 'High', evidence: ['e'], fileCount: 2, totalDurationMs: 1000, userCorrected: false },
       ],
       unresolved: [{ fileId: 3, relativePath: 'a.mp3', durationMs: null }],
     }
@@ -180,5 +189,47 @@ describe('groups', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(getGroups()).rejects.toThrow()
+  })
+
+  const group = {
+    id: 5,
+    title: 'The Hobbit',
+    author: 'J.R.R. Tolkien',
+    confidence: 'High',
+    evidence: ['e'],
+    fileCount: 2,
+    totalDurationMs: 1000,
+    userCorrected: true,
+  }
+  const request = { title: 'The Hobbit', author: 'J.R.R. Tolkien' }
+
+  it('updateGroup sends a PUT with the JSON body and returns the group on a 200', async () => {
+    const fetchMock = mockFetch(200, group)
+
+    await expect(updateGroup(5, request)).resolves.toEqual({ ok: true, group })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/5', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    })
+  })
+
+  it('updateGroup returns the field errors on a 400 problem body', async () => {
+    const errors = { title: ['The title can be at most 500 characters.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(updateGroup(5, request)).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('updateGroup returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(updateGroup(5, request)).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('updateGroup throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(updateGroup(5, request)).rejects.toThrow()
   })
 })

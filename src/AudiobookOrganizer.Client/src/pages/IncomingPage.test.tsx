@@ -1,13 +1,14 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getGroups } from '../services/api'
-import type { GroupsResponse } from '../types/groups'
+import { getGroups, updateGroup } from '../services/api'
+import type { GroupSummary, GroupsResponse } from '../types/groups'
 import IncomingPage from './IncomingPage'
 
-vi.mock('../services/api', () => ({ getGroups: vi.fn() }))
+vi.mock('../services/api', () => ({ getGroups: vi.fn(), updateGroup: vi.fn() }))
 
 const getGroupsMock = vi.mocked(getGroups)
+const updateGroupMock = vi.mocked(updateGroup)
 
 const response: GroupsResponse = {
   groups: [
@@ -19,6 +20,7 @@ const response: GroupsResponse = {
       evidence: ['Album tags conflict', 'Same folder'],
       fileCount: 3,
       totalDurationMs: 61_000,
+      userCorrected: false,
     },
     {
       id: 1,
@@ -28,6 +30,7 @@ const response: GroupsResponse = {
       evidence: ['Shared album tag'],
       fileCount: 12,
       totalDurationMs: 3_723_000,
+      userCorrected: false,
     },
   ],
   unresolved: [
@@ -47,6 +50,7 @@ function renderPage() {
 describe('IncomingPage', () => {
   beforeEach(() => {
     getGroupsMock.mockReset()
+    updateGroupMock.mockReset()
   })
 
   it('shows loading, then the groups in API order with their details and evidence', async () => {
@@ -117,5 +121,148 @@ describe('IncomingPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be loaded/i)
     expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+  })
+
+  describe('editing a title and author', () => {
+    async function openHobbitEditor() {
+      getGroupsMock.mockResolvedValue(response)
+      renderPage()
+      fireEvent.click(await screen.findByRole('button', { name: 'Edit The Hobbit' }))
+      return {
+        title: screen.getByLabelText('Title') as HTMLInputElement,
+        author: screen.getByLabelText('Author') as HTMLInputElement,
+      }
+    }
+
+    it('names each Edit button after its book, with the id for an unknown title', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      renderPage()
+
+      expect(await screen.findByRole('button', { name: 'Edit The Hobbit' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit Unknown (group 2)' })).toBeInTheDocument()
+      expect(screen.queryByText('Edited')).not.toBeInTheDocument()
+    })
+
+    it('opens a prefilled form with focus on Title, saves, then shows the new values with Edited', async () => {
+      const { title, author } = await openHobbitEditor()
+
+      expect(title).toHaveValue('The Hobbit')
+      expect(author).toHaveValue('J.R.R. Tolkien')
+      expect(title).toHaveFocus()
+      expect(title).toHaveAttribute('maxLength', '500')
+
+      const saved: GroupSummary = {
+        ...response.groups[1],
+        title: 'The Hobbit, or There and Back Again',
+        author: 'Tolkien',
+        userCorrected: true,
+      }
+      updateGroupMock.mockResolvedValue({ ok: true, group: saved })
+      fireEvent.change(title, { target: { value: 'The Hobbit, or There and Back Again' } })
+      fireEvent.change(author, { target: { value: 'Tolkien' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      const editButton = await screen.findByRole('button', { name: 'Edit The Hobbit, or There and Back Again' })
+      expect(updateGroupMock).toHaveBeenCalledWith(1, { title: 'The Hobbit, or There and Back Again', author: 'Tolkien' })
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+      const row = editButton.closest('tr') as HTMLElement
+      expect(within(row).getByText('Edited')).toBeInTheDocument()
+      expect(within(row).getAllByRole('cell')[1]).toHaveTextContent('Tolkien')
+      await waitFor(() => expect(editButton).toHaveFocus())
+    })
+
+    it('edits only one row at a time', async () => {
+      await openHobbitEditor()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Unknown (group 2)' }))
+
+      expect(screen.getAllByLabelText('Title')).toHaveLength(1)
+      expect(screen.getByLabelText('Title')).toHaveValue('')
+      expect(screen.getByRole('button', { name: 'Edit The Hobbit' })).toBeInTheDocument()
+    })
+
+    it('shows field errors linked to the input and keeps the form open on a 400', async () => {
+      const { title } = await openHobbitEditor()
+      updateGroupMock.mockResolvedValue({ ok: false, errors: { title: ['The title can be at most 500 characters.'] } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      const message = await screen.findByText('The title can be at most 500 characters.')
+      expect(title).toHaveAttribute('aria-invalid', 'true')
+      const errorList = message.closest('[id]') as HTMLElement
+      expect((title.getAttribute('aria-describedby') ?? '').split(' ')).toContain(errorList.id)
+      expect(screen.getByLabelText('Author')).not.toHaveAttribute('aria-invalid')
+      expect(screen.getByLabelText('Title')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+    })
+
+    it('Cancel restores the original values and focuses the Edit button', async () => {
+      const { title } = await openHobbitEditor()
+      fireEvent.change(title, { target: { value: 'Changed' } })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+      const editButton = screen.getByRole('button', { name: 'Edit The Hobbit' })
+      await waitFor(() => expect(editButton).toHaveFocus())
+      expect(screen.queryByText('Changed')).not.toBeInTheDocument()
+      expect(updateGroupMock).not.toHaveBeenCalled()
+    })
+
+    it('Escape cancels and focuses the Edit button', async () => {
+      const { title } = await openHobbitEditor()
+      fireEvent.change(title, { target: { value: 'Changed' } })
+
+      fireEvent.keyDown(title, { key: 'Escape' })
+
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+      const editButton = screen.getByRole('button', { name: 'Edit The Hobbit' })
+      await waitFor(() => expect(editButton).toHaveFocus())
+    })
+
+    it('shows an alert and reloads the list when the group is not found', async () => {
+      await openHobbitEditor()
+      updateGroupMock.mockResolvedValue({ ok: false, notFound: true })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        "That book couldn't be saved. The list has been reloaded.",
+      )
+      expect(screen.queryByLabelText('Title')).not.toBeInTheDocument()
+      await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
+    })
+
+    it('shows the alert and reloads the list when saving throws', async () => {
+      await openHobbitEditor()
+      updateGroupMock.mockRejectedValue(new Error('offline'))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be saved/)
+      await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
+    })
+
+    it('treats a 400 with no title or author message as a failed save', async () => {
+      await openHobbitEditor()
+      updateGroupMock.mockResolvedValue({ ok: false, errors: {} })
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be saved/)
+      await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
+    })
+
+    it('shows Edited for a group already corrected on load', async () => {
+      getGroupsMock.mockResolvedValue({
+        ...response,
+        groups: [response.groups[0], { ...response.groups[1], userCorrected: true }],
+      })
+      renderPage()
+
+      const editButton = await screen.findByRole('button', { name: 'Edit The Hobbit' })
+      expect(within(editButton.closest('tr') as HTMLElement).getByText('Edited')).toBeInTheDocument()
+      expect(screen.getAllByText('Edited')).toHaveLength(1)
+    })
   })
 })
