@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 09 review, 2026-10-18, commit 15485d5_
+_Updated: phase 3 start, 2026-10-18, commit a83af45_
 
 ## Branch
-`phase/2-settings-scan` (phase done; PR to `main` open, waiting for the developer to verify and merge)
+`phase/3-grouping`
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -14,11 +14,11 @@ _Updated: slice 09 review, 2026-10-18, commit 15485d5_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 2, Settings & scan: done and awaiting merge. Phase 3, Grouping, starts after the merge.
+Current phase 3, Grouping: everything. Phase 2 merged (PR #2).
 
 ## Last slice / next slice
-- Last: 09 dashboard-ui, Implemented
-- Next: 10, the first slice of phase 3 (not written yet)
+- Last: 09 dashboard-ui, Implemented (merged)
+- Next: 10 grouping-engine
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
