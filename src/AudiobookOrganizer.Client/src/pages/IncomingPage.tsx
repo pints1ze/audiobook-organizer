@@ -84,7 +84,7 @@ function bookLabel(group: GroupSummary) {
 }
 
 function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
-  const { groups, unresolved } = data
+  const { groups, unresolved, excluded } = data
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saveFailed, setSaveFailed] = useState(false)
   const editButtons = useRef(new Map<number, HTMLButtonElement>())
@@ -133,7 +133,9 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
     onReload()
   }
 
-  if (groups.length === 0 && unresolved.length === 0) {
+  const allBooks = groups.map((g) => ({ id: g.id, label: bookLabel(g) }))
+
+  if (groups.length === 0 && unresolved.length === 0 && excluded.length === 0) {
     return (
       <p className="mt-4">
         No books found yet.{' '}
@@ -249,8 +251,28 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
           <p className="mt-2">None.</p>
         ) : (
           <UnresolvedFiles
+            kind="unresolved"
             files={unresolved}
-            targets={groups.map((g) => ({ id: g.id, label: bookLabel(g) }))}
+            targets={allBooks}
+            onMoveStart={() => setMoveMessage('')}
+            onMoved={handleMoved}
+            onFailed={onReload}
+          />
+        )}
+      </section>
+
+      <section aria-labelledby="excluded-heading" className="mt-6">
+        <h2 id="excluded-heading" className="text-xl font-semibold">
+          Excluded files ({excluded.length})
+        </h2>
+        <p className="text-sm text-muted">Excluded files stay out of books until you send them back.</p>
+        {excluded.length === 0 ? (
+          <p className="mt-2">None.</p>
+        ) : (
+          <UnresolvedFiles
+            kind="excluded"
+            files={excluded}
+            targets={allBooks}
             onMoveStart={() => setMoveMessage('')}
             onMoved={handleMoved}
             onFailed={onReload}

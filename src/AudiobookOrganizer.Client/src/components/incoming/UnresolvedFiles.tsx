@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { CircleAlert } from 'lucide-react'
 import type { UnresolvedFile } from '../../types/groups'
 import { formatDuration } from '../../utils/formatDuration'
-import MoveBar, { type MoveTarget } from './MoveBar'
+import MoveBar, { type FileListName, type MoveTarget } from './MoveBar'
 
 interface UnresolvedFilesProps {
+  /** Which list these files are in; it sets the labels and ids, and isn't offered as a destination. */
+  kind: FileListName
   files: UnresolvedFile[]
   /** Every book the selected files can move to. */
   targets: MoveTarget[]
@@ -14,7 +16,7 @@ interface UnresolvedFilesProps {
   onFailed: () => void
 }
 
-export default function UnresolvedFiles({ files, targets, onMoveStart, onMoved, onFailed }: UnresolvedFilesProps) {
+export default function UnresolvedFiles({ kind, files, targets, onMoveStart, onMoved, onFailed }: UnresolvedFilesProps) {
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [saving, setSaving] = useState(false)
   const [moveFailed, setMoveFailed] = useState(false)
@@ -78,11 +80,11 @@ export default function UnresolvedFiles({ files, targets, onMoveStart, onMoved, 
           disabled={saving}
           className="size-4"
         />
-        Select all unresolved files
+        Select all {kind} files
       </label>
       <ul className="mt-1 space-y-1">
         {files.map((file) => {
-          const checkboxId = `unresolved-file-${file.fileId}`
+          const checkboxId = `${kind}-file-${file.fileId}`
           return (
             <li key={file.fileId} className="flex items-start gap-2">
               <input
@@ -103,8 +105,9 @@ export default function UnresolvedFiles({ files, targets, onMoveStart, onMoved, 
         })}
       </ul>
       <MoveBar
-        id="unresolved-move-to"
+        id={`${kind}-move-to`}
         targets={targets}
+        source={kind}
         fileIds={files.filter((f) => selected.has(f.fileId)).map((f) => f.fileId)}
         disabled={saving}
         onMoveStart={handleMoveStart}

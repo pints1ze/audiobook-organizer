@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createGroup,
+  excludeFiles,
   getDashboard,
   getGroup,
   getGroups,
@@ -10,6 +11,7 @@ import {
   saveSettings,
   startScan,
   moveFilesToGroup,
+  unresolveFiles,
   reorderGroup,
   updateGroup,
 } from './api'
@@ -182,6 +184,7 @@ describe('groups', () => {
         { id: 1, title: 'T', author: null, confidence: 'High', evidence: ['e'], fileCount: 2, totalDurationMs: 1000, userCorrected: false },
       ],
       unresolved: [{ fileId: 3, relativePath: 'a.mp3', durationMs: null }],
+      excluded: [{ fileId: 4, relativePath: 'b.mp3', durationMs: 5 }],
     }
     const fetchMock = mockFetch(200, body)
 
@@ -339,5 +342,44 @@ describe('groups', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(createGroup({ fileIds: [11], title: null, author: null })).rejects.toThrow()
+  })
+})
+
+describe.each([
+  ['excludeFiles', excludeFiles, '/api/groups/excluded'],
+  ['unresolveFiles', unresolveFiles, '/api/groups/unresolved'],
+])('%s', (_name, call, url) => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const list = {
+    groups: [],
+    unresolved: [{ fileId: 3, relativePath: 'a.mp3', durationMs: null }],
+    excluded: [{ fileId: 4, relativePath: 'b.mp3', durationMs: 1000 }],
+  }
+
+  it(`POSTs the file ids to ${url} and returns the list on a 200`, async () => {
+    const fetchMock = mockFetch(200, list)
+
+    await expect(call([4, 3])).resolves.toEqual({ ok: true, list })
+    expect(fetchMock).toHaveBeenCalledWith(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileIds: [4, 3] }),
+    })
+  })
+
+  it('returns the errors on a 400 problem body', async () => {
+    const errors = { fileIds: ['Every file must exist.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(call([99])).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(call([4])).rejects.toThrow()
   })
 })

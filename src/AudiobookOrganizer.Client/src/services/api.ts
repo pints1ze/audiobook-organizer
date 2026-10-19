@@ -2,6 +2,7 @@ import type { Dashboard, ScanRun, StartScanResult } from '../types/dashboard'
 import type {
   CreateGroupRequest,
   CreateGroupResult,
+  FileListResult,
   GroupDetail,
   GroupFieldErrors,
   GroupSummary,
@@ -165,4 +166,28 @@ export async function createGroup(request: CreateGroupRequest): Promise<CreateGr
     return { ok: false, errors: problem.errors ?? {} }
   }
   throw new Error(`Creating the group failed with status ${response.status}`)
+}
+
+async function postFileList(url: string, fileIds: number[], action: string): Promise<FileListResult> {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileIds }),
+  })
+  if (response.status === 200) {
+    return { ok: true, list: (await response.json()) as GroupsResponse }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  throw new Error(`${action} failed with status ${response.status}`)
+}
+
+export function excludeFiles(fileIds: number[]): Promise<FileListResult> {
+  return postFileList('/api/groups/excluded', fileIds, 'Excluding the files')
+}
+
+export function unresolveFiles(fileIds: number[]): Promise<FileListResult> {
+  return postFileList('/api/groups/unresolved', fileIds, 'Sending the files to unresolved')
 }

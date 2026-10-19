@@ -33,7 +33,7 @@ describe('AppLayout', () => {
       audioFileCount: 0,
       filesWithErrors: 0,
     })
-    vi.mocked(getGroups).mockResolvedValue({ groups: [], unresolved: [] })
+    vi.mocked(getGroups).mockResolvedValue({ groups: [], unresolved: [], excluded: [] })
   })
 
   it('renders the skip link first, the header and the main landmark', async () => {

@@ -22,7 +22,11 @@ export interface UnresolvedFile {
 export interface GroupsResponse {
   groups: GroupSummary[]
   unresolved: UnresolvedFile[]
+  /** Kept out of books until the user sends them back to unresolved. */
+  excluded: UnresolvedFile[]
 }
+
+export type FileListResult = { ok: true; list: GroupsResponse } | { ok: false; errors: { fileIds?: string[] } }
 
 export interface UpdateGroupRequest {
   title: string | null

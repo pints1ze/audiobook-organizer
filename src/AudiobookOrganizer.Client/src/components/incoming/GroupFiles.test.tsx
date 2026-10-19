@@ -1,20 +1,24 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createGroup, getGroup, moveFilesToGroup, reorderGroup } from '../../services/api'
+import { createGroup, excludeFiles, getGroup, moveFilesToGroup, reorderGroup, unresolveFiles } from '../../services/api'
 import type { GroupDetail, GroupFile } from '../../types/groups'
 import GroupFiles from './GroupFiles'
 
 vi.mock('../../services/api', () => ({
   createGroup: vi.fn(),
+  excludeFiles: vi.fn(),
   getGroup: vi.fn(),
   moveFilesToGroup: vi.fn(),
   reorderGroup: vi.fn(),
+  unresolveFiles: vi.fn(),
 }))
 
 const getGroupMock = vi.mocked(getGroup)
 const reorderGroupMock = vi.mocked(reorderGroup)
 const moveFilesMock = vi.mocked(moveFilesToGroup)
 const createGroupMock = vi.mocked(createGroup)
+const excludeFilesMock = vi.mocked(excludeFiles)
+const unresolveFilesMock = vi.mocked(unresolveFiles)
 
 function file(fileId: number, name: string, position: number, extra: Partial<GroupFile> = {}): GroupFile {
   return { fileId, relativePath: `book/${name}`, position, disc: null, track: null, durationMs: 1000, ...extra }
@@ -48,6 +52,8 @@ describe('GroupFiles', () => {
     reorderGroupMock.mockReset()
     moveFilesMock.mockReset()
     createGroupMock.mockReset()
+    excludeFilesMock.mockReset()
+    unresolveFilesMock.mockReset()
   })
 
   it('loads and lists the files in order with path, disc and track, disabling the end moves', async () => {
@@ -181,6 +187,8 @@ describe('GroupFiles', () => {
         'Other book',
         'Unknown (group 6)',
         'New book',
+        'Unresolved files',
+        'Excluded files',
       ])
       expect(screen.getByRole('button', { name: 'Move' })).toBeDisabled()
 
@@ -243,6 +251,51 @@ describe('GroupFiles', () => {
       await waitFor(() => expect(onMoved).toHaveBeenCalledWith('Moved 2 files to a new book'))
       expect(createGroupMock).toHaveBeenCalledWith({ fileIds: [1, 3], title: null, author: null })
       expect(moveFilesMock).not.toHaveBeenCalled()
+    })
+
+    const list = { groups: [], unresolved: [], excluded: [] }
+
+    it('excludes a selected file and reports it', async () => {
+      getGroupMock.mockResolvedValue(detail([a, b, c]))
+      excludeFilesMock.mockResolvedValue({ ok: true, list })
+      const { onMoved } = renderMove()
+
+      fireEvent.click(await screen.findByRole('checkbox', { name: 'Select b.mp3' }))
+      fireEvent.change(screen.getByLabelText('Move selected to'), { target: { value: 'excluded' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+      await waitFor(() => expect(onMoved).toHaveBeenCalledWith('Excluded 1 file'))
+      expect(excludeFilesMock).toHaveBeenCalledWith([2])
+      expect(moveFilesMock).not.toHaveBeenCalled()
+      expect(unresolveFilesMock).not.toHaveBeenCalled()
+    })
+
+    it('sends a selected file to unresolved and reports it', async () => {
+      getGroupMock.mockResolvedValue(detail([a, b, c]))
+      unresolveFilesMock.mockResolvedValue({ ok: true, list })
+      const { onMoved } = renderMove()
+
+      fireEvent.click(await screen.findByRole('checkbox', { name: 'Select b.mp3' }))
+      fireEvent.change(screen.getByLabelText('Move selected to'), { target: { value: 'unresolved' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+      await waitFor(() => expect(onMoved).toHaveBeenCalledWith('Moved 1 file to unresolved files'))
+      expect(unresolveFilesMock).toHaveBeenCalledWith([2])
+      expect(excludeFilesMock).not.toHaveBeenCalled()
+    })
+
+    it('shows the alert and reloads when excluding is rejected', async () => {
+      getGroupMock.mockResolvedValue(detail([a, b, c]))
+      excludeFilesMock.mockResolvedValue({ ok: false, errors: { fileIds: ['bad'] } })
+      const { onMoved } = renderMove()
+
+      fireEvent.click(await screen.findByRole('checkbox', { name: 'Select a.mp3' }))
+      fireEvent.change(screen.getByLabelText('Move selected to'), { target: { value: 'excluded' } })
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be moved/)
+      await waitFor(() => expect(getGroupMock).toHaveBeenCalledTimes(2))
+      expect(onMoved).not.toHaveBeenCalled()
     })
 
     it.each([

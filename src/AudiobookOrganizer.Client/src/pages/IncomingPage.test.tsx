@@ -1,16 +1,18 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getGroup, getGroups, moveFilesToGroup, reorderGroup, updateGroup } from '../services/api'
+import { excludeFiles, getGroup, getGroups, moveFilesToGroup, reorderGroup, updateGroup } from '../services/api'
 import type { GroupDetail, GroupSummary, GroupsResponse } from '../types/groups'
 import IncomingPage from './IncomingPage'
 
 vi.mock('../services/api', () => ({
   createGroup: vi.fn(),
+  excludeFiles: vi.fn(),
   getGroup: vi.fn(),
   getGroups: vi.fn(),
   moveFilesToGroup: vi.fn(),
   reorderGroup: vi.fn(),
+  unresolveFiles: vi.fn(),
   updateGroup: vi.fn(),
 }))
 
@@ -19,6 +21,7 @@ const updateGroupMock = vi.mocked(updateGroup)
 const getGroupMock = vi.mocked(getGroup)
 const reorderGroupMock = vi.mocked(reorderGroup)
 const moveFilesMock = vi.mocked(moveFilesToGroup)
+const excludeFilesMock = vi.mocked(excludeFiles)
 
 const response: GroupsResponse = {
   groups: [
@@ -47,6 +50,7 @@ const response: GroupsResponse = {
     { fileId: 7, relativePath: 'stray/track.mp3', durationMs: 125_000 },
     { fileId: 8, relativePath: 'loose.m4b', durationMs: null },
   ],
+  excluded: [{ fileId: 9, relativePath: 'extras/sample.mp3', durationMs: 30_000 }],
 }
 
 function renderPage() {
@@ -64,6 +68,7 @@ describe('IncomingPage', () => {
     getGroupMock.mockReset()
     reorderGroupMock.mockReset()
     moveFilesMock.mockReset()
+    excludeFilesMock.mockReset()
   })
 
   it('shows loading, then the groups in API order with their details and evidence', async () => {
@@ -120,7 +125,7 @@ describe('IncomingPage', () => {
   })
 
   it('shows the empty state with a Dashboard link when there is nothing', async () => {
-    getGroupsMock.mockResolvedValue({ groups: [], unresolved: [] })
+    getGroupsMock.mockResolvedValue({ groups: [], unresolved: [], excluded: [] })
     renderPage()
 
     expect(await screen.findByText(/No books found yet\./)).toBeInTheDocument()
@@ -352,8 +357,13 @@ describe('IncomingPage', () => {
       getGroupMock.mockResolvedValue(detail)
       renderPage()
 
-      expect(await optionsFor('Files (3)')).toEqual(['The Hobbit', 'New book'])
-      expect(await optionsFor('Files (12)')).toEqual(['Unknown (group 2)', 'New book'])
+      expect(await optionsFor('Files (3)')).toEqual(['The Hobbit', 'New book', 'Unresolved files', 'Excluded files'])
+      expect(await optionsFor('Files (12)')).toEqual([
+        'Unknown (group 2)',
+        'New book',
+        'Unresolved files',
+        'Excluded files',
+      ])
     })
 
     it('reloads the list and focuses the status message after a move', async () => {
@@ -397,13 +407,19 @@ describe('IncomingPage', () => {
 
       const section = await unresolvedSection()
       const select = within(section).getByLabelText('Move selected to') as HTMLSelectElement
-      expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Unknown (group 2)', 'The Hobbit', 'New book'])
+      expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+        'Unknown (group 2)',
+        'The Hobbit',
+        'New book',
+        'Excluded files',
+      ])
     })
 
     it('reloads, drops the moved file and focuses the status message after a move', async () => {
       const after: GroupsResponse = {
         groups: [response.groups[0], { ...response.groups[1], fileCount: 13, userCorrected: true }],
         unresolved: [response.unresolved[0]],
+        excluded: response.excluded,
       }
       getGroupsMock.mockResolvedValueOnce(response).mockResolvedValue(after)
       moveFilesMock.mockResolvedValue({ ok: true, group: { ...response.groups[1], files: [] } })
@@ -436,6 +452,86 @@ describe('IncomingPage', () => {
 
       expect(await within(section).findByRole('alert')).toHaveTextContent("The files couldn't be moved")
       await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
+    })
+  })
+
+  describe('excluded files', () => {
+    async function excludedSection() {
+      const heading = await screen.findByRole('heading', { level: 2, name: /^Excluded files/ })
+      return heading.closest('section') as HTMLElement
+    }
+
+    it('lists the excluded files with their count after Unresolved', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      renderPage()
+
+      const section = await excludedSection()
+      expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Excluded files (1)')
+      expect(section).toHaveAttribute('aria-labelledby', 'excluded-heading')
+      expect(within(section).getByText('Excluded files stay out of books until you send them back.')).toBeInTheDocument()
+      expect(within(section).getByRole('checkbox', { name: 'Select extras/sample.mp3' })).toBeInTheDocument()
+      expect(within(section).getByRole('checkbox', { name: 'Select all excluded files' })).toBeInTheDocument()
+      const select = within(section).getByLabelText('Move selected to') as HTMLSelectElement
+      expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+        'Unknown (group 2)',
+        'The Hobbit',
+        'New book',
+        'Unresolved files',
+      ])
+      const unresolved = screen.getByRole('heading', { level: 2, name: /^Unresolved files/ }).closest('section') as HTMLElement
+      expect(unresolved.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('shows None. when nothing is excluded', async () => {
+      getGroupsMock.mockResolvedValue({ ...response, excluded: [] })
+      renderPage()
+
+      const section = await excludedSection()
+      expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Excluded files (0)')
+      expect(within(section).getByText('None.')).toBeInTheDocument()
+      expect(within(section).queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('shows the sections when the only files left are excluded', async () => {
+      getGroupsMock.mockResolvedValue({ groups: [], unresolved: [], excluded: response.excluded })
+      renderPage()
+
+      const section = await excludedSection()
+      expect(within(section).getByText('extras/sample.mp3')).toBeInTheDocument()
+      expect(screen.queryByText(/No books found yet\./)).not.toBeInTheDocument()
+    })
+
+    it('reloads and focuses the status message after excluding a file from a book', async () => {
+      const files = [
+        { fileId: 21, relativePath: 'mystery/a.mp3', position: 1, disc: null, track: 1, durationMs: 20_000 },
+        { fileId: 22, relativePath: 'mystery/b.mp3', position: 2, disc: null, track: 2, durationMs: 20_000 },
+      ]
+      const after: GroupsResponse = {
+        ...response,
+        groups: [{ ...response.groups[0], fileCount: 2 }, response.groups[1]],
+        excluded: [...response.excluded, { fileId: 22, relativePath: 'mystery/b.mp3', durationMs: 20_000 }],
+      }
+      getGroupsMock.mockResolvedValueOnce(response).mockResolvedValue(after)
+      getGroupMock.mockResolvedValue({ ...response.groups[0], files })
+      excludeFilesMock.mockResolvedValue({ ok: true, list: after })
+      renderPage()
+
+      const summary = await screen.findByText('Files (3)', { selector: 'summary' })
+      const details = summary.closest('details') as HTMLDetailsElement
+      details.open = true
+      fireEvent(details, new Event('toggle'))
+      fireEvent.click(await within(details).findByRole('checkbox', { name: 'Select b.mp3' }))
+      fireEvent.change(within(details).getByLabelText('Move selected to'), { target: { value: 'excluded' } })
+      fireEvent.click(within(details).getByRole('button', { name: 'Move' }))
+
+      const status = await screen.findByRole('status')
+      expect(status).toHaveTextContent('Excluded 1 file')
+      await waitFor(() => expect(status).toHaveFocus())
+      expect(excludeFilesMock).toHaveBeenCalledWith([22])
+      expect(getGroupsMock).toHaveBeenCalledTimes(2)
+      const section = await excludedSection()
+      expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Excluded files (2)')
+      expect(within(section).getByText('mystery/b.mp3')).toBeInTheDocument()
     })
   })
 })
