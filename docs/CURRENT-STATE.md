@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 23 review, 2026-10-18, commit 38bd4fc_
+_Updated: slice 24 review, 2026-10-18, commit 61afe71_
 
 ## Branch
 `phase/4-group-corrections` (off `main` after the phase 3 merge, PR #3)
@@ -16,11 +16,11 @@ _Updated: slice 23 review, 2026-10-18, commit 38bd4fc_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Still to do: stable group ids, the correction evidence line, and Incoming polish.
+Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Group ids are never reused (slice 24). Still to do: the correction evidence line, and Incoming polish.
 
 ## Last slice / next slice
-- Last: 23 dashboard-group-counts-ui, Implemented
-- Next: 24, stable group ids (not written yet)
+- Last: 24 stable-group-ids, Implemented
+- Next: 25, a "Corrected by the user" evidence line on groups changed by moves (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -53,8 +53,8 @@ Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and pic
 - 2026-10-18 (slice 17): Merge and split aren't separate endpoints. Merge moves all of B's files into A (B is deleted when empty); split creates a user-made group (`High`, "Grouped by the user") from the chosen files.
 - 2026-10-18 (slice 18, developer): An excluded file stays excluded until the user undoes it, survives rescans, and can be sent back to unresolved. Unresolved files stay unresolved across rescans.
 - 2026-10-18 (slice 20): The exclude and keep-unresolved states live in `AudioFile.UserState`. The grouping engine skips any file with a state; placing a file in a group clears it, and undoing an exclude sends the file to unresolved.
-- 2026-10-18 (developer): Phase 4 is reopened for its leftovers. The grouping-rule tweaks are dropped (no real-collection list). Group ids must stay stable: never reused after a group is deleted.
+- 2026-10-18 (developer): Phase 4 is reopened for its leftovers. The grouping-rule tweaks are dropped (no real-collection list). Group ids must stay stable: never reused after a group is deleted. (Done in slice 24: `FileGroup` is `AUTOINCREMENT`, and old databases are rebuilt once at startup.)
 - 2026-10-18 (slice 18): A bug found by a manual check inside a slice gets its own `fix: slice NN` commit, with the developer's OK.
 
 ## Verification
-Full suite: backend 110 passed / 0 failed, frontend 126 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 114 passed / 0 failed, frontend 126 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.

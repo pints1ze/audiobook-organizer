@@ -60,3 +60,33 @@
 - **Why a rebuild:** SQLite can't add `AUTOINCREMENT` with `ALTER TABLE`. The documented procedure is: create the new table, copy the rows, drop the old table, rename the new one. `FileGroupFile`'s foreign key refers to `FileGroup` by name, so after the rename it points to the new table.
 - **Size:** 3 tasks, 3 files: `DatabaseInitializer.cs` and its test, `GroupingServiceTests.cs`.
 - **Commit:** `feat: slice 24 stable-group-ids`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 114 passed, 0 failed | 110 before plus 4 new |
+| Frontend tests | 126 passed, 0 failed | no frontend change in this slice |
+| New tests | 3 of 3 behaviours present, passing | rebuild keeps ids 1 and 5, columns and file rows, `foreign_key_check` empty, and a second initialise changes nothing; a new id after deleting 5 is above 5; a rescan replacing the highest-id group gives a higher id, and the old id returns null. Extra: new databases get `AUTOINCREMENT` |
+| Manual: upgrade keeps data | Passed | Built 9482e6d in a temporary worktree and ran it on a scratch DB: scanned scenario A (3 tracks), one M4B and a stray MP3 (5 added), renamed group 1 to "Renamed Book" and excluded the stray file. The new API on that DB served `GET /api/groups` byte-identical to before |
+| Manual: ids aren't reused | Passed | Merging the M4B into group 1 deleted group 2, the highest id (`GET /api/groups/2` then returned 404). `POST /api/groups` then returned 201 with `Location: /api/groups/3`; without `AUTOINCREMENT` it would have reused 2 |
+| Manual: second start | Passed | Restarted on the upgraded DB: groups 3 and 1 served, and a rescan completed with 5 unchanged |
+
+**Data:** scratch DBs and folders in the session scratchpad; the dev `data/audiobooks.db` was not touched. The servers, the worktree and the scratch data were removed afterwards. One cleanup command was blocked by a safety check for an unguarded variable path; it was rerun with a guarded path.
+
+## Outcome (2026-10-18, commit 61afe71)
+
+**Status:** Implemented
+**Summary:** `FileGroup.Id` is now `AUTOINCREMENT`, so a deleted group's id is never reused. Existing databases are rebuilt once at startup in one transaction (copy, drop, rename), with foreign keys off for the rebuild only, and a `foreign_key_check` that rolls back on any problem. All Done when items are met, which resolves the slice 13 id-reuse debt.
+**Changed:** 3 code files plus 2 docs. Key ones: `Data/DatabaseInitializer.cs`, `Data/DatabaseInitializerTests.cs`.
+**Deviations:**
+- The column definition is a shared constant used by both the create and the rebuild. *Improvement*: one definition.
+- One extra test covers new databases. *Improvement.*
+- The rollback path has no test that forces a failure. *Minor debt*, acceptable: the transaction makes the failure case a no-op.
+**Follow-ups:**
+- Next slice: the "Corrected by the user" evidence line.
+
