@@ -26,6 +26,9 @@
     <Content Include="..\..\docs\fixtures\audible\*.json"
              Link="fixtures\audible\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\docs\fixtures\openlibrary\*.json"
+             Link="fixtures\openlibrary\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

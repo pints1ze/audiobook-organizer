@@ -17,4 +17,8 @@ public record MetadataCandidateDto(
     string? Language,
     int? RuntimeMinutes,
     string? Format,
-    string? CoverUrl);
+    string? CoverUrl,
+    string? Isbn = null);
+
+/// <summary>Candidates from the first provider that found any, plus the errors of providers that failed before it.</summary>
+public record MetadataSearchResultDto(IReadOnlyList<MetadataCandidateDto> Candidates, IReadOnlyList<string> ProviderErrors);

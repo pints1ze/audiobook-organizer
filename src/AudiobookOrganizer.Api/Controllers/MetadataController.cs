@@ -6,24 +6,24 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/metadata")]
-public class MetadataController(IMetadataProvider provider, ILogger<MetadataController> logger) : ControllerBase
+public class MetadataController(MetadataSearchService search) : ControllerBase
 {
     [HttpGet("search")]
-    public async Task<ActionResult<IReadOnlyList<MetadataCandidateDto>>> Search(string? keywords, CancellationToken ct)
+    public async Task<ActionResult<MetadataSearchResultDto>> Search(string? keywords, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(keywords))
         {
-            ModelState.AddModelError("keywords", "Enter a title, author or ASIN to search for.");
+            ModelState.AddModelError("keywords", "Enter a title, author, ASIN or ISBN to search for.");
             return ValidationProblem(ModelState);
         }
 
         try
         {
-            return Ok(await provider.SearchAsync(keywords.Trim(), ct));
+            return Ok(await search.SearchAsync(keywords.Trim(), ct));
         }
         catch (MetadataProviderException ex)
         {
-            logger.LogWarning(ex, "Metadata search with {Provider} failed for {Keywords}", provider.Name, keywords);
+            // Every provider failed; MetadataSearchService has logged each one.
             return Problem(statusCode: StatusCodes.Status502BadGateway, detail: ex.Message);
         }
     }
