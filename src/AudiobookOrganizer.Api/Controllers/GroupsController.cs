@@ -31,6 +31,28 @@ public class GroupsController(GroupingService grouping, AudiobookService audiobo
         return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
     }
 
+    private const long MaxUploadRequestBytes = CoverService.MaxCoverBytes + 64 * 1024;
+
+    [HttpPut("{id:long}/cover/upload")]
+    [RequestSizeLimit(MaxUploadRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxUploadRequestBytes)]
+    public async Task<ActionResult<BookCoverDto>> PutCoverUpload(long id, IFormFile? file, CancellationToken ct)
+    {
+        var image = file is null ? [] : await ReadAtMost(file, CoverService.MaxCoverBytes + 1, ct);
+        var result = covers.SaveUpload(id, image);
+        if (result.Cover is not null) return result.Cover;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    /// <summary>The file's first <paramref name="limit"/> bytes at most, so an oversized part is never held whole.</summary>
+    private static async Task<byte[]> ReadAtMost(IFormFile file, int limit, CancellationToken ct)
+    {
+        await using var stream = file.OpenReadStream();
+        var buffer = new byte[Math.Min(file.Length, limit)];
+        var read = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, ct);
+        return read == buffer.Length ? buffer : buffer[..read];
+    }
+
     [HttpGet("{id:long}/cover/image")]
     public IActionResult GetCoverImage(long id) =>
         covers.GetChosenImage(id) is { } cover ? File(cover.Image, cover.MimeType) : NotFound();

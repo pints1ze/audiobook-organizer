@@ -395,6 +395,84 @@ public class GroupCoverControllerTests : IDisposable
         Assert.Equal(1, CoverCount());
     }
 
+    private static Task<HttpResponseMessage> Upload(HttpClient client, long groupId, byte[]? image, string fileName = "cover.jpg",
+        string contentType = "image/jpeg")
+    {
+        var form = new MultipartFormDataContent();
+        if (image is null)
+        {
+            form.Add(new StringContent("nothing"), "other");
+        }
+        else
+        {
+            var part = new ByteArrayContent(image);
+            part.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+            form.Add(part, "file", fileName);
+        }
+        return client.PutAsync($"/api/groups/{groupId}/cover/upload", form);
+    }
+
+    [Fact]
+    public async Task Put_upload_stores_the_image_typed_by_its_bytes_marks_the_group_corrected_and_a_second_upload_replaces_it()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+
+        // A PNG sent as cover.jpg with image/jpeg: the bytes decide.
+        var put = await Upload(client, books.OtherId, CoverPng);
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var body = await ScansControllerTests.ReadJson(put);
+        var chosen = body.GetProperty("chosen");
+        Assert.Equal("upload", chosen.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, chosen.GetProperty("fileId").ValueKind);
+        Assert.Equal("image/png", chosen.GetProperty("mimeType").GetString());
+        Assert.Equal(body.GetRawText(), (await GetCover(client, books.OtherId)).GetRawText());
+        var image = await client.GetAsync($"/api/groups/{books.OtherId}/cover/image");
+        Assert.Equal("image/png", image.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(CoverPng, await image.Content.ReadAsByteArrayAsync());
+        Assert.True((await ScansControllerTests.ReadJson(await client.GetAsync($"/api/groups/{books.OtherId}")))
+            .GetProperty("userCorrected").GetBoolean());
+
+        var second = await Upload(client, books.OtherId, CoverJpeg, "cover.png", "image/png");
+
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal("image/jpeg", (await GetCover(client, books.OtherId)).GetProperty("chosen").GetProperty("mimeType").GetString());
+        image = await client.GetAsync($"/api/groups/{books.OtherId}/cover/image");
+        Assert.Equal(CoverJpeg, await image.Content.ReadAsByteArrayAsync());
+        Assert.Equal(1, CoverCount());
+    }
+
+    [Fact]
+    public async Task Put_upload_returns_400_on_file_for_a_missing_empty_non_image_or_too_large_file_and_404_storing_nothing()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+        var huge = new byte[CoverService.MaxCoverBytes + 1];
+        CoverPng.CopyTo(huge, 0);
+
+        (byte[]? Image, string FileName, string Message)[] bad =
+        [
+            (null, "cover.jpg", "Choose an image to upload."),
+            ([], "cover.jpg", "Choose an image to upload."),
+            ("<html><script>alert(1)</script></html>"u8.ToArray(), "cover.png", "The cover must be a JPEG or PNG."),
+            (huge, "cover.png", "The cover can be at most 10 MB."),
+        ];
+        foreach (var (image, fileName, message) in bad)
+        {
+            var response = await Upload(client, books.BookId, image, fileName, "image/png");
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var problem = await ScansControllerTests.ReadJson(response);
+            Assert.True(problem.GetProperty("errors").TryGetProperty("file", out var messages), problem.GetRawText());
+            Assert.Equal(message, messages[0].GetString());
+        }
+        Assert.Equal(HttpStatusCode.NotFound, (await Upload(client, 999999, CoverPng)).StatusCode);
+
+        Assert.Equal(0, CoverCount());
+        Assert.False((await ScansControllerTests.ReadJson(await client.GetAsync($"/api/groups/{books.BookId}")))
+            .GetProperty("userCorrected").GetBoolean());
+    }
+
     public void Dispose()
     {
         _factory.Dispose();

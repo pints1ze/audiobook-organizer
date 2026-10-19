@@ -14,11 +14,14 @@ import type {
 } from '../types/groups'
 import type { HealthResponse } from '../types/health'
 import type {
+  BookCovers,
   BookMatch,
   BookMetadata,
+  CoverChoice,
   MetadataCandidate,
   MetadataSearchResult,
   PickMatchResult,
+  SaveCoverResult,
   SaveMetadataResult,
   SearchMetadataResult,
   UpdateBookMetadataFields,
@@ -271,4 +274,57 @@ export async function saveMetadata(groupId: number, fields: UpdateBookMetadataFi
     return { ok: false, notFound: true }
   }
   throw new Error(`Saving the metadata failed with status ${response.status}`)
+}
+
+export function fileCoverUrl(groupId: number, fileId: number): string {
+  return `/api/groups/${groupId}/files/${fileId}/cover`
+}
+
+export function chosenCoverUrl(groupId: number): string {
+  return `/api/groups/${groupId}/cover/image`
+}
+
+export async function getCovers(groupId: number): Promise<BookCovers> {
+  const response = await fetch(`/api/groups/${groupId}/cover`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the covers failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookCovers
+}
+
+/** Maps a cover PUT's 200, 400 and 404 (and 502 for a download); throws for any other status. */
+async function toSaveCoverResult(response: Response, action: string): Promise<SaveCoverResult> {
+  if (response.status === 200) {
+    return { ok: true, cover: (await response.json()) as BookCovers }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: Record<string, string[]> }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  if (response.status === 502) {
+    const problem = (await response.json()) as { title?: string; detail?: string }
+    return { ok: false, downloadFailed: problem.detail || problem.title || "The cover couldn't be downloaded." }
+  }
+  throw new Error(`${action} failed with status ${response.status}`)
+}
+
+export async function chooseCover(groupId: number, choice: CoverChoice): Promise<SaveCoverResult> {
+  const response = await fetch(`/api/groups/${groupId}/cover`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(choice),
+  })
+  return toSaveCoverResult(response, 'Choosing the cover')
+}
+
+export async function uploadCover(groupId: number, file: File): Promise<SaveCoverResult> {
+  const body = new FormData()
+  body.append('file', file)
+  // No Content-Type header: the browser sets multipart/form-data with its boundary.
+  const response = await fetch(`/api/groups/${groupId}/cover/upload`, { method: 'PUT', body })
+  if (response.status === 502) throw new Error('Uploading the cover failed with status 502')
+  return toSaveCoverResult(response, 'Uploading the cover')
 }

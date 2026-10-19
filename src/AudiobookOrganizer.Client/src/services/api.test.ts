@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  chooseCover,
+  chosenCoverUrl,
   createGroup,
+  fileCoverUrl,
+  getCovers,
   excludeFiles,
   getDashboard,
   getGroup,
@@ -19,6 +23,7 @@ import {
   unresolveFiles,
   reorderGroup,
   updateGroup,
+  uploadCover,
 } from './api'
 
 function mockFetch(status: number, body: unknown) {
@@ -595,5 +600,91 @@ describe('metadata', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(saveMetadata(4, { title: 'x' })).rejects.toThrow()
+  })
+})
+
+describe('covers', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const cover = {
+    groupId: 4,
+    chosen: { source: 'upload', fileId: null, mimeType: 'image/png', chosenAtUtc: '2026-10-19T10:00:00+00:00' },
+    embedded: [{ fileId: 7, relativePath: 'book/track1.mp3' }],
+    provider: { provider: 'audible', coverUrl: 'https://m.media-amazon.com/images/I/x.jpg' },
+  }
+
+  it('builds the image URLs', () => {
+    expect(fileCoverUrl(4, 7)).toBe('/api/groups/4/files/7/cover')
+    expect(chosenCoverUrl(4)).toBe('/api/groups/4/cover/image')
+  })
+
+  it('getCovers returns the parsed body on a 200', async () => {
+    const fetchMock = mockFetch(200, cover)
+
+    await expect(getCovers(4)).resolves.toEqual(cover)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/cover')
+  })
+
+  it('getCovers throws for any other status', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getCovers(4)).rejects.toThrow()
+  })
+
+  it('chooseCover sends the choice as JSON and returns the covers on a 200', async () => {
+    const fetchMock = mockFetch(200, cover)
+
+    await expect(chooseCover(4, { source: 'provider' })).resolves.toEqual({ ok: true, cover })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/cover', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'provider' }),
+    })
+  })
+
+  it('chooseCover maps 400, 404 and 502, and throws for any other status', async () => {
+    const errors = { fileId: ['This file has no embedded cover.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+    await expect(chooseCover(4, { source: 'embedded', fileId: 7 })).resolves.toEqual({ ok: false, errors })
+
+    mockFetch(404, { title: 'Not Found', status: 404 })
+    await expect(chooseCover(4, { source: 'provider' })).resolves.toEqual({ ok: false, notFound: true })
+
+    const detail = "The cover couldn't be downloaded. Try again later."
+    mockFetch(502, { title: 'Bad Gateway', status: 502, detail })
+    await expect(chooseCover(4, { source: 'provider' })).resolves.toEqual({ ok: false, downloadFailed: detail })
+
+    mockFetch(500, { title: 'error' })
+    await expect(chooseCover(4, { source: 'provider' })).rejects.toThrow()
+  })
+
+  it('uploadCover sends a PUT with the file under "file" and returns the covers on a 200', async () => {
+    const fetchMock = mockFetch(200, cover)
+    const file = new File([new Uint8Array([0x89, 0x50])], 'cover.png', { type: 'image/png' })
+
+    await expect(uploadCover(4, file)).resolves.toEqual({ ok: true, cover })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/groups/4/cover/upload')
+    expect(init.method).toBe('PUT')
+    expect(init.headers).toBeUndefined()
+    const body = init.body as FormData
+    expect(body).toBeInstanceOf(FormData)
+    expect(body.get('file')).toBeInstanceOf(File)
+    expect((body.get('file') as File).name).toBe('cover.png')
+  })
+
+  it('uploadCover maps 400 and 404, and throws for any other status', async () => {
+    const file = new File(['x'], 'cover.png')
+    const errors = { file: ['The cover must be a JPEG or PNG.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+    await expect(uploadCover(4, file)).resolves.toEqual({ ok: false, errors })
+
+    mockFetch(404, { title: 'Not Found', status: 404 })
+    await expect(uploadCover(4, file)).resolves.toEqual({ ok: false, notFound: true })
+
+    mockFetch(413, { title: 'Payload Too Large' })
+    await expect(uploadCover(4, file)).rejects.toThrow()
   })
 })

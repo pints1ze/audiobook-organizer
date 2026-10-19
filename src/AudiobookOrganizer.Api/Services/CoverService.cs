@@ -94,6 +94,27 @@ public class CoverService(GroupingService grouping, GroupRepository groups, Audi
         return new ChooseCoverResult(GetCovers(groupId), new Dictionary<string, string[]>());
     }
 
+    /// <summary>
+    /// Stores an uploaded image as the book's cover (source "upload"), typed by its bytes' signature (JPEG or PNG, at
+    /// most 10 MB), never by its name or declared type; creates the Audiobook if needed and marks the group
+    /// user-corrected. Errors are keyed "file"; nothing is stored on any error.
+    /// </summary>
+    public ChooseCoverResult SaveUpload(long groupId, byte[] image)
+    {
+        if (groups.GetGroup(groupId) is null) return new ChooseCoverResult(null, new Dictionary<string, string[]>());
+
+        static ChooseCoverResult Error(string message) =>
+            new(null, new Dictionary<string, string[]> { ["file"] = [message] });
+
+        if (image.Length == 0) return Error("Choose an image to upload.");
+        if (SignatureType(image) is not { } mimeType) return Error("The cover must be a JPEG or PNG.");
+        if (image.Length > MaxCoverBytes) return Error("The cover can be at most 10 MB.");
+
+        audiobooks.SaveCover(groupId, new AudiobookCover { Source = "upload", FileId = null, MimeType = mimeType, Image = image },
+            DateTimeOffset.UtcNow.ToString("O"));
+        return new ChooseCoverResult(GetCovers(groupId), new Dictionary<string, string[]>());
+    }
+
     /// <summary>The current match's provider and cover URL; null when there's no match or it has no cover URL.</summary>
     private ProviderCoverDto? ProviderCover(long groupId)
     {

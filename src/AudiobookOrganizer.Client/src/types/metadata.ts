@@ -93,3 +93,39 @@ export type SaveMetadataResult =
   | { ok: true; metadata: BookMetadata }
   | { ok: false; errors: Record<string, string[]> }
   | { ok: false; notFound: true }
+
+/** The book's chosen cover: source "embedded" (with the file id), "provider" or "upload". */
+export interface ChosenCover {
+  source: 'embedded' | 'provider' | 'upload'
+  fileId: number | null
+  mimeType: string
+  chosenAtUtc: string
+}
+
+/** A file of the book whose scan found an embedded cover. */
+export interface EmbeddedCover {
+  fileId: number
+  relativePath: string
+}
+
+/** The current match's cover, which the "provider" choice downloads. */
+export interface ProviderCover {
+  provider: string
+  coverUrl: string
+}
+
+/** A book's chosen cover, if any, and the covers it can choose from. */
+export interface BookCovers {
+  groupId: number
+  chosen: ChosenCover | null
+  embedded: EmbeddedCover[]
+  provider: ProviderCover | null
+}
+
+export type CoverChoice = { source: 'embedded'; fileId: number } | { source: 'provider' }
+
+export type SaveCoverResult =
+  | { ok: true; cover: BookCovers }
+  | { ok: false; errors: Record<string, string[]> }
+  | { ok: false; notFound: true }
+  | { ok: false; downloadFailed: string }
