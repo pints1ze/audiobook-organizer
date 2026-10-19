@@ -1,3 +1,4 @@
+using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Api;
 using AudiobookOrganizer.Api.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -6,41 +7,43 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/people")]
-public class PeopleController(PersonService people) : ControllerBase
+public class PeopleController(CanonicalNameService names) : ControllerBase
 {
+    private const CanonicalKind Kind = CanonicalKind.Person;
+
     [HttpGet]
-    public IReadOnlyList<PersonDto> List() => people.List();
+    public IReadOnlyList<CanonicalEntryDto> List() => names.List(Kind);
 
     [HttpGet("resolve")]
-    public ActionResult<PersonDto> Resolve(string? name)
+    public ActionResult<CanonicalEntryDto> Resolve(string? name)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             ModelState.AddModelError(nameof(name), "Enter a name to resolve.");
             return ValidationProblem(ModelState);
         }
-        var person = people.Resolve(name);
-        if (person is null) return NotFound();
-        return person;
+        var entry = names.Resolve(Kind, name);
+        if (entry is null) return NotFound();
+        return entry;
     }
 
     [HttpPost]
-    public ActionResult<PersonDto> Create(PersonRequest request)
+    public ActionResult<CanonicalEntryDto> Create(CanonicalEntryRequest request)
     {
-        var result = people.Create(request);
+        var result = names.Create(Kind, request);
         if (result.Saved is not null) return CreatedAtAction(nameof(List), null, result.Saved);
         return SaveFailed(result);
     }
 
     [HttpPut("{id:long}")]
-    public ActionResult<PersonDto> Update(long id, PersonRequest request)
+    public ActionResult<CanonicalEntryDto> Update(long id, CanonicalEntryRequest request)
     {
-        var result = people.Update(id, request);
+        var result = names.Update(Kind, id, request);
         if (result.Saved is not null) return result.Saved;
         return SaveFailed(result);
     }
 
-    private ActionResult SaveFailed(PersonSaveResult result)
+    private ActionResult SaveFailed(CanonicalSaveResult result)
     {
         if (result.NotFound) return NotFound();
         foreach (var (field, messages) in result.Errors)

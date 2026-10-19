@@ -22,7 +22,7 @@ Phase 6, Normalization: in progress (phase 5 merged, PR #5). People + aliases AP
 
 ## Last slice / next slice
 - Last: 38 people-aliases-api, Implemented
-- Next: 39, genres + genre aliases API (not written)
+- Next: 39 genres-aliases-api (written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
