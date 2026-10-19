@@ -2,17 +2,22 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../App'
-import { getGroup, searchMetadata } from '../services/api'
+import { getGroup, getMatch, pickMatch, searchMetadata } from '../services/api'
 import type { GroupDetail } from '../types/groups'
-import type { MetadataCandidate } from '../types/metadata'
+import type { BookMatch, MetadataCandidate, PickMatchResult } from '../types/metadata'
+import { formatDateTime } from '../utils/formatDateTime'
 
 vi.mock('../services/api', () => ({
   getGroup: vi.fn(),
+  getMatch: vi.fn(),
+  pickMatch: vi.fn(),
   searchMetadata: vi.fn(),
 }))
 
 const getGroupMock = vi.mocked(getGroup)
 const searchMock = vi.mocked(searchMetadata)
+const getMatchMock = vi.mocked(getMatch)
+const pickMock = vi.mocked(pickMatch)
 
 const group: GroupDetail = {
   id: 4,
@@ -60,6 +65,25 @@ const openLibrary: MetadataCandidate = {
   isbn: '9780593135204',
 }
 
+const storedMatch: BookMatch = { groupId: 4, match: openLibrary, pickedAtUtc: '2026-10-18T09:30:00Z' }
+
+function chosenSection() {
+  return screen.getByRole('heading', { level: 2, name: 'Chosen match' }).closest('section')!
+}
+
+function resultItems() {
+  const section = screen.getByRole('heading', { level: 2, name: 'Catalog search' }).closest('section')!
+  return within(section)
+    .getAllByRole('heading', { level: 3 })
+    .map((heading) => heading.closest('li')!)
+}
+
+async function searchFor(candidates: MetadataCandidate[]) {
+  searchMock.mockResolvedValue({ ok: true, result: { candidates, providerErrors: [] } })
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+  await screen.findByText(`${candidates.length} matches found.`)
+}
+
 function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -78,6 +102,9 @@ describe('BookPage', () => {
   beforeEach(() => {
     getGroupMock.mockReset()
     searchMock.mockReset()
+    getMatchMock.mockReset()
+    getMatchMock.mockResolvedValue(null)
+    pickMock.mockReset()
   })
 
   it('loads the group, prefills the keywords, searches and lists a candidate', async () => {
@@ -186,5 +213,122 @@ describe('BookPage', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Book not found' })).toBeInTheDocument()
     expect(getGroupMock).not.toHaveBeenCalled()
+  })
+
+  it('shows the stored match under "Chosen match" with its picked date, above the search', async () => {
+    getMatchMock.mockResolvedValue(storedMatch)
+    await loadedPage()
+
+    expect(getMatchMock).toHaveBeenCalledWith(4)
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Catalog search'])
+    const section = chosenSection()
+    expect(await within(section).findByRole('heading', { level: 3, name: 'Project Hail Mary' })).toBeInTheDocument()
+    expect(within(section).getByText('Open Library')).toBeInTheDocument()
+    expect(within(section).getByText('9780593135204')).toBeInTheDocument()
+    expect(within(section).getByText(`Picked ${formatDateTime(storedMatch.pickedAtUtc)}`)).toBeInTheDocument()
+  })
+
+  it('says "No match chosen yet." when the book has none', async () => {
+    await loadedPage()
+
+    expect(await within(chosenSection()).findByText('No match chosen yet.')).toBeInTheDocument()
+  })
+
+  it('picks the second result, announces it, focuses the Chosen match heading and marks it current', async () => {
+    let resolvePick!: (value: PickMatchResult) => void
+    pickMock.mockReturnValue(new Promise((resolve) => (resolvePick = resolve)))
+    await loadedPage()
+    await within(chosenSection()).findByText('No match chosen yet.')
+    await searchFor([openLibrary, audible])
+
+    const first = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 1 of 2' })
+    const second = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' })
+    fireEvent.click(second)
+    expect(pickMock).toHaveBeenCalledWith(4, audible)
+    expect(first).toBeDisabled()
+    expect(second).toBeDisabled()
+
+    resolvePick({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    expect(await screen.findByText('Match saved: Project Hail Mary')).toHaveAttribute('role', 'status')
+    expect(screen.getByRole('heading', { level: 2, name: 'Chosen match' })).toHaveFocus()
+    expect(within(chosenSection()).getByText('B08G9PRS1K')).toBeInTheDocument()
+
+    const items = resultItems()
+    expect(within(items[1]).getByText('Current match')).toBeInTheDocument()
+    expect(within(items[1]).queryByRole('button')).not.toBeInTheDocument()
+    expect(within(items[0]).getByRole('button', { name: /Use this match/ })).toBeEnabled()
+  })
+
+  it('replaces the stored match, which reads "Current match" until another is picked', async () => {
+    getMatchMock.mockResolvedValue(storedMatch)
+    pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    await loadedPage()
+    await within(chosenSection()).findByText('9780593135204')
+    await searchFor([openLibrary, audible])
+
+    expect(within(resultItems()[0]).getByText('Current match')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+
+    expect(await screen.findByText('Match saved: Project Hail Mary')).toBeInTheDocument()
+    expect(within(chosenSection()).queryByText('9780593135204')).not.toBeInTheDocument()
+    expect(within(chosenSection()).getByText('B08G9PRS1K')).toBeInTheDocument()
+    const items = resultItems()
+    expect(within(items[0]).getByRole('button', { name: /Use this match/ })).toBeEnabled()
+    expect(within(items[1]).getByText('Current match')).toBeInTheDocument()
+  })
+
+  it('shows a 400 beside the result and keeps the previous match and the results', async () => {
+    getMatchMock.mockResolvedValue(storedMatch)
+    pickMock.mockResolvedValue({ ok: false, errors: { coverUrl: ['The cover URL must be an absolute http or https URL.'] } })
+    await loadedPage()
+    await within(chosenSection()).findByText('9780593135204')
+    await searchFor([openLibrary, audible])
+
+    const button = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' })
+    fireEvent.click(button)
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('The cover URL must be an absolute http or https URL.')
+    expect(button.closest('li')).toContainElement(alert)
+    expect(within(chosenSection()).getByText('9780593135204')).toBeInTheDocument()
+    expect(screen.getByText('2 matches found.')).toBeInTheDocument()
+    expect(button).toBeEnabled()
+  })
+
+  it('shows "This book no longer exists" with a link to Incoming on a 404', async () => {
+    pickMock.mockResolvedValue({ ok: false, notFound: true })
+    await loadedPage()
+    await searchFor([audible, openLibrary])
+    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 1 of 2' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('This book no longer exists')
+    expect(within(alert).getByRole('link', { name: /incoming/i })).toHaveAttribute('href', '/incoming')
+    expect(screen.getByText('2 matches found.')).toBeInTheDocument()
+  })
+
+  it('shows a retryable error when the pick request fails', async () => {
+    pickMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    await loadedPage()
+    await searchFor([audible, openLibrary])
+    const button = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 1 of 2' })
+    fireEvent.click(button)
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("The match couldn't be saved.")
+    await waitFor(() => expect(button).toBeEnabled())
+
+    pickMock.mockResolvedValueOnce({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    fireEvent.click(button)
+    expect(await screen.findByText('Match saved: Project Hail Mary')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('still lets the user search when loading the match fails', async () => {
+    getMatchMock.mockRejectedValue(new Error('Loading the match failed with status 500'))
+    await loadedPage()
+
+    expect(await within(chosenSection()).findByText("The chosen match couldn't be loaded.")).toBeInTheDocument()
+    await searchFor([audible, openLibrary])
+    expect(screen.getAllByRole('button', { name: /Use this match/ })).toHaveLength(2)
   })
 })

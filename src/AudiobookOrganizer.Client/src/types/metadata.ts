@@ -32,3 +32,15 @@ export type SearchMetadataResult =
   | { ok: true; result: MetadataSearchResult }
   | { ok: false; errors: { keywords?: string[] } }
   | { ok: false; providerFailure: string }
+
+/** The candidate the user picked for a book (a group), and when. */
+export interface BookMatch {
+  groupId: number
+  match: MetadataCandidate
+  pickedAtUtc: string
+}
+
+export type PickMatchResult =
+  | { ok: true; match: BookMatch }
+  | { ok: false; errors: Record<string, string[]> }
+  | { ok: false; notFound: true }

@@ -7,6 +7,8 @@ import {
   getGroups,
   getHealth,
   getLatestScan,
+  getMatch,
+  pickMatch,
   getSettings,
   saveSettings,
   searchMetadata,
@@ -445,5 +447,78 @@ describe('searchMetadata', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(searchMetadata('dune')).rejects.toThrow()
+  })
+})
+
+describe('match', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const candidate = {
+    provider: 'audible',
+    asin: 'B08G9PRS1K',
+    title: 'Project Hail Mary',
+    subtitle: null,
+    authors: ['Andy Weir'],
+    narrators: ['Ray Porter'],
+    series: null,
+    publisher: 'Audible Studios',
+    releaseDate: '2021-05-04',
+    language: 'english',
+    runtimeMinutes: 970,
+    format: 'unabridged',
+    coverUrl: 'https://example.test/cover.jpg',
+    isbn: null,
+  }
+  const bookMatch = { groupId: 4, match: candidate, pickedAtUtc: '2026-10-19T10:00:00+00:00' }
+
+  it('getMatch returns the match on a 200', async () => {
+    const fetchMock = mockFetch(200, bookMatch)
+
+    await expect(getMatch(4)).resolves.toEqual(bookMatch)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/match')
+  })
+
+  it('getMatch returns null on a 204', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    await expect(getMatch(4)).resolves.toBeNull()
+  })
+
+  it('getMatch throws for any other status', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getMatch(4)).rejects.toThrow()
+  })
+
+  it('pickMatch sends a PUT with the candidate and returns the match on a 200', async () => {
+    const fetchMock = mockFetch(200, bookMatch)
+
+    await expect(pickMatch(4, candidate)).resolves.toEqual({ ok: true, match: bookMatch })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/match', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(candidate),
+    })
+  })
+
+  it('pickMatch returns the field errors on a 400', async () => {
+    const errors = { title: ['The title is required.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(pickMatch(4, candidate)).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('pickMatch returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(pickMatch(4, candidate)).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('pickMatch throws for any other status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(pickMatch(4, candidate)).rejects.toThrow()
   })
 })
