@@ -51,3 +51,32 @@
 - **Split:** the Dashboard page UI (`types/dashboard.ts`, `DashboardPage.tsx` and its test, and the `AppLayout.test.tsx` mock) is the next slice. Doing both would touch about 10 files.
 - **Size:** 4 tasks, 6 files: `DashboardService.cs` (new), `DashboardController.cs`, `DashboardDto.cs`, `Program.cs`, `GroupRepository.cs`, `DashboardControllerTests.cs`.
 - **Commit:** `feat: slice 22 dashboard-group-counts-api`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 110 passed, 0 failed | 107 before plus 3 new; the existing dashboard tests pass unchanged |
+| Frontend tests | 125 passed, 0 failed | no frontend change in this slice |
+| New tests | 3 of 3 present, passing | fresh database gives zeros; after a scan the counts match `GET /api/groups`; the counts follow a rename and an exclude |
+| Manual: fresh database | Passed | API on :5070 with a scratch DB: every new count is 0, `booksByConfidence` `{0,0,0}` |
+| Manual: after a scan | Passed | Scenario A (3 tracks), one M4B and a stray MP3: `bookCount` 2, `{low 0, medium 1, high 1}`, `correctedBookCount` 0, `unresolvedFileCount` 1, `excludedFileCount` 0 |
+| Manual: after an exclude | Passed | `POST /api/groups/excluded` with the stray file (200): `unresolvedFileCount` 0 and `excludedFileCount` 1, matching `GET /api/groups` |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The server and the scratch data were removed afterwards.
+
+## Outcome (2026-10-18, commit 718d680)
+
+**Status:** Implemented
+**Summary:** `GET /api/dashboard` now comes from a new `DashboardService`, and the controller is one line. The response adds the book count, books by confidence, corrected books, and unresolved and excluded file counts, using the same filters as `GET /api/groups`. All Done when items are met.
+**Changed:** 6 code files plus 3 docs. Key ones: `Services/DashboardService.cs` (new), `Data/GroupRepository.cs` (`CountGroups`, `CountUnresolvedAndExcluded`), `Models/Api/DashboardDto.cs`, `Controllers/DashboardController.cs`.
+**Deviations:**
+- `CountGroups` returns a small `GroupCounts` class kept next to `GroupFileRow`. *Fine.*
+- The commit includes the reopened-phase changes to PLAN.md and CURRENT-STATE.md. *Fine*, by design.
+**Follow-ups:**
+- Next slice: show the counts on the Dashboard page, and add the new fields to `types/dashboard.ts` and the test mocks.
+
