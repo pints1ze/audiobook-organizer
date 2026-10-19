@@ -52,3 +52,35 @@
 - Initials (`J.R.R.` vs `J. R. R.`) and punctuation are not folded into the key; those become aliases or later suggestions.
 - Split off for later phase 6 slices: genres + genre aliases API; merge two people (aliases and later book links move to the survivor); alias suggestions; people/genre management screen; resolving a book's author, narrator and genre values to canonical entries.
 - Conflict check: no new package; SQLite + Dapper and the `CREATE TABLE IF NOT EXISTS` decision (slice 05); AUTOINCREMENT so ids aren't reused (slice 24 decision); matches PLAN.md phase 6 and PRD Data.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 200 passed, 0 failed | Was 184 |
+| Frontend tests | 195 passed, 0 failed | Unchanged (no client changes) |
+| New tests | 5 of 5 present, passing | `PersonServiceTests` (key variants, two commas, `Clean`); `PeopleControllerTests` (create/list/resolve, ordering, dropped duplicate aliases, clash 400, blank 400, PUT replace, PUT keeps own keys, PUT 404, resolve 404/400): 16 tests |
+| Manual: POST Stephen King, resolve `king, stephen` and `Richard Bachman` | Not run | API (5070) not running. Start with `scripts/start-api.ps1` |
+| Manual: restart API, person still listed | Not run | Same |
+
+Data checks for the developer (not run): `SELECT p.Id, p.Name, p.NameKey, a.Alias, a.AliasKey FROM Person p LEFT JOIN PersonAlias a ON a.PersonId = p.Id;`
+
+## Outcome (2026-10-19, commit 152c634)
+
+**Status:** Implemented
+**Summary:** The API stores canonical people in `Person` and their variants in `PersonAlias`, each with a `PersonService.NameKey` match key (whitespace, case and single-comma `Last, First` folded). `GET`/`POST /api/people`, `PUT /api/people/{id}` and `GET /api/people/resolve?name=` list, create, replace and resolve them, rejecting a name or alias another person already owns.
+**Changed:** 8 code files: `Data/PersonRepository.cs`, `Services/PersonService.cs`, `Controllers/PeopleController.cs`, `Models/Api/PersonDtos.cs` (new); `Data/DatabaseInitializer.cs`, `Program.cs`; tests `Services/PersonServiceTests.cs`, `Controllers/PeopleControllerTests.cs` (16 tests). Plus this slice file, `docs/PLAN.md` and `docs/CURRENT-STATE.md`.
+**Deviations:**
+- Alias clashes come back under `aliases` as `"<alias>: Already used by <Name>."` so the clashing alias is named: *improvement*.
+- Aliases are ordered ignoring case (`COLLATE NOCASE`), like names: *fine*.
+- The repository returns `PersonDto` rather than a `Models/Local` entity, keeping the slice at 8 files: *fine*; add an entity if a later slice needs columns the DTO doesn't carry.
+- `resolve` with `name` missing returns 400, the same as blank: *fine*.
+- Two saves racing on the same key hit the UNIQUE constraint and return 500 instead of 400: *debt*, minor for a single user. Revisit if the management screen allows parallel saves.
+- The slice file and the PLAN.md / CURRENT-STATE.md branch edits went in the `feat:` commit (uncommitted when it ran): *fine*.
+**Follow-ups:**
+- Next phase 6 slices (from Notes): genres + genre aliases API; merging two people; alias suggestions; the people/genre management screen; resolving a book's author, narrator and genre values to canonical entries.
+- Manual checks for 38 not run; the developer verifies them with the phase.
