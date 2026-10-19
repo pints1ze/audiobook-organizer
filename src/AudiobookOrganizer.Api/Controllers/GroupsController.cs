@@ -1,4 +1,5 @@
 using AudiobookOrganizer.Api.Models.Api;
+using AudiobookOrganizer.Api.Services;
 using AudiobookOrganizer.Api.Services.Grouping;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,8 +7,88 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/groups")]
-public class GroupsController(GroupingService grouping) : ControllerBase
+public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers,
+    ILogger<GroupsController> logger) : ControllerBase
 {
+    [HttpGet("{id:long}/cover")]
+    public ActionResult<BookCoverDto> GetCover(long id) => covers.GetCovers(id) is { } cover ? cover : NotFound();
+
+    [HttpPut("{id:long}/cover")]
+    public async Task<ActionResult<BookCoverDto>> PutCover(long id, ChooseCoverDto request, CancellationToken ct)
+    {
+        ChooseCoverResult result;
+        try
+        {
+            result = await covers.ChooseCoverAsync(id, request, ct);
+        }
+        catch (CoverDownloadException ex)
+        {
+            logger.LogWarning(ex, "Cover download for group {GroupId} failed", id);
+            return Problem(statusCode: StatusCodes.Status502BadGateway,
+                detail: "The cover couldn't be downloaded. Try again later.");
+        }
+        if (result.Cover is not null) return result.Cover;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    private const long MaxUploadRequestBytes = CoverService.MaxCoverBytes + 64 * 1024;
+
+    [HttpPut("{id:long}/cover/upload")]
+    [RequestSizeLimit(MaxUploadRequestBytes)]
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxUploadRequestBytes)]
+    public async Task<ActionResult<BookCoverDto>> PutCoverUpload(long id, IFormFile? file, CancellationToken ct)
+    {
+        var image = file is null ? [] : await ReadAtMost(file, CoverService.MaxCoverBytes + 1, ct);
+        var result = covers.SaveUpload(id, image);
+        if (result.Cover is not null) return result.Cover;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    /// <summary>The file's first <paramref name="limit"/> bytes at most, so an oversized part is never held whole.</summary>
+    private static async Task<byte[]> ReadAtMost(IFormFile file, int limit, CancellationToken ct)
+    {
+        await using var stream = file.OpenReadStream();
+        var buffer = new byte[Math.Min(file.Length, limit)];
+        var read = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, ct);
+        return read == buffer.Length ? buffer : buffer[..read];
+    }
+
+    [HttpGet("{id:long}/cover/image")]
+    public IActionResult GetCoverImage(long id) =>
+        covers.GetChosenImage(id) is { } cover ? File(cover.Image, cover.MimeType) : NotFound();
+
+    [HttpGet("{id:long}/files/{fileId:long}/cover")]
+    public IActionResult GetFileCover(long id, long fileId) =>
+        covers.ReadEmbedded(id, fileId) is { } picture ? File(picture.Data, picture.MimeType) : NotFound();
+
+    [HttpGet("{id:long}/match")]
+    public ActionResult<BookMatchDto> GetMatch(long id)
+    {
+        var result = audiobooks.GetMatch(id);
+        if (!result.GroupFound) return NotFound();
+        return result.Match is { } match ? match : NoContent();
+    }
+
+    [HttpPut("{id:long}/match")]
+    public ActionResult<BookMatchDto> PutMatch(long id, MetadataCandidateDto candidate)
+    {
+        var result = audiobooks.PickMatch(id, candidate);
+        if (result.Match is not null) return result.Match;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    [HttpGet("{id:long}/metadata")]
+    public ActionResult<BookMetadataDto> GetMetadata(long id) =>
+        audiobooks.GetMetadata(id) is { } metadata ? metadata : NotFound();
+
+    [HttpPut("{id:long}/metadata")]
+    public ActionResult<BookMetadataDto> PutMetadata(long id, UpdateBookMetadataDto request)
+    {
+        var result = audiobooks.UpdateMetadata(id, request);
+        if (result.Metadata is not null) return result.Metadata;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
     [HttpGet]
     public ActionResult<GroupListDto> Get() => grouping.List();
 

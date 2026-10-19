@@ -29,9 +29,36 @@ builder.Services.AddSingleton<AudioFileReader>();
 builder.Services.AddSingleton<ScanRepository>();
 builder.Services.AddSingleton<GroupRepository>();
 builder.Services.AddSingleton<GroupingService>();
+builder.Services.AddSingleton<AudiobookRepository>();
+builder.Services.AddSingleton<AudiobookService>();
+// Transient because it holds the typed CoverDownloadClient, as MetadataSearchService holds the providers.
+builder.Services.AddTransient<CoverService>();
 builder.Services.AddSingleton<ScanService>();
 builder.Services.AddSingleton<ScanRunner>();
 builder.Services.AddSingleton<DashboardService>();
+
+builder.Services.AddHttpClient<AudibleClient>(http =>
+{
+    http.BaseAddress = new Uri("https://api.audible.com/");
+    http.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddHttpClient<OpenLibraryClient>(http =>
+{
+    http.BaseAddress = new Uri("https://openlibrary.org/");
+    http.Timeout = TimeSpan.FromSeconds(15);
+    // Open Library asks clients to identify themselves.
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("AudiobookOrganizer/1.0 (self-hosted)");
+});
+// The catalogs' image CDNs are their own system; CoverService limits which hosts it's asked to fetch from.
+builder.Services.AddHttpClient<CoverDownloadClient>(http =>
+{
+    http.Timeout = TimeSpan.FromSeconds(15);
+    http.DefaultRequestHeaders.UserAgent.ParseAdd("AudiobookOrganizer/1.0 (self-hosted)");
+});
+// Registration order is the fallback order: Audible first, then Open Library.
+builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<AudibleClient>());
+builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<OpenLibraryClient>());
+builder.Services.AddTransient<MetadataSearchService>();
 
 builder.Services.AddControllers();
 

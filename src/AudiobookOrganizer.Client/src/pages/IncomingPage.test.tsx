@@ -161,6 +161,21 @@ describe('IncomingPage', () => {
       expect(screen.queryByText('Edited')).not.toBeInTheDocument()
     })
 
+    it('gives each book row a uniquely named "Find metadata" link to its book page', async () => {
+      const book = response.groups[1]
+      getGroupsMock.mockResolvedValue({
+        ...response,
+        groups: [response.groups[0], { ...book, id: 3, title: 'Dune' }, { ...book, id: 4, title: 'Dune' }, book],
+      })
+      renderPage()
+
+      expect(await screen.findByRole('link', { name: 'Find metadata for The Hobbit' })).toHaveAttribute('href', '/books/1')
+      expect(screen.getByRole('link', { name: 'Find metadata for Unknown (group 2)' })).toHaveAttribute('href', '/books/2')
+      expect(screen.getByRole('link', { name: 'Find metadata for Dune (group 3)' })).toHaveAttribute('href', '/books/3')
+      expect(screen.getByRole('link', { name: 'Find metadata for Dune (group 4)' })).toHaveAttribute('href', '/books/4')
+      expect(screen.getAllByText('Find metadata')).toHaveLength(4)
+    })
+
     it('adds the group id to Edit names when books share a title', async () => {
       const book = response.groups[1]
       getGroupsMock.mockResolvedValue({

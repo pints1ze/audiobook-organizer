@@ -1,19 +1,29 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  chooseCover,
+  chosenCoverUrl,
   createGroup,
+  fileCoverUrl,
+  getCovers,
   excludeFiles,
   getDashboard,
   getGroup,
   getGroups,
   getHealth,
   getLatestScan,
+  getMatch,
+  getMetadata,
+  pickMatch,
+  saveMetadata,
   getSettings,
   saveSettings,
+  searchMetadata,
   startScan,
   moveFilesToGroup,
   unresolveFiles,
   reorderGroup,
   updateGroup,
+  uploadCover,
 } from './api'
 
 function mockFetch(status: number, body: unknown) {
@@ -392,5 +402,289 @@ describe.each([
     mockFetch(500, { title: 'error' })
 
     await expect(call([4])).rejects.toThrow()
+  })
+})
+
+describe('searchMetadata', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const candidate = {
+    provider: 'audible',
+    asin: 'B08G9PRS1K',
+    title: 'Project Hail Mary',
+    subtitle: null,
+    authors: ['Andy Weir'],
+    narrators: ['Ray Porter'],
+    series: null,
+    publisher: 'Audible Studios',
+    releaseDate: '2021-05-04',
+    language: 'english',
+    runtimeMinutes: 970,
+    format: 'unabridged',
+    coverUrl: 'https://example.test/cover.jpg',
+    isbn: null,
+  }
+
+  it('encodes the keywords and returns candidates and provider errors on a 200', async () => {
+    const result = { candidates: [candidate], providerErrors: ['Audible search failed: timeout'] }
+    const fetchMock = mockFetch(200, result)
+
+    await expect(searchMetadata('hail mary & co/2')).resolves.toEqual({ ok: true, result })
+    expect(fetchMock).toHaveBeenCalledWith('/api/metadata/search?keywords=hail%20mary%20%26%20co%2F2')
+  })
+
+  it('returns the field errors on a 400', async () => {
+    mockFetch(400, { title: 'One or more validation errors occurred.', errors: { keywords: ['Enter a title.'] } })
+
+    await expect(searchMetadata(' ')).resolves.toEqual({ ok: false, errors: { keywords: ['Enter a title.'] } })
+  })
+
+  it('returns the problem detail on a 502', async () => {
+    mockFetch(502, { title: 'Bad Gateway', status: 502, detail: 'Audible search failed. Open Library search failed.' })
+
+    await expect(searchMetadata('dune')).resolves.toEqual({
+      ok: false,
+      providerFailure: 'Audible search failed. Open Library search failed.',
+    })
+  })
+
+  it('throws for any other status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(searchMetadata('dune')).rejects.toThrow()
+  })
+})
+
+describe('match', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const candidate = {
+    provider: 'audible',
+    asin: 'B08G9PRS1K',
+    title: 'Project Hail Mary',
+    subtitle: null,
+    authors: ['Andy Weir'],
+    narrators: ['Ray Porter'],
+    series: null,
+    publisher: 'Audible Studios',
+    releaseDate: '2021-05-04',
+    language: 'english',
+    runtimeMinutes: 970,
+    format: 'unabridged',
+    coverUrl: 'https://example.test/cover.jpg',
+    isbn: null,
+  }
+  const bookMatch = { groupId: 4, match: candidate, pickedAtUtc: '2026-10-19T10:00:00+00:00' }
+
+  it('getMatch returns the match on a 200', async () => {
+    const fetchMock = mockFetch(200, bookMatch)
+
+    await expect(getMatch(4)).resolves.toEqual(bookMatch)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/match')
+  })
+
+  it('getMatch returns null on a 204', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })))
+
+    await expect(getMatch(4)).resolves.toBeNull()
+  })
+
+  it('getMatch throws for any other status', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getMatch(4)).rejects.toThrow()
+  })
+
+  it('pickMatch sends a PUT with the candidate and returns the match on a 200', async () => {
+    const fetchMock = mockFetch(200, bookMatch)
+
+    await expect(pickMatch(4, candidate)).resolves.toEqual({ ok: true, match: bookMatch })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/match', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(candidate),
+    })
+  })
+
+  it('pickMatch returns the field errors on a 400', async () => {
+    const errors = { title: ['The title is required.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(pickMatch(4, candidate)).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('pickMatch returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(pickMatch(4, candidate)).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('pickMatch throws for any other status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(pickMatch(4, candidate)).rejects.toThrow()
+  })
+})
+
+describe('metadata', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const field = <T,>(value: T, origin: 'file' | 'provider' | 'user' | null = null, provider: string | null = null) => ({
+    value,
+    origin,
+    provider,
+  })
+  const metadata = {
+    groupId: 4,
+    fields: {
+      title: field('Project Hail Mary', 'file'),
+      subtitle: field(null),
+      authors: field(['Andy Weir'], 'file'),
+      narrators: field(['A', 'B'], 'user'),
+      series: field(null),
+      seriesPart: field(null),
+      publisher: field('', 'user'),
+      releaseDate: field(null),
+      language: field(null),
+      format: field(null),
+      asin: field(null),
+      isbn: field(null),
+    },
+  }
+
+  it('getMetadata returns the parsed body on a 200', async () => {
+    const fetchMock = mockFetch(200, metadata)
+
+    await expect(getMetadata(4)).resolves.toEqual(metadata)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/metadata')
+  })
+
+  it('getMetadata throws for any other status', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getMetadata(4)).rejects.toThrow()
+  })
+
+  it('saveMetadata sends a PUT with { fields } and returns the metadata on a 200', async () => {
+    const fetchMock = mockFetch(200, metadata)
+    const fields = { narrators: ['A', 'B'], publisher: '' }
+
+    await expect(saveMetadata(4, fields)).resolves.toEqual({ ok: true, metadata })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/metadata', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields }),
+    })
+  })
+
+  it('saveMetadata returns the field errors on a 400', async () => {
+    const errors = { title: ['The title is required.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(saveMetadata(4, { title: '' })).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('saveMetadata returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(saveMetadata(4, { title: 'x' })).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('saveMetadata throws for any other status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(saveMetadata(4, { title: 'x' })).rejects.toThrow()
+  })
+})
+
+describe('covers', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const cover = {
+    groupId: 4,
+    chosen: { source: 'upload', fileId: null, mimeType: 'image/png', chosenAtUtc: '2026-10-19T10:00:00+00:00' },
+    embedded: [{ fileId: 7, relativePath: 'book/track1.mp3' }],
+    provider: { provider: 'audible', coverUrl: 'https://m.media-amazon.com/images/I/x.jpg' },
+  }
+
+  it('builds the image URLs', () => {
+    expect(fileCoverUrl(4, 7)).toBe('/api/groups/4/files/7/cover')
+    expect(chosenCoverUrl(4)).toBe('/api/groups/4/cover/image')
+  })
+
+  it('getCovers returns the parsed body on a 200', async () => {
+    const fetchMock = mockFetch(200, cover)
+
+    await expect(getCovers(4)).resolves.toEqual(cover)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/cover')
+  })
+
+  it('getCovers throws for any other status', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getCovers(4)).rejects.toThrow()
+  })
+
+  it('chooseCover sends the choice as JSON and returns the covers on a 200', async () => {
+    const fetchMock = mockFetch(200, cover)
+
+    await expect(chooseCover(4, { source: 'provider' })).resolves.toEqual({ ok: true, cover })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/4/cover', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: 'provider' }),
+    })
+  })
+
+  it('chooseCover maps 400, 404 and 502, and throws for any other status', async () => {
+    const errors = { fileId: ['This file has no embedded cover.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+    await expect(chooseCover(4, { source: 'embedded', fileId: 7 })).resolves.toEqual({ ok: false, errors })
+
+    mockFetch(404, { title: 'Not Found', status: 404 })
+    await expect(chooseCover(4, { source: 'provider' })).resolves.toEqual({ ok: false, notFound: true })
+
+    const detail = "The cover couldn't be downloaded. Try again later."
+    mockFetch(502, { title: 'Bad Gateway', status: 502, detail })
+    await expect(chooseCover(4, { source: 'provider' })).resolves.toEqual({ ok: false, downloadFailed: detail })
+
+    mockFetch(500, { title: 'error' })
+    await expect(chooseCover(4, { source: 'provider' })).rejects.toThrow()
+  })
+
+  it('uploadCover sends a PUT with the file under "file" and returns the covers on a 200', async () => {
+    const fetchMock = mockFetch(200, cover)
+    const file = new File([new Uint8Array([0x89, 0x50])], 'cover.png', { type: 'image/png' })
+
+    await expect(uploadCover(4, file)).resolves.toEqual({ ok: true, cover })
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/groups/4/cover/upload')
+    expect(init.method).toBe('PUT')
+    expect(init.headers).toBeUndefined()
+    const body = init.body as FormData
+    expect(body).toBeInstanceOf(FormData)
+    expect(body.get('file')).toBeInstanceOf(File)
+    expect((body.get('file') as File).name).toBe('cover.png')
+  })
+
+  it('uploadCover maps 400 and 404, and throws for any other status', async () => {
+    const file = new File(['x'], 'cover.png')
+    const errors = { file: ['The cover must be a JPEG or PNG.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+    await expect(uploadCover(4, file)).resolves.toEqual({ ok: false, errors })
+
+    mockFetch(404, { title: 'Not Found', status: 404 })
+    await expect(uploadCover(4, file)).resolves.toEqual({ ok: false, notFound: true })
+
+    mockFetch(413, { title: 'Payload Too Large' })
+    await expect(uploadCover(4, file)).rejects.toThrow()
   })
 })

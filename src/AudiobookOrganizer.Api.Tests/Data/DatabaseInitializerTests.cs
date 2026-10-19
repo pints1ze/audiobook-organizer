@@ -194,6 +194,43 @@ public class DatabaseInitializerTests : IDisposable
         Assert.Contains("AUTOINCREMENT", FileGroupSql(connections), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Initialize_creates_Audiobook_and_MetadataMatch_with_unique_cascading_foreign_keys()
+    {
+        var connections = new SqliteConnectionFactory(Path.Combine(_root, "new.db"));
+        var initializer = new DatabaseInitializer(connections);
+        initializer.Initialize();
+        initializer.Initialize();
+
+        using var connection = connections.Open();
+        var audiobookKey = connection.QuerySingle<(string Table, string From, string On_Delete)>(
+            "SELECT \"table\", \"from\", on_delete FROM pragma_foreign_key_list('Audiobook')");
+        Assert.Equal(("FileGroup", "GroupId", "CASCADE"), audiobookKey);
+        var matchKey = connection.QuerySingle<(string Table, string From, string On_Delete)>(
+            "SELECT \"table\", \"from\", on_delete FROM pragma_foreign_key_list('MetadataMatch')");
+        Assert.Equal(("Audiobook", "AudiobookId", "CASCADE"), matchKey);
+
+        // A unique index on the foreign key column keeps it one-to-one.
+        Assert.Contains("GroupId", UniqueColumns(connection, "Audiobook"));
+        Assert.Contains("AudiobookId", UniqueColumns(connection, "MetadataMatch"));
+
+        connection.Execute(
+            """
+            INSERT INTO ScanRun (Id, StartedAt, Status) VALUES (1, '2026-10-19T00:00:00Z', 'Completed');
+            INSERT INTO FileGroup (Id, Confidence, EvidenceJson, FileCount, TotalDurationMs, ScanRunId) VALUES (3, 'High', '[]', 0, 0, 1);
+            INSERT INTO Audiobook (GroupId, CreatedAtUtc, UpdatedAtUtc) VALUES (3, 'now', 'now');
+            INSERT INTO MetadataMatch (AudiobookId, Provider, ProviderId, CandidateJson, PickedAtUtc)
+            SELECT Id, 'audible', 'B0', '{}', 'now' FROM Audiobook;
+            DELETE FROM FileGroup WHERE Id = 3;
+            """);
+        Assert.Equal(0, connection.ExecuteScalar<long>("SELECT COUNT(*) FROM Audiobook"));
+        Assert.Equal(0, connection.ExecuteScalar<long>("SELECT COUNT(*) FROM MetadataMatch"));
+    }
+
+    private static List<string> UniqueColumns(SqliteConnection connection, string table) =>
+        connection.Query<string>(
+            $"SELECT ii.name FROM pragma_index_list('{table}') il, pragma_index_info(il.name) ii WHERE il.\"unique\" = 1").ToList();
+
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();

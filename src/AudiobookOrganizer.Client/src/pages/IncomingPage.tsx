@@ -158,10 +158,10 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
     if (g.title) titleCounts.set(g.title, (titleCounts.get(g.title) ?? 0) + 1)
   }
 
-  // Books that share a title get their id too, so every Edit button has a unique name.
-  function editLabel(group: GroupSummary) {
-    if (!group.title) return `Edit Unknown (group ${group.id})`
-    return (titleCounts.get(group.title) ?? 0) > 1 ? `Edit ${group.title} (group ${group.id})` : `Edit ${group.title}`
+  // Books that share a title get their id too, so every row control has a unique name.
+  function uniqueName(group: GroupSummary) {
+    if (!group.title) return `Unknown (group ${group.id})`
+    return (titleCounts.get(group.title) ?? 0) > 1 ? `${group.title} (group ${group.id})` : group.title
   }
 
   function filesDisclosure(group: GroupSummary) {
@@ -254,11 +254,18 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
                               else editButtons.current.delete(group.id)
                             }}
                             onClick={() => openEditor(group.id)}
-                            aria-label={editLabel(group)}
+                            aria-label={`Edit ${uniqueName(group)}`}
                             className="rounded underline underline-offset-4"
                           >
                             Edit
                           </button>
+                          <Link
+                            to={`/books/${group.id}`}
+                            aria-label={`Find metadata for ${uniqueName(group)}`}
+                            className="rounded underline underline-offset-4"
+                          >
+                            Find metadata
+                          </Link>
                         </div>
                       </td>
                       <td className="p-2">{group.author ?? 'Unknown'}</td>

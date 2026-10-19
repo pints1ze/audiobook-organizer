@@ -77,6 +77,50 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 Track INTEGER)
             """);
         connection.Execute("CREATE INDEX IF NOT EXISTS IX_FileGroupFile_GroupId ON FileGroupFile (GroupId)");
+        // One Audiobook per group and one current match per Audiobook; both go when their group is deleted.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS Audiobook (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                GroupId INTEGER NOT NULL UNIQUE REFERENCES FileGroup (Id) ON DELETE CASCADE,
+                CreatedAtUtc TEXT NOT NULL,
+                UpdatedAtUtc TEXT NOT NULL)
+            """);
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS MetadataMatch (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                AudiobookId INTEGER NOT NULL UNIQUE REFERENCES Audiobook (Id) ON DELETE CASCADE,
+                Provider TEXT NOT NULL,
+                ProviderId TEXT,
+                CandidateJson TEXT NOT NULL,
+                PickedAtUtc TEXT NOT NULL)
+            """);
+        // A book's metadata values, one row per field. ValueJson is "text", ["a","b"] or null, so text and list
+        // fields share the table. Origin is file, provider or user; Provider is set only for provider values.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS AudiobookField (
+                AudiobookId INTEGER NOT NULL REFERENCES Audiobook (Id) ON DELETE CASCADE,
+                Field TEXT NOT NULL,
+                ValueJson TEXT NOT NULL,
+                Origin TEXT NOT NULL,
+                Provider TEXT,
+                PRIMARY KEY (AudiobookId, Field))
+            """);
+        // The book's chosen cover, one per Audiobook. Source is "embedded" (FileId is the file it came from); the image
+        // is copied in, so the choice survives the source file being moved.
+        // shortcut: covers stored as BLOBs — revisit if the database grows past a few hundred MB
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS AudiobookCover (
+                AudiobookId INTEGER PRIMARY KEY REFERENCES Audiobook (Id) ON DELETE CASCADE,
+                Source TEXT NOT NULL,
+                FileId INTEGER,
+                MimeType TEXT NOT NULL,
+                Image BLOB NOT NULL,
+                ChosenAtUtc TEXT NOT NULL)
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404
