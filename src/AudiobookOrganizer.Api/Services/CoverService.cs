@@ -29,11 +29,15 @@ public class CoverService(GroupingService grouping, GroupRepository groups, Audi
     }
 
     /// <summary>
-    /// The first picture in the file, read with TagLibSharp and never saved; null when the file isn't in the group, is
-    /// missing or unreadable, or has no picture. The file is read again because it may have changed since the scan.
+    /// The first picture in the file, read with TagLibSharp and never saved, with its type as "image/jpeg" or
+    /// "image/png"; null when the file isn't in the group, is missing or unreadable, or has no JPEG or PNG picture. The
+    /// file is read again because it may have changed since the scan. Any other type the tag claims (text/html, SVG) is
+    /// refused, so a crafted tag can't be served as a page on the app's origin.
     /// </summary>
     public EmbeddedPicture? ReadEmbedded(long groupId, long fileId) =>
-        FilePath(groupId, fileId) is { } path ? ReadPicture(path) : null;
+        FilePath(groupId, fileId) is { } path && ReadPicture(path) is { } picture && ImageType(picture.MimeType) is { } type
+            ? picture with { MimeType = type }
+            : null;
 
     /// <summary>The group's chosen cover image; null when there's none.</summary>
     public AudiobookCover? GetChosenImage(long groupId) => audiobooks.GetCoverImage(groupId);

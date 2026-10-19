@@ -142,6 +142,28 @@ public class GroupCoverControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_file_cover_serves_only_jpeg_or_png_whatever_type_the_tag_claims()
+    {
+        var client = _factory.CreateClient();
+        var books = await ScanBooks(client, odd: true);
+        var (htmlId, jpgId) = (books.FileIds["odd/gif.mp3"], books.FileIds["odd/huge.mp3"]);
+        Assert.Equal(HttpStatusCode.OK, (await client.PostAsJsonAsync($"/api/groups/{books.BookId}/files",
+            new { fileIds = new[] { htmlId, jpgId } })).StatusCode);
+        // A tag can name any MIME type; one claiming text/html must never be served as a page.
+        var dir = Path.Combine(_folders.Incoming, "odd");
+        SetPicture(Path.Combine(dir, "gif.mp3"), "<script>alert(1)</script>"u8.ToArray(), "text/html");
+        SetPicture(Path.Combine(dir, "huge.mp3"), CoverJpeg, "image/jpg");
+
+        var html = await client.GetAsync($"/api/groups/{books.BookId}/files/{htmlId}/cover");
+        var jpg = await client.GetAsync($"/api/groups/{books.BookId}/files/{jpgId}/cover");
+
+        Assert.Equal(HttpStatusCode.NotFound, html.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, jpg.StatusCode);
+        Assert.Equal("image/jpeg", jpg.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(CoverJpeg, await jpg.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task Put_cover_stores_the_embedded_picture_marks_the_group_corrected_and_a_second_pick_replaces_it()
     {
         var client = _factory.CreateClient();

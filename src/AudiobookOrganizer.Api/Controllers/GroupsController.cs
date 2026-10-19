@@ -26,9 +26,7 @@ public class GroupsController(GroupingService grouping, AudiobookService audiobo
 
     [HttpGet("{id:long}/files/{fileId:long}/cover")]
     public IActionResult GetFileCover(long id, long fileId) =>
-        covers.ReadEmbedded(id, fileId) is { } picture
-            ? File(picture.Data, picture.MimeType is "" ? "application/octet-stream" : picture.MimeType)
-            : NotFound();
+        covers.ReadEmbedded(id, fileId) is { } picture ? File(picture.Data, picture.MimeType) : NotFound();
 
     [HttpGet("{id:long}/match")]
     public ActionResult<BookMatchDto> GetMatch(long id)
