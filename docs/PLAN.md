@@ -37,10 +37,10 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** Audible catalog and Open Library searches return candidates the user can pick; the editor shows current vs proposed values with their origin and keeps user edits across re-searches; cover can come from the embedded image, a download, or an upload; a book can be completed manually with no match.
 **Slices:** 27 (implemented), 28 (implemented), 29 (implemented), 30 (implemented), 31 (implemented), 32 (implemented), 33 (implemented), 34 (implemented), 35 (implemented), 36 (implemented), 37 (implemented). Manual completion with no match is met by 33's editor (developer, 2026-10-19). Carried in: skipping files the user excluded (`AudioFile.UserState`, from slice 20).
 
-### 6. Normalization (not started)
+### 6. Normalization (in progress)
 **Goal:** authors, narrators and genres resolve to canonical names.
 **Done when:** aliases map variants to one canonical entry; the app suggests but never auto-merges aliases; a management screen lets the user create, merge and edit canonical entries.
-**Slices:** none yet
+**Slices:** 38 (written).
 
 ### 7. Naming & preview (not started)
 **Goal:** see exactly where every file will go before anything moves.

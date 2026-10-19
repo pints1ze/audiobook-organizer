@@ -3,7 +3,7 @@
 _Updated: slice 37 review, 2026-10-19, commit 55b6ac9_
 
 ## Branch
-`phase/5-metadata` (off `main` after the phase 4 merge, PR #4)
+`phase/6-normalization` (off `main` after the phase 5 merge, PR #5)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -17,11 +17,11 @@ _Updated: slice 37 review, 2026-10-19, commit 55b6ac9_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 5, Metadata: done (slices 27–37), waiting for the developer to verify it and merge its PR. Next is phase 6, Normalization. Excluded files never get an `Audiobook`.
+Phase 6, Normalization: in progress (phase 5 merged, PR #5). Excluded files never get an `Audiobook`.
 
 ## Last slice / next slice
 - Last: 37 cover-picker, Implemented
-- Next: phase 6's first slice, after the phase 5 PR is merged (not written)
+- Next: 38 people-aliases-api (written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)

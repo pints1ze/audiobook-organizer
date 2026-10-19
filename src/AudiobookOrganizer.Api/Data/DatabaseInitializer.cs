@@ -121,6 +121,23 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 Image BLOB NOT NULL,
                 ChosenAtUtc TEXT NOT NULL)
             """);
+        // Canonical people (authors and narrators) and their name variants. The keys are PersonService.NameKey values;
+        // PersonService keeps a key from appearing as both one person's name and another's alias.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS Person (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                NameKey TEXT NOT NULL UNIQUE)
+            """);
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS PersonAlias (
+                PersonId INTEGER NOT NULL REFERENCES Person (Id) ON DELETE CASCADE,
+                Alias TEXT NOT NULL,
+                AliasKey TEXT NOT NULL UNIQUE,
+                PRIMARY KEY (PersonId, AliasKey))
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404
