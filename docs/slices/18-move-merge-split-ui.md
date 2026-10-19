@@ -62,3 +62,33 @@
 - **Split:** unresolved-file assignment is the next slice. Including it would mean extracting the move bar into its own component and touching the unresolved section, which comes to about 9 files.
 - **Size:** 4 tasks, 7 files: `types/groups.ts`, `services/api.ts` and its test, `components/incoming/GroupFiles.tsx` and its test, `pages/IncomingPage.tsx` and its test.
 - **Commit:** `feat: slice 18 move-merge-split-ui`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none in the automated suite.
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 100 passed, 0 failed | no backend change in this slice |
+| Frontend tests | 98 passed, 0 failed | 8 files, 17 new |
+| New tests | 4 of 4 behaviours present, passing | api: `moveFilesToGroup` (200, 400, 404, 500) and `createGroup` (201, 400, 500). `GroupFiles`: Move disabled with nothing selected; Select all with the mixed state; move to a book; move to a new book in list order; alerts on a rejected or `notFound` move. Page: targets exclude the row's own book; reload and focused status after a move |
+| Manual: keyboard split to a new book | Passed | Playwright on :5173 against a scratch DB; scenario A (3 tracks), one M4B and a stray MP3. Open "Files (3)" on "track" with Enter, then Space on "Select 01 track.mp3". The select ("Move selected to": single, New book) was focused by script; ArrowDown picked "New book", then Tab to Move and Enter. Focus landed on `role="status"` "Moved 1 file to a new book", and a new "Unknown" book with 1 file appeared |
+| Manual: keyboard merge | Passed | On "single", Space on "Select all files" ticked both boxes. ArrowDown to "track", Tab, Enter. Status "Moved 1 file to track" was focused, "single" disappeared and "track" has 3 files |
+| Manual: rescan keeps moves | Passed | Rescan completed with 5 unchanged; `GET /api/groups` was byte-identical before and after |
+| Manual: 375 px width | Passed (after fix 4914b15) | First run failed: with both Files lists open, the page scroll width was 385 in a 375 viewport. Each `GroupFiles` live region (`<p aria-live="polite" class="sr-only">`, `position: absolute`) sat inside the table's `overflow-x-auto` container, which wasn't positioned, so the hidden `<p>` was placed against the page. Latent since slice 16. Fix: the container is now `relative`. Rerun at 375 px with both lists and both move bars open: page scroll width 360, live regions end at x = 348. After the fix the four checks still pass (build 0 warnings, backend 100, typecheck, frontend 98) |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the browser, the scratch data and the `.playwright-mcp/` output were removed afterwards.
+
+## Outcome (2026-10-18, commit 6729a07, fix 4914b15)
+
+**Status:** Implemented
+**Summary:** each book's Files list now has a checkbox per file, a "Select all files" checkbox that shows the mixed state, and a "Move selected to" list (other books, then "New book") with a Move button. One primitive covers move file, split (some files to "New book") and merge (all files to another book). After a move the page reloads, and focus goes to a status message. All Done when items are met, and the 375 px failure is fixed in 4914b15.
+**Changed:** 7 code files plus 2 docs. Key ones: `components/incoming/GroupFiles.tsx` and its test, `pages/IncomingPage.tsx` and its test, `services/api.ts`, `types/groups.ts`.
+**Deviations:**
+- `<GroupFiles>` is keyed by `fileCount`, so the list remounts and reloads when its book gains or loses files. *Fine.*
+- New `onMoveStart` prop, which clears the page status message when a move starts. *Fine*, as the slice asked.
+- Bug: the live region pushed the page 10 px wider at 375 px. It was latent since slice 16 and is fixed in the separate `fix:` commit 4914b15, with the developer's OK. jsdom can't lay out a page, so there's no automated test for it; the manual 375 px check covers it.
+**Follow-ups:**
+- Next slice: assign unresolved files to a book (reuse the move bar), then exclude and send back to unresolved, as decided.
