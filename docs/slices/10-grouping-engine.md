@@ -78,3 +78,37 @@
 - **Remaining in phase 3:**
   - 11, persist groups: `FileGroup` and `FileGroupFile` tables. Regroup after each completed scan, replacing only groups that aren't user-confirmed (no confirmed state exists yet, so replace all). Add `GET /api/groups` with list fields, and move the dashboard query into a service with group counts (from slice 08).
   - 12, Incoming screen: lists groups with title, author, file count, duration and confidence, plus the unresolved files. Add `getDashboard` to the `AppLayout` test mock (from slice 09).
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 79 passed, 0 failed | 20 new in `GroupingEngineTests` |
+| Frontend tests | 40 passed, 0 failed | |
+| New tests | 8 of 8 listed present, passing | Scenarios A–E, unresolved, low confidence, determinism (10 shuffles). Extras: disc-folder name variants, stem and track parsing variants, natural sort, slightly different album tags giving Low |
+| Manual | n/a | The slice lists none (pure logic) |
+
+**Data:** none.
+
+## Outcome (2026-10-18, commit eee7aa1)
+
+**Status:** Implemented
+**Summary:** This slice adds the pure, static `GroupingEngine.Group` with its models in `Services/Grouping/`.
+- **Containers:** the parent folder, or the grandparent for disc, cd or part folders.
+- **Grouping:** each M4B is its own book; MP3s group by normalised album plus artist, otherwise by filename stem, otherwise the folder forms one group. Untagged root files that share no stem are unresolved.
+- **Order:** disc, then track, then natural sort.
+- **Confidence:** counts the signals that agree (single M4B, the whole folder, the same album tag, a shared stem, continuous tag tracks): 2 or more is High, 1 is Medium, and a conflict forces Low.
+- **Evidence and estimates:** each group gets evidence strings and an estimated title and author.
+
+Scenarios A–E pass, and so does every other Done when item.
+**Changed:** 3 code files plus 3 docs: `Services/Grouping/GroupingEngine.cs`, `Services/Grouping/GroupingModels.cs`, `GroupingEngineTests.cs`.
+**Deviations:**
+- Untagged MP3s in one folder with different stems (e.g. chapter-titled files) form one folder group at Medium, rather than one group per file. They split by stem only when every file belongs to a series of 2 or more and there are 2 or more series. *Improvement:* a literal reading would have shattered chapter-named books.
+- Disc folders are evidence but not a separate signal, so scenario C comes out Medium. *Fine:* the slice left C's confidence open, but the first real scan may show this is too cautious.
+- A single M4B with an album tag is High, and the whole folder name is the last fallback for the title. *Fine.*
+**Follow-ups:**
+- Slice 12 (first real-collection run): review the confidence calibration (C at Medium) and the stem rules against real folders. Tweaks go in a follow-up slice within phase 3.

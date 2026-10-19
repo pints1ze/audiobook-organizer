@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: phase 3 start, 2026-10-18, commit a83af45_
+_Updated: slice 10 review, 2026-10-18, commit eee7aa1_
 
 ## Branch
 `phase/3-grouping`
@@ -11,14 +11,15 @@ _Updated: phase 3 start, 2026-10-18, commit a83af45_
 - **Tag safety:** proven by tests. MP3 writes go through TagLibSharp and M4B writes through an ffmpeg `-c copy` remux; chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
+- **Grouping engine:** the pure `GroupingEngine.Group` proposes book groups from scanned file facts, with confidence, evidence and an estimated title and author; scenarios A–E pass. Groups aren't persisted or shown yet.
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Current phase 3, Grouping: everything. Phase 2 merged (PR #2).
+Current phase 3, Grouping. Still to do: persist groups after each scan with a groups API (11), and the Incoming screen (12).
 
 ## Last slice / next slice
-- Last: 09 dashboard-ui, Implemented (merged)
-- Next: 10 grouping-engine
+- Last: 10 grouping-engine, Implemented
+- Next: 11 persist-groups
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -45,6 +46,7 @@ Current phase 3, Grouping: everything. Phase 2 merged (PR #2).
 - 2026-10-18 (slice 05): Settings are key/value rows in `ApplicationSetting`. The schema is `CREATE TABLE IF NOT EXISTS` in `DatabaseInitializer`, with no migration framework. Validation never writes into incoming.
 - 2026-10-18 (slice 07): Duration comes from ffprobe, because TagLibSharp misreads MPEG-2 MP3 duration. Files are unchanged when size and mtime match. Rows for missing files are kept and counted.
 - 2026-10-18 (slice 08): Only one scan runs at a time (409 otherwise). Runs still `Running` at startup are marked `Failed`. Dashboard counts come from the latest completed run.
+- 2026-10-18 (slice 10): Grouping is deterministic and rule-based within one container folder. Confidence is the number of agreeing signals (2+ High, 1 Medium, conflict Low). Untagged root files with no shared stem are unresolved.
 
 ## Verification
-Full suite: backend 59 passed / 0 failed, frontend 40 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1, and the M4B remux was checked by hand there.
+Full suite: backend 79 passed / 0 failed, frontend 40 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1, and the M4B remux was checked by hand there.
