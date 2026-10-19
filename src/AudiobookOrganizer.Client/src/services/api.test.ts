@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createGroup,
   getDashboard,
   getGroup,
   getGroups,
@@ -8,6 +9,7 @@ import {
   getSettings,
   saveSettings,
   startScan,
+  moveFilesToGroup,
   reorderGroup,
   updateGroup,
 } from './api'
@@ -283,5 +285,59 @@ describe('groups', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(reorderGroup(5, [11])).rejects.toThrow()
+  })
+  it('moveFilesToGroup POSTs the file ids and returns the group on a 200', async () => {
+    const fetchMock = mockFetch(200, detail)
+
+    await expect(moveFilesToGroup(5, [12, 11])).resolves.toEqual({ ok: true, group: detail })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/5/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileIds: [12, 11] }),
+    })
+  })
+
+  it('moveFilesToGroup returns the errors on a 400 problem body', async () => {
+    const errors = { fileIds: ['Every file must exist.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(moveFilesToGroup(5, [99])).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('moveFilesToGroup returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(moveFilesToGroup(5, [11])).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('moveFilesToGroup throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(moveFilesToGroup(5, [11])).rejects.toThrow()
+  })
+
+  it('createGroup POSTs the request and returns the group on a 201', async () => {
+    const fetchMock = mockFetch(201, detail)
+    const request = { fileIds: [11, 12], title: null, author: null }
+
+    await expect(createGroup(request)).resolves.toEqual({ ok: true, group: detail })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    })
+  })
+
+  it('createGroup returns the errors on a 400 problem body', async () => {
+    const errors = { fileIds: ['Choose at least one file.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(createGroup({ fileIds: [], title: null, author: null })).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('createGroup throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(createGroup({ fileIds: [11], title: null, author: null })).rejects.toThrow()
   })
 })

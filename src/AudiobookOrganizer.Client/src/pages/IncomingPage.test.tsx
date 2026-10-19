@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getGroup, getGroups, reorderGroup, updateGroup } from '../services/api'
+import { getGroup, getGroups, moveFilesToGroup, reorderGroup, updateGroup } from '../services/api'
 import type { GroupDetail, GroupSummary, GroupsResponse } from '../types/groups'
 import IncomingPage from './IncomingPage'
 
 vi.mock('../services/api', () => ({
+  createGroup: vi.fn(),
   getGroup: vi.fn(),
   getGroups: vi.fn(),
+  moveFilesToGroup: vi.fn(),
   reorderGroup: vi.fn(),
   updateGroup: vi.fn(),
 }))
@@ -16,6 +18,7 @@ const getGroupsMock = vi.mocked(getGroups)
 const updateGroupMock = vi.mocked(updateGroup)
 const getGroupMock = vi.mocked(getGroup)
 const reorderGroupMock = vi.mocked(reorderGroup)
+const moveFilesMock = vi.mocked(moveFilesToGroup)
 
 const response: GroupsResponse = {
   groups: [
@@ -60,6 +63,7 @@ describe('IncomingPage', () => {
     updateGroupMock.mockReset()
     getGroupMock.mockReset()
     reorderGroupMock.mockReset()
+    moveFilesMock.mockReset()
   })
 
   it('shows loading, then the groups in API order with their details and evidence', async () => {
@@ -321,6 +325,62 @@ describe('IncomingPage', () => {
       const row = summary.closest('tr') as HTMLElement
       expect(await within(row).findByText('Edited')).toBeInTheDocument()
       expect(screen.getAllByText('Edited')).toHaveLength(1)
+    })
+  })
+  describe('moving files between books', () => {
+    const files = [
+      { fileId: 21, relativePath: 'mystery/a.mp3', position: 1, disc: null, track: 1, durationMs: 20_000 },
+      { fileId: 22, relativePath: 'mystery/b.mp3', position: 2, disc: null, track: 2, durationMs: 20_000 },
+    ]
+    const detail: GroupDetail = { ...response.groups[0], fileCount: 2, files }
+
+    function openFiles(details: HTMLDetailsElement) {
+      details.open = true
+      fireEvent(details, new Event('toggle'))
+    }
+
+    async function optionsFor(summaryText: string) {
+      const summary = await screen.findByText(summaryText, { selector: 'summary' })
+      const details = summary.closest('details') as HTMLDetailsElement
+      openFiles(details)
+      const select = (await within(details).findByLabelText('Move selected to')) as HTMLSelectElement
+      return Array.from(select.options).map((o) => o.textContent)
+    }
+
+    it("lists the other books as targets, not the row's own", async () => {
+      getGroupsMock.mockResolvedValue(response)
+      getGroupMock.mockResolvedValue(detail)
+      renderPage()
+
+      expect(await optionsFor('Files (3)')).toEqual(['The Hobbit', 'New book'])
+      expect(await optionsFor('Files (12)')).toEqual(['Unknown (group 2)', 'New book'])
+    })
+
+    it('reloads the list and focuses the status message after a move', async () => {
+      const after: GroupsResponse = {
+        ...response,
+        groups: [{ ...response.groups[0], fileCount: 2 }, { ...response.groups[1], fileCount: 13, userCorrected: true }],
+      }
+      getGroupsMock.mockResolvedValueOnce(response).mockResolvedValue(after)
+      getGroupMock.mockResolvedValue(detail)
+      moveFilesMock.mockResolvedValue({ ok: true, group: { ...response.groups[1], files: [] } })
+      renderPage()
+
+      const summary = await screen.findByText('Files (3)', { selector: 'summary' })
+      openFiles(summary.closest('details') as HTMLDetailsElement)
+      fireEvent.click(await screen.findByRole('checkbox', { name: 'Select b.mp3' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+
+      const status = await screen.findByRole('status')
+      expect(status).toHaveTextContent('Moved 1 file to The Hobbit')
+      expect(status).toHaveAttribute('tabindex', '-1')
+      await waitFor(() => expect(status).toHaveFocus())
+      expect(moveFilesMock).toHaveBeenCalledWith(1, [22])
+      expect(getGroupsMock).toHaveBeenCalledTimes(2)
+      expect(screen.getByText('Files (13)', { selector: 'summary' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit The Hobbit' }))
+      expect(screen.queryByRole('status')).not.toBeInTheDocument()
     })
   })
 })

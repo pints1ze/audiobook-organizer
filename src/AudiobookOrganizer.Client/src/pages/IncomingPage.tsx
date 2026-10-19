@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
-import GroupFiles from '../components/incoming/GroupFiles'
+import GroupFiles, { type MoveTarget } from '../components/incoming/GroupFiles'
 import { getGroups, updateGroup } from '../services/api'
 import type { GroupConfidence, GroupDetail, GroupFieldErrors, GroupSummary, GroupsResponse } from '../types/groups'
 import { formatDuration } from '../utils/formatDuration'
@@ -29,7 +29,7 @@ export default function IncomingPage() {
   const mounted = useRef(false)
 
   const load = useCallback(() => {
-    getGroups()
+    return getGroups()
       .then((data) => {
         if (mounted.current) setState({ kind: 'loaded', data })
       })
@@ -75,7 +75,11 @@ export default function IncomingPage() {
 interface IncomingContentProps {
   data: GroupsResponse
   onSaved: (group: GroupSummary) => void
-  onReload: () => void
+  onReload: () => Promise<void>
+}
+
+function bookLabel(group: GroupSummary) {
+  return group.title ?? `Unknown (group ${group.id})`
 }
 
 function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
@@ -84,6 +88,13 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
   const [saveFailed, setSaveFailed] = useState(false)
   const editButtons = useRef(new Map<number, HTMLButtonElement>())
   const focusAfterClose = useRef<number | null>(null)
+  const [moveMessage, setMoveMessage] = useState('')
+  const moveStatus = useRef<HTMLParagraphElement>(null)
+
+  // A move can remove or re-sort the row it came from, so focus goes to the page-level message.
+  useEffect(() => {
+    if (moveMessage) moveStatus.current?.focus()
+  }, [moveMessage])
 
   // Return focus to the row's Edit button once its form has closed.
   useEffect(() => {
@@ -95,6 +106,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
 
   function openEditor(id: number) {
     setSaveFailed(false)
+    setMoveMessage('')
     setEditingId(id)
   }
 
@@ -106,6 +118,11 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
   function handleSaved(group: GroupSummary) {
     onSaved(group)
     closeEditor(group.id)
+  }
+
+  async function handleMoved(message: string) {
+    await onReload()
+    setMoveMessage(message)
   }
 
   // The group may be gone or renumbered after a rescan, so show the current list.
@@ -136,6 +153,11 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
           <p role="alert" className="mt-2 flex items-center gap-2 text-destructive">
             <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
             That book couldn't be saved. The list has been reloaded.
+          </p>
+        )}
+        {moveMessage && (
+          <p ref={moveStatus} role="status" tabIndex={-1} className="mt-2 rounded">
+            {moveMessage}
           </p>
         )}
         {groups.length === 0 ? (
@@ -200,7 +222,13 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
                             ))}
                           </ul>
                         </details>
-                        <FilesDisclosure group={group} onReordered={onSaved} />
+                        <FilesDisclosure
+                          group={group}
+                          targets={groups.filter((g) => g.id !== group.id).map((g) => ({ id: g.id, label: bookLabel(g) }))}
+                          onReordered={onSaved}
+                          onMoveStart={() => setMoveMessage('')}
+                          onMoved={handleMoved}
+                        />
                       </td>
                     </tr>
                   ),
@@ -235,11 +263,14 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
 
 interface FilesDisclosureProps {
   group: GroupSummary
+  targets: MoveTarget[]
   onReordered: (group: GroupSummary) => void
+  onMoveStart: () => void
+  onMoved: (message: string) => void
 }
 
 // GroupFiles mounts only while open, so the files load when the user asks for them.
-function FilesDisclosure({ group, onReordered }: FilesDisclosureProps) {
+function FilesDisclosure({ group, targets, onReordered, onMoveStart, onMoved }: FilesDisclosureProps) {
   const [open, setOpen] = useState(false)
 
   function handleReordered(detail: GroupDetail) {
@@ -251,7 +282,17 @@ function FilesDisclosure({ group, onReordered }: FilesDisclosureProps) {
   return (
     <details className="mt-2" onToggle={(event) => setOpen(event.currentTarget.open)}>
       <summary className="cursor-pointer rounded">Files ({group.fileCount})</summary>
-      {open && <GroupFiles groupId={group.id} onReordered={handleReordered} />}
+      {/* Keyed by the count so the list reloads when files move in or out of this book. */}
+      {open && (
+        <GroupFiles
+          key={group.fileCount}
+          groupId={group.id}
+          onReordered={handleReordered}
+          targets={targets}
+          onMoveStart={onMoveStart}
+          onMoved={onMoved}
+        />
+      )}
     </details>
   )
 }

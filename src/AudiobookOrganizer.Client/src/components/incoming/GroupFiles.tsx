@@ -1,14 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, CircleAlert } from 'lucide-react'
-import { getGroup, reorderGroup } from '../../services/api'
+import { createGroup, getGroup, moveFilesToGroup, reorderGroup } from '../../services/api'
 import type { GroupDetail, GroupFile } from '../../types/groups'
 
 type Direction = 'up' | 'down'
 
+export interface MoveTarget {
+  id: number
+  label: string
+}
+
 interface GroupFilesProps {
   groupId: number
   onReordered: (detail: GroupDetail) => void
+  /** The other books the selected files can move to. */
+  targets: MoveTarget[]
+  onMoveStart: () => void
+  onMoved: (message: string) => void
 }
+
+const newBookValue = 'new'
 
 function fileName(relativePath: string) {
   return relativePath.slice(relativePath.lastIndexOf('/') + 1)
@@ -29,21 +40,27 @@ function displayNames(files: GroupFile[]) {
 const moveButtonClass =
   'inline-flex items-center gap-1 rounded border border-muted px-2 py-1 text-xs font-medium disabled:opacity-50'
 
-export default function GroupFiles({ groupId, onReordered }: GroupFilesProps) {
+export default function GroupFiles({ groupId, onReordered, targets, onMoveStart, onMoved }: GroupFilesProps) {
   const [files, setFiles] = useState<GroupFile[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [saveFailed, setSaveFailed] = useState(false)
+  const [moveFailed, setMoveFailed] = useState(false)
+  const [selected, setSelected] = useState<Set<number>>(new Set())
+  const [destination, setDestination] = useState('')
   const [saving, setSaving] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [pendingFocus, setPendingFocus] = useState<{ fileId: number; direction: Direction } | null>(null)
   const buttons = useRef(new Map<string, HTMLButtonElement>())
   const mounted = useRef(false)
+  const selectAll = useRef<HTMLInputElement>(null)
 
   const load = useCallback(() => {
     setLoadFailed(false)
     getGroup(groupId)
       .then((detail) => {
-        if (mounted.current) setFiles(detail.files)
+        if (!mounted.current) return
+        setFiles(detail.files)
+        setSelected(new Set())
       })
       .catch(() => {
         if (mounted.current) setLoadFailed(true)
@@ -82,6 +99,7 @@ export default function GroupFiles({ groupId, onReordered }: GroupFilesProps) {
 
     setSaving(true)
     setSaveFailed(false)
+    setMoveFailed(false)
     setAnnouncement('')
     let result
     try {
@@ -105,7 +123,70 @@ export default function GroupFiles({ groupId, onReordered }: GroupFilesProps) {
     load()
   }
 
+  const someSelected = selected.size > 0 && !!files && selected.size < files.length
+  const allSelected = !!files && files.length > 0 && selected.size === files.length
+
+  useEffect(() => {
+    if (selectAll.current) selectAll.current.indeterminate = someSelected
+  }, [someSelected, files])
+
+  // Fall back to the first option when the chosen book is no longer listed.
+  const destinationValue =
+    destination === newBookValue || targets.some((t) => String(t.id) === destination)
+      ? destination
+      : targets.length > 0
+        ? String(targets[0].id)
+        : newBookValue
+
+  function toggle(fileId: number) {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(fileId)) next.delete(fileId)
+      else next.add(fileId)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected(allSelected || !files ? new Set() : new Set(files.map((f) => f.fileId)))
+  }
+
+  async function moveSelected() {
+    if (!files || selected.size === 0) return
+    // Keep the list order so the files stay in sequence in their new book.
+    const fileIds = files.filter((f) => selected.has(f.fileId)).map((f) => f.fileId)
+    const toNewBook = destinationValue === newBookValue
+    const target = targets.find((t) => String(t.id) === destinationValue)
+
+    onMoveStart()
+    setSaving(true)
+    setSaveFailed(false)
+    setMoveFailed(false)
+    setAnnouncement('')
+    let ok = false
+    try {
+      const result = toNewBook
+        ? await createGroup({ fileIds, title: null, author: null })
+        : await moveFilesToGroup(Number(destinationValue), fileIds)
+      ok = result.ok
+    } catch {
+      ok = false
+    }
+    if (!mounted.current) return
+    if (ok) {
+      const count = `${fileIds.length} ${fileIds.length === 1 ? 'file' : 'files'}`
+      setSelected(new Set())
+      setSaving(false)
+      onMoved(toNewBook ? `Moved ${count} to a new book` : `Moved ${count} to ${target?.label ?? 'another book'}`)
+      return
+    }
+    // The books may have changed since the list loaded, so show the current files.
+    setMoveFailed(true)
+    load()
+  }
+
   const names = files ? displayNames(files) : new Map<number, string>()
+  const destinationId = `group-${groupId}-move-to`
 
   return (
     <div className="mt-1">
@@ -118,6 +199,12 @@ export default function GroupFiles({ groupId, onReordered }: GroupFilesProps) {
           The new order couldn't be saved. The files have been reloaded.
         </p>
       )}
+      {moveFailed && (
+        <p role="alert" className="mt-1 flex items-center gap-2 text-destructive">
+          <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
+          The files couldn't be moved. The files have been reloaded.
+        </p>
+      )}
       {loadFailed && (
         <p role="alert" className="mt-1 flex items-center gap-2 text-destructive">
           <CircleAlert aria-hidden="true" className="size-4 shrink-0" />
@@ -125,13 +212,39 @@ export default function GroupFiles({ groupId, onReordered }: GroupFilesProps) {
         </p>
       )}
       {!files && !loadFailed && <p className="mt-1 text-muted">Loading files…</p>}
+      {files && files.length > 0 && (
+        <label className="mt-1 flex items-center gap-2">
+          <input
+            ref={selectAll}
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleAll}
+            disabled={saving}
+            className="size-4"
+          />
+          Select all files
+        </label>
+      )}
       {files && (
         <ol className="mt-1 list-decimal space-y-2 pl-6">
           {files.map((file, index) => {
             const name = names.get(file.fileId) ?? file.relativePath
             return (
               <li key={file.fileId}>
-                <span className="font-medium break-all">{fileName(file.relativePath)}</span>
+                <div className="flex items-start gap-2">
+                  <input
+                    id={`group-${groupId}-file-${file.fileId}`}
+                    type="checkbox"
+                    checked={selected.has(file.fileId)}
+                    onChange={() => toggle(file.fileId)}
+                    disabled={saving}
+                    aria-label={`Select ${name}`}
+                    className="mt-1 size-4 shrink-0"
+                  />
+                  <label htmlFor={`group-${groupId}-file-${file.fileId}`}>
+                    <span className="font-medium break-all">{fileName(file.relativePath)}</span>
+                  </label>
+                </div>
                 <div className="text-xs text-muted break-all">{file.relativePath}</div>
                 {(file.disc !== null || file.track !== null) && (
                   <div className="text-xs text-muted">
@@ -168,6 +281,37 @@ export default function GroupFiles({ groupId, onReordered }: GroupFilesProps) {
             )
           })}
         </ol>
+      )}
+      {files && files.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <div>
+            <label htmlFor={destinationId} className="block text-xs font-medium">
+              Move selected to
+            </label>
+            <select
+              id={destinationId}
+              value={destinationValue}
+              onChange={(event) => setDestination(event.target.value)}
+              disabled={saving}
+              className="mt-1 max-w-full rounded border border-muted bg-background px-2 py-1 text-sm"
+            >
+              {targets.map((t) => (
+                <option key={t.id} value={String(t.id)}>
+                  {t.label}
+                </option>
+              ))}
+              <option value={newBookValue}>New book</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            onClick={moveSelected}
+            disabled={saving || selected.size === 0}
+            className={moveButtonClass}
+          >
+            Move
+          </button>
+        </div>
       )}
     </div>
   )

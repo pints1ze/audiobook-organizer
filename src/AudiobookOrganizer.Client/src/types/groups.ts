@@ -59,3 +59,15 @@ export type ReorderGroupResult =
   | { ok: true; group: GroupDetail }
   | { ok: false; errors: { fileIds?: string[] } }
   | { ok: false; notFound: true }
+
+export type MoveFilesResult = ReorderGroupResult
+
+export interface CreateGroupRequest {
+  fileIds: number[]
+  title: string | null
+  author: string | null
+}
+
+export type CreateGroupResult =
+  | { ok: true; group: GroupDetail }
+  | { ok: false; errors: { fileIds?: string[]; title?: string[]; author?: string[] } }

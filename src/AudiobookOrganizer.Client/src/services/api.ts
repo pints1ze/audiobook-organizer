@@ -1,9 +1,12 @@
 import type { Dashboard, ScanRun, StartScanResult } from '../types/dashboard'
 import type {
+  CreateGroupRequest,
+  CreateGroupResult,
   GroupDetail,
   GroupFieldErrors,
   GroupSummary,
   GroupsResponse,
+  MoveFilesResult,
   ReorderGroupResult,
   UpdateGroupRequest,
   UpdateGroupResult,
@@ -127,4 +130,39 @@ export async function reorderGroup(id: number, fileIds: number[]): Promise<Reord
     return { ok: false, notFound: true }
   }
   throw new Error(`Reordering the group failed with status ${response.status}`)
+}
+
+export async function moveFilesToGroup(id: number, fileIds: number[]): Promise<MoveFilesResult> {
+  const response = await fetch(`/api/groups/${id}/files`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileIds }),
+  })
+  if (response.status === 200) {
+    return { ok: true, group: (await response.json()) as GroupDetail }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Moving the files failed with status ${response.status}`)
+}
+
+export async function createGroup(request: CreateGroupRequest): Promise<CreateGroupResult> {
+  const response = await fetch('/api/groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (response.status === 201) {
+    return { ok: true, group: (await response.json()) as GroupDetail }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[]; title?: string[]; author?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  throw new Error(`Creating the group failed with status ${response.status}`)
 }
