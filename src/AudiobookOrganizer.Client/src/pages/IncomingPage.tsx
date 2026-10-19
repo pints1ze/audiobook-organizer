@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObjec
 import { Link } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import GroupFiles, { type MoveTarget } from '../components/incoming/GroupFiles'
+import UnresolvedFiles from '../components/incoming/UnresolvedFiles'
 import { getGroups, updateGroup } from '../services/api'
 import type { GroupConfidence, GroupDetail, GroupFieldErrors, GroupSummary, GroupsResponse } from '../types/groups'
 import { formatDuration } from '../utils/formatDuration'
@@ -247,14 +248,13 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
         {unresolved.length === 0 ? (
           <p className="mt-2">None.</p>
         ) : (
-          <ul className="mt-2 space-y-1">
-            {unresolved.map((file) => (
-              <li key={file.fileId} className="flex flex-wrap gap-x-4">
-                <span className="break-all">{file.relativePath}</span>
-                <span className="text-muted">{formatDuration(file.durationMs)}</span>
-              </li>
-            ))}
-          </ul>
+          <UnresolvedFiles
+            files={unresolved}
+            targets={groups.map((g) => ({ id: g.id, label: bookLabel(g) }))}
+            onMoveStart={() => setMoveMessage('')}
+            onMoved={handleMoved}
+            onFailed={onReload}
+          />
         )}
       </section>
     </>

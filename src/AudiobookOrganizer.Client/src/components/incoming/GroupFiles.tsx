@@ -1,14 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowDown, ArrowUp, CircleAlert } from 'lucide-react'
-import { createGroup, getGroup, moveFilesToGroup, reorderGroup } from '../../services/api'
+import { getGroup, reorderGroup } from '../../services/api'
 import type { GroupDetail, GroupFile } from '../../types/groups'
+import MoveBar, { type MoveTarget } from './MoveBar'
+
+export type { MoveTarget }
 
 type Direction = 'up' | 'down'
-
-export interface MoveTarget {
-  id: number
-  label: string
-}
 
 interface GroupFilesProps {
   groupId: number
@@ -18,8 +16,6 @@ interface GroupFilesProps {
   onMoveStart: () => void
   onMoved: (message: string) => void
 }
-
-const newBookValue = 'new'
 
 function fileName(relativePath: string) {
   return relativePath.slice(relativePath.lastIndexOf('/') + 1)
@@ -46,7 +42,6 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
   const [saveFailed, setSaveFailed] = useState(false)
   const [moveFailed, setMoveFailed] = useState(false)
   const [selected, setSelected] = useState<Set<number>>(new Set())
-  const [destination, setDestination] = useState('')
   const [saving, setSaving] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [pendingFocus, setPendingFocus] = useState<{ fileId: number; direction: Direction } | null>(null)
@@ -130,14 +125,6 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
     if (selectAll.current) selectAll.current.indeterminate = someSelected
   }, [someSelected, files])
 
-  // Fall back to the first option when the chosen book is no longer listed.
-  const destinationValue =
-    destination === newBookValue || targets.some((t) => String(t.id) === destination)
-      ? destination
-      : targets.length > 0
-        ? String(targets[0].id)
-        : newBookValue
-
   function toggle(fileId: number) {
     setSelected((current) => {
       const next = new Set(current)
@@ -151,42 +138,25 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
     setSelected(allSelected || !files ? new Set() : new Set(files.map((f) => f.fileId)))
   }
 
-  async function moveSelected() {
-    if (!files || selected.size === 0) return
-    // Keep the list order so the files stay in sequence in their new book.
-    const fileIds = files.filter((f) => selected.has(f.fileId)).map((f) => f.fileId)
-    const toNewBook = destinationValue === newBookValue
-    const target = targets.find((t) => String(t.id) === destinationValue)
-
+  function handleMoveStart() {
     onMoveStart()
-    setSaving(true)
     setSaveFailed(false)
     setMoveFailed(false)
     setAnnouncement('')
-    let ok = false
-    try {
-      const result = toNewBook
-        ? await createGroup({ fileIds, title: null, author: null })
-        : await moveFilesToGroup(Number(destinationValue), fileIds)
-      ok = result.ok
-    } catch {
-      ok = false
-    }
-    if (!mounted.current) return
-    if (ok) {
-      const count = `${fileIds.length} ${fileIds.length === 1 ? 'file' : 'files'}`
-      setSelected(new Set())
-      setSaving(false)
-      onMoved(toNewBook ? `Moved ${count} to a new book` : `Moved ${count} to ${target?.label ?? 'another book'}`)
-      return
-    }
-    // The books may have changed since the list loaded, so show the current files.
+  }
+
+  function handleMoved(message: string) {
+    setSelected(new Set())
+    onMoved(message)
+  }
+
+  // The books may have changed since the list loaded, so show the current files.
+  function handleMoveFailed() {
     setMoveFailed(true)
     load()
   }
 
   const names = files ? displayNames(files) : new Map<number, string>()
-  const destinationId = `group-${groupId}-move-to`
 
   return (
     <div className="mt-1">
@@ -283,35 +253,17 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
         </ol>
       )}
       {files && files.length > 0 && (
-        <div className="mt-2 flex flex-wrap items-end gap-2">
-          <div>
-            <label htmlFor={destinationId} className="block text-xs font-medium">
-              Move selected to
-            </label>
-            <select
-              id={destinationId}
-              value={destinationValue}
-              onChange={(event) => setDestination(event.target.value)}
-              disabled={saving}
-              className="mt-1 max-w-full rounded border border-muted bg-background px-2 py-1 text-sm"
-            >
-              {targets.map((t) => (
-                <option key={t.id} value={String(t.id)}>
-                  {t.label}
-                </option>
-              ))}
-              <option value={newBookValue}>New book</option>
-            </select>
-          </div>
-          <button
-            type="button"
-            onClick={moveSelected}
-            disabled={saving || selected.size === 0}
-            className={moveButtonClass}
-          >
-            Move
-          </button>
-        </div>
+        <MoveBar
+          id={`group-${groupId}-move-to`}
+          targets={targets}
+          // Keep the list order so the files stay in sequence in their new book.
+          fileIds={files.filter((f) => selected.has(f.fileId)).map((f) => f.fileId)}
+          disabled={saving}
+          onMoveStart={handleMoveStart}
+          onSaving={setSaving}
+          onMoved={handleMoved}
+          onFailed={handleMoveFailed}
+        />
       )}
     </div>
   )

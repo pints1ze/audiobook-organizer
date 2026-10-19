@@ -369,7 +369,8 @@ describe('IncomingPage', () => {
       const summary = await screen.findByText('Files (3)', { selector: 'summary' })
       openFiles(summary.closest('details') as HTMLDetailsElement)
       fireEvent.click(await screen.findByRole('checkbox', { name: 'Select b.mp3' }))
-      fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+      const details = summary.closest('details') as HTMLElement
+      fireEvent.click(within(details).getByRole('button', { name: 'Move' }))
 
       const status = await screen.findByRole('status')
       expect(status).toHaveTextContent('Moved 1 file to The Hobbit')
@@ -381,6 +382,60 @@ describe('IncomingPage', () => {
 
       fireEvent.click(screen.getByRole('button', { name: 'Edit The Hobbit' }))
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('assigning unresolved files', () => {
+    async function unresolvedSection() {
+      const heading = await screen.findByRole('heading', { level: 2, name: /^Unresolved files/ })
+      return heading.closest('section') as HTMLElement
+    }
+
+    it('lists every book plus New book as targets', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      renderPage()
+
+      const section = await unresolvedSection()
+      const select = within(section).getByLabelText('Move selected to') as HTMLSelectElement
+      expect(Array.from(select.options).map((o) => o.textContent)).toEqual(['Unknown (group 2)', 'The Hobbit', 'New book'])
+    })
+
+    it('reloads, drops the moved file and focuses the status message after a move', async () => {
+      const after: GroupsResponse = {
+        groups: [response.groups[0], { ...response.groups[1], fileCount: 13, userCorrected: true }],
+        unresolved: [response.unresolved[0]],
+      }
+      getGroupsMock.mockResolvedValueOnce(response).mockResolvedValue(after)
+      moveFilesMock.mockResolvedValue({ ok: true, group: { ...response.groups[1], files: [] } })
+      renderPage()
+
+      const section = await unresolvedSection()
+      fireEvent.click(within(section).getByRole('checkbox', { name: 'Select loose.m4b' }))
+      fireEvent.change(within(section).getByLabelText('Move selected to'), { target: { value: '1' } })
+      fireEvent.click(within(section).getByRole('button', { name: 'Move' }))
+
+      const status = await screen.findByRole('status')
+      expect(status).toHaveTextContent('Moved 1 file to The Hobbit')
+      await waitFor(() => expect(status).toHaveFocus())
+      expect(moveFilesMock).toHaveBeenCalledWith(1, [8])
+      expect(getGroupsMock).toHaveBeenCalledTimes(2)
+      const updated = await unresolvedSection()
+      expect(within(updated).getByRole('heading', { level: 2 })).toHaveTextContent('Unresolved files (1)')
+      expect(within(updated).queryByText('loose.m4b')).not.toBeInTheDocument()
+      expect(within(updated).getByText('stray/track.mp3')).toBeInTheDocument()
+    })
+
+    it('shows an alert in the section and reloads when the move fails', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      moveFilesMock.mockResolvedValue({ ok: false, notFound: true })
+      renderPage()
+
+      const section = await unresolvedSection()
+      fireEvent.click(within(section).getByRole('checkbox', { name: 'Select loose.m4b' }))
+      fireEvent.click(within(section).getByRole('button', { name: 'Move' }))
+
+      expect(await within(section).findByRole('alert')).toHaveTextContent("The files couldn't be moved")
+      await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
     })
   })
 })
