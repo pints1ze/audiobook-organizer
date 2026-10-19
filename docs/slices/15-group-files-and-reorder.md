@@ -48,3 +48,37 @@
 - **Ordering:** this slice puts the reorder and detail endpoints first because the move, split and reorder UI all need a group's file list. The UI for the file list and reordering is the next slice (`types/groups.ts`, `services/api.ts` and its test, `IncomingPage.tsx` and its test).
 - **Size:** 3 tasks, 6 files: `GroupRepository.cs`, `GroupingService.cs` and its test, `GroupsController.cs` and its test, `GroupDtos.cs`.
 - **Commit:** `feat: slice 15 group-files-and-reorder`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 94 passed, 0 failed | 90 before plus 4 new |
+| Frontend tests | 65 passed, 0 failed | no frontend change in this slice |
+| New tests | 4 of 4 present, passing | `Get_by_id_returns_the_group_with_its_files_in_order_and_404_for_an_unknown_id`, `Put_order_reverses_the_files_and_marks_the_group_corrected`, `Put_order_rejects_a_bad_list_with_400_without_changing_anything_and_404s_an_unknown_group`, `Reordered_group_keeps_its_order_after_a_rescan_of_unchanged_files` |
+| Manual: detail lists files in track order | Passed | API on :5070 with a scratch DB (`Database__Path`); a scenario A folder with three tracks. `GET /api/groups/1` gave files 1, 2, 3 at positions 1–3 with relative paths `book a/01 track.mp3` and so on |
+| Manual: reverse the order | Passed | `PUT /api/groups/1/order` with `[3,2,1]` returned 200, `userCorrected: true`, files 3, 2, 1 at positions 1–3 |
+| Manual: order survives a rescan | Passed | Rescan completed with 3 unchanged; `GET /api/groups/1` still gave 3, 2, 1 |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The server and all scratch data were removed afterwards.
+
+## Outcome (2026-10-18, commit 8ee85fa)
+
+**Status:** Implemented
+**Summary:** This slice adds two endpoints:
+- `GET /api/groups/{id}` returns a group with its files in position order: relative path, position, disc, track and duration.
+- `PUT /api/groups/{id}/order` rewrites the positions in one transaction and marks the group user-corrected. It rejects an empty, duplicated or mismatched list with a 400 keyed `fileIds`.
+
+A reordered group keeps its order through a rescan. All Done when items are met.
+**Changed:** 6 code files plus 2 docs. Key ones: `Data/GroupRepository.cs`, `Services/Grouping/GroupingService.cs`, `Controllers/GroupsController.cs`, `Models/Api/GroupDtos.cs`.
+**Deviations:**
+- Added a `GroupFileRow` row class in `GroupRepository.cs`. *Fine.*
+- Added a `GroupReorderResult` record that carries the detail DTO. *Fine.*
+- The 400 mapping moved into a private `Invalid` helper shared by `Put` and `PutOrder`. *Improvement*, and the `Put` tests still pass.
+**Follow-ups:**
+- Next slice: a per-row file list on the Incoming page with move up/down to reorder, using these endpoints.
+- `GroupDetailDto` repeats the summary fields. Fine for now; revisit if more detail fields arrive.
