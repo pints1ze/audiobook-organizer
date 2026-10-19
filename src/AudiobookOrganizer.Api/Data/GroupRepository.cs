@@ -161,7 +161,7 @@ public class GroupRepository(SqliteConnectionFactory connections)
             VALUES (@title, @author, 'High', @evidence, 0, 0, @scanRunId, 1)
             RETURNING Id
             """,
-            new { title, author, evidence = JsonSerializer.Serialize(new[] { "Grouped by the user" }), scanRunId },
+            new { title, author, evidence = JsonSerializer.Serialize(new[] { UserMadeEvidence }), scanRunId },
             transaction);
         PlaceFiles(connection, transaction, groupId, fileIds, 0);
         transaction.Commit();
@@ -227,6 +227,7 @@ public class GroupRepository(SqliteConnectionFactory connections)
                 transaction);
         }
 
+        var ids = sources.Concat(alsoRecompute).Distinct().ToList();
         connection.Execute(
             """
             UPDATE FileGroup SET UserCorrected = 1,
@@ -236,8 +237,28 @@ public class GroupRepository(SqliteConnectionFactory connections)
                                    WHERE gf.GroupId = FileGroup.Id)
             WHERE Id IN @ids
             """,
-            new { ids = sources.Concat(alsoRecompute).Distinct().ToList() }, transaction);
+            new { ids }, transaction);
+
+        connection.Execute(
+            """
+            UPDATE FileGroup SET EvidenceJson = json_insert(EvidenceJson, '$[#]', @corrected)
+            WHERE Id IN @ids
+                AND NOT EXISTS (SELECT 1 FROM json_each(FileGroup.EvidenceJson) WHERE value IN (@corrected, @userMade))
+            """,
+            new
+            {
+                ids,
+                corrected = CorrectedEvidence,
+                userMade = UserMadeEvidence,
+            },
+            transaction);
     }
+
+    /// <summary>The evidence line added to a group whose files the user changed.</summary>
+    public const string CorrectedEvidence = "Corrected by the user";
+
+    /// <summary>The evidence of a group the user created.</summary>
+    public const string UserMadeEvidence = "Grouped by the user";
 
     /// <summary>
     /// Takes <paramref name="fileIds"/> out of their groups and sets their user state to <paramref name="state"/>

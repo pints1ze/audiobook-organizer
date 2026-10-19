@@ -415,6 +415,73 @@ public class GroupingServiceTests : IDisposable
         Assert.Empty(_grouping.List().Excluded);
     }
 
+    private const string Corrected = "Corrected by the user";
+
+    [Fact]
+    public void Moving_a_file_adds_the_correction_line_to_both_groups_once()
+    {
+        NewScanService(_grouping).Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var singleId = GroupIdOf("single.m4b");
+        var bookBefore = _grouping.GetDetail(bookId)!.Evidence;
+        var singleBefore = _grouping.GetDetail(singleId)!.Evidence;
+        Assert.NotEmpty(bookBefore);
+        Assert.DoesNotContain(Corrected, bookBefore);
+
+        Assert.Empty(_grouping.MoveFiles(singleId, new MoveFilesDto([FileIdOf("book a/track1.mp3")])).Errors);
+
+        Assert.Equal([.. bookBefore, Corrected], _grouping.GetDetail(bookId)!.Evidence);
+        Assert.Equal([.. singleBefore, Corrected], _grouping.GetDetail(singleId)!.Evidence);
+
+        Assert.Empty(_grouping.MoveFiles(bookId, new MoveFilesDto([FileIdOf("book a/track1.mp3")])).Errors);
+
+        Assert.Equal([.. bookBefore, Corrected], _grouping.GetDetail(bookId)!.Evidence);
+        Assert.Equal([.. singleBefore, Corrected], _grouping.GetDetail(singleId)!.Evidence);
+    }
+
+    [Fact]
+    public void Excluding_a_file_adds_the_correction_line_but_user_made_groups_keep_their_own()
+    {
+        NewScanService(_grouping).Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var bookBefore = _grouping.GetDetail(bookId)!.Evidence;
+
+        Assert.Empty(_grouping.Exclude(new MoveFilesDto([FileIdOf("book a/track1.mp3")])).Errors);
+
+        Assert.Equal([.. bookBefore, Corrected], _grouping.GetDetail(bookId)!.Evidence);
+
+        var created = _grouping.CreateGroup(new CreateGroupDto([FileIdOf("single.m4b")], "Mine", null)).Group!;
+        Assert.Equal(["Grouped by the user"], created.Evidence);
+
+        Assert.Empty(_grouping.MoveFiles(created.Id, new MoveFilesDto([FileIdOf("book a/track2.mp3")])).Errors);
+
+        Assert.Equal(["Grouped by the user"], _grouping.GetDetail(created.Id)!.Evidence);
+    }
+
+    [Fact]
+    public void Rename_and_reorder_leave_evidence_alone_and_the_correction_line_survives_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var singleId = GroupIdOf("single.m4b");
+        var bookBefore = _grouping.GetDetail(bookId)!.Evidence;
+
+        Assert.Empty(_grouping.Rename(bookId, new UpdateGroupDto("My Book", null)).Errors);
+        var reversed = _grouping.GetDetail(bookId)!.Files.Select(f => f.FileId).Reverse().ToList();
+        Assert.Empty(_grouping.Reorder(bookId, new ReorderGroupDto(reversed)).Errors);
+
+        Assert.Equal(bookBefore, _grouping.GetDetail(bookId)!.Evidence);
+
+        Assert.Empty(_grouping.MoveFiles(singleId, new MoveFilesDto([FileIdOf("book a/track1.mp3")])).Errors);
+        var movedInto = _grouping.GetDetail(singleId)!.Evidence;
+        Assert.Equal(Corrected, movedInto[^1]);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        Assert.Equal(movedInto, _grouping.GetDetail(singleId)!.Evidence);
+    }
+
     private string? UserStateOf(long fileId)
     {
         using var connection = _connections.Open();
