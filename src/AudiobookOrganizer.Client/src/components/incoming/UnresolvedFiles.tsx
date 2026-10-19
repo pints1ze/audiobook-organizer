@@ -22,10 +22,13 @@ export default function UnresolvedFiles({ kind, files, targets, onMoveStart, onM
   const [moveFailed, setMoveFailed] = useState(false)
   const selectAll = useRef<HTMLInputElement>(null)
 
-  // A reload brings a new list, so start again with nothing selected.
-  useEffect(() => {
+  // A reload brings a new list, so start again with nothing selected. Done while rendering, not in an effect: an
+  // effect runs after the list is painted and would clear a box ticked in that gap.
+  const [listedFiles, setListedFiles] = useState(files)
+  if (listedFiles !== files) {
+    setListedFiles(files)
     setSelected(new Set())
-  }, [files])
+  }
 
   const someSelected = selected.size > 0 && selected.size < files.length
   const allSelected = files.length > 0 && selected.size === files.length

@@ -1,4 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { flushSync } from 'react-dom'
+import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createGroup, excludeFiles, moveFilesToGroup, unresolveFiles } from '../../services/api'
 import type { GroupDetail, UnresolvedFile } from '../../types/groups'
@@ -50,6 +52,44 @@ describe('UnresolvedFiles', () => {
     createGroupMock.mockReset()
     excludeFilesMock.mockReset()
     unresolveFilesMock.mockReset()
+  })
+
+  it('keeps a file ticked straight after the list renders, before React runs its effects', async () => {
+    // Outside act, React runs effects in a later task, as in the browser. The click goes in the microtask right after
+    // the commit, before that task. The old reset-on-new-list effect then cleared the tick, so Move did nothing (the
+    // flaky IncomingPage move test).
+    const actEnvironment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    const previous = actEnvironment.IS_REACT_ACT_ENVIRONMENT
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = false
+    const container = document.body.appendChild(document.createElement('div'))
+    const root = createRoot(container)
+    try {
+      const handlers = { onMoveStart: vi.fn(), onMoved: vi.fn(), onFailed: vi.fn() }
+      const clicked = new Promise<HTMLInputElement>((resolve) => {
+        const clickOnCommit = (element: HTMLDivElement | null) => {
+          if (!element) return
+          queueMicrotask(() => {
+            const checkbox = within(element).getByRole('checkbox', { name: 'Select loose.m4b' }) as HTMLInputElement
+            fireEvent.click(checkbox)
+            resolve(checkbox)
+          })
+        }
+        root.render(
+          <div ref={clickOnCommit}>
+            <UnresolvedFiles kind="unresolved" files={files} targets={targets} {...handlers} />
+          </div>,
+        )
+      })
+
+      const checkbox = await clicked
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      expect(checkbox).toBeChecked()
+    } finally {
+      flushSync(() => root.unmount())
+      container.remove()
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = previous
+    }
   })
 
   it('lists each file with its path, duration and a labelled checkbox', () => {
