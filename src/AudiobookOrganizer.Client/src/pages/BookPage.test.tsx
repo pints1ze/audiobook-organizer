@@ -2,12 +2,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../App'
-import { getGroup, getMatch, getMetadata, pickMatch, saveMetadata, searchMetadata } from '../services/api'
+import { getCovers, getGroup, getMatch, getMetadata, pickMatch, saveMetadata, searchMetadata } from '../services/api'
 import type { GroupDetail } from '../types/groups'
 import type { BookMatch, BookMetadata, MetadataCandidate, PickMatchResult } from '../types/metadata'
 import { formatDateTime } from '../utils/formatDateTime'
 
 vi.mock('../services/api', () => ({
+  getCovers: vi.fn(),
   getGroup: vi.fn(),
   getMatch: vi.fn(),
   getMetadata: vi.fn(),
@@ -22,6 +23,7 @@ const getMatchMock = vi.mocked(getMatch)
 const pickMock = vi.mocked(pickMatch)
 const getMetadataMock = vi.mocked(getMetadata)
 const saveMetadataMock = vi.mocked(saveMetadata)
+const getCoversMock = vi.mocked(getCovers)
 
 function metadataWith(title: string, origin: 'file' | 'provider', narrators: string[]): BookMetadata {
   const empty = { value: null, origin: null, provider: null }
@@ -138,13 +140,18 @@ describe('BookPage', () => {
     getMetadataMock.mockReset()
     getMetadataMock.mockResolvedValue(metadataWith('Project Hail Mary', 'file', []))
     saveMetadataMock.mockReset()
+    getCoversMock.mockReset()
+    getCoversMock.mockResolvedValue({ groupId: 4, chosen: null, embedded: [], provider: null })
   })
 
-  it('shows the Metadata section between Chosen match and Catalog search', async () => {
+  it('shows the Cover and Metadata sections between Chosen match and Catalog search', async () => {
     await loadedPage()
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
-    expect(headings).toEqual(['Chosen match', 'Metadata', 'Catalog search'])
+    expect(headings).toEqual(['Chosen match', 'Cover', 'Metadata', 'Catalog search'])
+    expect(getCoversMock).toHaveBeenCalledWith(4)
+    const cover = screen.getByRole('heading', { level: 2, name: 'Cover' }).closest('section')!
+    expect(await within(cover).findByText('No cover chosen yet.')).toBeInTheDocument()
     expect(await within(metadataSection()).findAllByText('From files')).toHaveLength(2)
   })
 
@@ -160,6 +167,25 @@ describe('BookPage', () => {
     expect(await within(metadataSection()).findByText('Ray Porter')).toBeInTheDocument()
     expect(within(metadataSection()).getAllByText('From Audible').length).toBeGreaterThan(0)
     expect(getMetadataMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads the covers after "Use this match" succeeds, so the match cover follows it', async () => {
+    pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    await loadedPage()
+    const cover = screen.getByRole('heading', { level: 2, name: 'Cover' }).closest('section')!
+    await within(cover).findByText('No cover chosen yet.')
+    await searchFor([openLibrary, audible])
+
+    getCoversMock.mockResolvedValue({
+      groupId: 4,
+      chosen: null,
+      embedded: [],
+      provider: { provider: 'audible', coverUrl: 'https://example.test/phm.jpg' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+
+    expect(await within(cover).findByRole('button', { name: "Use the match's cover: Audible" })).toBeInTheDocument()
+    expect(getCoversMock).toHaveBeenCalledTimes(2)
   })
 
   it('loads the group, prefills the keywords, searches and lists a candidate', async () => {
@@ -275,7 +301,7 @@ describe('BookPage', () => {
     await loadedPage()
 
     expect(getMatchMock).toHaveBeenCalledWith(4)
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Metadata', 'Catalog search'])
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Cover', 'Metadata', 'Catalog search'])
     const section = chosenSection()
     expect(await within(section).findByRole('heading', { level: 3, name: 'Project Hail Mary' })).toBeInTheDocument()
     expect(within(section).getByText('Open Library')).toBeInTheDocument()

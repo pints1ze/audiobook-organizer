@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
+import CoverPicker from '../components/book/CoverPicker'
 import MetadataEditor, { providerNames } from '../components/book/MetadataEditor'
 import { getGroup, getMatch, pickMatch, searchMetadata } from '../services/api'
 import type { GroupDetail } from '../types/groups'
@@ -123,6 +124,7 @@ function BookContent({ group }: { group: GroupDetail }) {
           </div>
         )}
       </section>
+      <CoverPicker groupId={group.id} reloadKey={metadataReloadKey} />
       <MetadataEditor groupId={group.id} match={currentMatch} reloadKey={metadataReloadKey} />
       <CatalogSearch
         initialKeywords={[group.title, group.author].filter((part) => part?.trim()).join(' ')}
