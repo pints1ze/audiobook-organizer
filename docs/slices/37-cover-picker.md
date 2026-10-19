@@ -46,3 +46,35 @@
 - `?v=<chosenAtUtc>` is a cache-buster on the client only; the server ignores the query.
 - This should meet phase 5's last done-when line ("cover can come from the embedded image, a download, or an upload"), so the review should end the phase (gate 5).
 - Conflict check: no new package or shadcn component (plain buttons and a native file input), matches the slice 34–36 API and the "Covers can come from the embedded image, a provider download or an upload" decision.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 184 passed, 0 failed | Unchanged (no API changes) |
+| Frontend tests | 195 passed, 0 failed | Was 183 |
+| New tests | 4 of 4 present, passing | `CoverPicker.test.tsx` (11 tests: chosen cover + options + "Current cover", empty messages, load failure, provider choice + "Cover saved.", embedded choice by file id, 502 `downloadFailed`, 400/404/thrown alerts, upload, 400 `file` error on the input, no-file upload, reload on `reloadKey`); `BookPage.test.tsx` (Cover section order, covers reload after "Use this match") |
+| Manual: choose embedded, match's cover, upload; image changes without reload | Not run | API (5070) and client (5173) not running. Start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+| Manual: text file renamed `.png` shows the error, cover unchanged | Not run | Same |
+| Manual: keyboard and screen reader pass | Not run | Same; needs a screen reader |
+
+Data checks for the developer (not run): `SELECT AudiobookId, Source, FileId, MimeType, length(Image), ChosenAtUtc FROM AudiobookCover;`
+
+## Outcome (2026-10-19, commit 55b6ac9)
+
+**Status:** Implemented
+**Summary:** The book page has a Cover section (`components/book/CoverPicker.tsx`) between Chosen match and Metadata. It shows the chosen cover and its source and lists the embedded covers and the match's cover with "Use this cover" / "Use the match's cover", and it has an upload form. Saves announce "Cover saved." and errors show as alerts. Picking a match reloads it.
+**Changed:** 4 code files: `components/book/CoverPicker.tsx` (new), `CoverPicker.test.tsx` (new, 11 tests), `pages/BookPage.tsx` (2 lines), `pages/BookPage.test.tsx`. Plus this slice file and `docs/PLAN.md`.
+**Deviations:**
+- Upload with no file chosen shows "Choose a JPEG or PNG image to upload." on the input and sends nothing (not specified): *improvement*.
+- A chosen embedded cover whose file is gone from the list reads "From a file of this book"; a provider cover with no current match reads "From the match": *fine*.
+- Existing `BookPage.test.tsx` heading-order assertions now include "Cover"; nothing weakened: *fine*.
+- The slice file and the PLAN.md line were committed with the `feat:` commit, because they were uncommitted when it ran: *fine*.
+- After a new match is picked, a cover chosen from the old match still shows "Current cover" on the new match's option, although the stored image is the old one: *debt*, minor. Re-choosing downloads the new one. Fix when phase 8 touches covers, or in phase 9 polish.
+**Follow-ups:**
+- The "Current cover" mark for a provider cover after the match changes (above).
+- Manual checks for 33–37 are still not run; the developer verifies them with the phase.
