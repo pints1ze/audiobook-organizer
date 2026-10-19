@@ -40,7 +40,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 6. Normalization (in progress)
 **Goal:** authors, narrators and genres resolve to canonical names.
 **Done when:** aliases map variants to one canonical entry; the app suggests but never auto-merges aliases; a management screen lets the user create, merge and edit canonical entries.
-**Slices:** 38 (implemented), 39 (implemented), 40 (implemented), 41 (implemented), 42 (written). Next pieces: merge and suggestions on the screen, resolving book values to canonical entries.
+**Slices:** 38 (implemented), 39 (implemented), 40 (implemented), 41 (implemented), 42 (implemented). Next pieces: merge and suggestions on the screen, resolving book values to canonical entries.
 
 ### 7. Naming & preview (not started)
 **Goal:** see exactly where every file will go before anything moves.

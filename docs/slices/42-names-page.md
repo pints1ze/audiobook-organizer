@@ -51,3 +51,33 @@
 - No new package or shadcn component: plain form controls and a list. `docs/UIUX.md` doesn't exist; follow the Settings and Book page styling.
 - Remaining phase 6 piece after this: merge + suggestions on these pages (slice 43), which should meet the phase's done-when lines.
 - Conflict check: matches the slice 33 decision (list values one per line), the API error keys from slices 38–39, and AGENTS.md's stack (React built-ins + `services/api.ts`).
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 243 passed, 0 failed | Unchanged (no API changes) |
+| Frontend tests | 206 passed, 0 failed | Was 195 |
+| New tests | 5 of 5 present, passing | `NamesPage.test.tsx` (9: list with aliases, empty, failed load + retry, add with blank lines dropped, 400 on name keeps input, edit + save, cancel focuses Edit, genres labels); `AppLayout.test.tsx` (People `aria-current`, nav order) |
+| Manual: add/edit Stephen King, clash on `KING, STEPHEN`, then `/genres` | Not run | API (5070) and client (5173) not running. Start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+| Manual: keyboard-only edit, focus back to Edit, screen reader "Saved …" | Not run | Same; needs a screen reader |
+
+Data checks for the developer (not run): `SELECT * FROM Person; SELECT * FROM PersonAlias;` after the manual steps.
+
+## Outcome (2026-10-19, commit 8375c9e)
+
+**Status:** Implemented
+**Summary:** The nav has People (`/people`) and Genres (`/genres`), both served by one `NamesPage` that lists entries with their aliases, adds them through an `EntryForm` (aliases one per line) and edits each row in place. Saves announce "Saved …"; 400 errors show on the field; focus returns to the row's Edit button.
+**Changed:** 8 code files: `types/names.ts`, `components/names/EntryForm.tsx`, `pages/NamesPage.tsx`, `pages/NamesPage.test.tsx` (new, 9 tests); `services/api.ts` (`getEntries`, `createEntry`, `updateEntry`), `App.tsx`, `components/layout/AppLayout.tsx`, `AppLayout.test.tsx`. Plus this slice file, `docs/PLAN.md` and `docs/CURRENT-STATE.md`.
+**Deviations:**
+- The add form sits in a region headed "New person" / "New genre", with the submit button "Add a person" / "Add a genre": *fine*.
+- The nav list wraps (`flex-wrap`) so five links fit at phone width: *improvement*.
+- The existing nav-order test now expects People and Genres; nothing weakened: *fine*.
+- A 404 on update, or a 400 without a `name`/`aliases` error, shows the form's general "couldn't be saved" alert: *fine*.
+**Follow-ups:**
+- Merge and suggestions on these pages (slice 43).
+- Manual checks for 42 not run (live API and client, keyboard, screen reader).
