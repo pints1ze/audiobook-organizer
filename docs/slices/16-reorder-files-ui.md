@@ -57,3 +57,32 @@
 - **Why a component:** `IncomingPage.tsx` already holds the table and the edit form. The file list has its own loading, saving and focus state, so it goes in `components/incoming/` with its own test, which is the first feature folder there.
 - **Size:** 4 tasks, 7 files: `types/groups.ts`, `services/api.ts` and its test, `components/incoming/GroupFiles.tsx` and its test, `pages/IncomingPage.tsx` and its test.
 - **Commit:** `feat: slice 16 reorder-files-ui`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 94 passed, 0 failed | no backend change in this slice |
+| Frontend tests | 81 passed, 0 failed | 8 files, 16 new |
+| New tests | 4 of 4 behaviours present, passing | api: `getGroup` (200, 404) and `reorderGroup` (200, 400, 404, 500). `GroupFiles`: ordered list with disabled end moves; move up with new order, focus and announcement; alert and reload after a 400, a 404 or a thrown error. Page: the disclosure loads only when opened; "Edited" after a reorder. Extra: path names for duplicate file names, a load-failure alert, focus kept on a still-enabled button |
+| Manual: keyboard reorder | Passed | Playwright on :5173 against a scratch DB (`Database__Path`); a scenario A folder with three tracks. Focus on the "Files (3)" summary, then Enter: 3 files, with "Move 01 … up" and "Move 03 … down" disabled. Focus on "Move 03 track.mp3 up", then Enter: order 01, 03, 02, focus stays, live region "Moved 03 track.mp3 to position 2". Space: order 03, 01, 02. Focus moves to "Move 03 track.mp3 down" (up is now disabled), live region "…position 1", and the row shows "Edited" |
+| Manual: order survives a rescan | Passed | "Scan incoming" on the Dashboard: completed, 3 unchanged. Incoming then lists 03, 01, 02 |
+| Manual: 375 px width | Passed | Page scroll width 360 is within the 375 viewport. The table scrolls inside its container (419 vs 312) |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the browser, the scratch data and the `.playwright-mcp/` output were removed afterwards.
+
+## Outcome (2026-10-18, commit 8e6d813)
+
+**Status:** Implemented
+**Summary:** Each proposed book on the Incoming page has a native "Files (N)" disclosure. It loads the group's files only when opened and lists them in an `<ol>` with Move up and Move down buttons. A move saves through `reorderGroup`, keeps focus with the moved file and announces the move in a polite live region; the row then shows "Edited". Failures show an alert and reload the files. All Done when items are met.
+**Changed:** 7 code files plus 2 docs. Key ones: `components/incoming/GroupFiles.tsx` (new, the first feature folder) and its test, `pages/IncomingPage.tsx`, `services/api.ts`, `types/groups.ts`.
+**Deviations:**
+- When two files in a group share a file name, their buttons and announcements use the relative path, so every name stays unique. *Improvement.*
+- An alert shows when the first file load fails. *Improvement*, because the slice hadn't covered that case.
+- A small `FilesDisclosure` wrapper in the page holds the open state and strips `files` before `replaceGroup`. *Fine.*
+**Follow-ups:**
+- Clicking Edit swaps the row for the form, which closes that row's Files list; reopening it reloads the files. *Minor.* Revisit if a group detail view replaces the inline form.

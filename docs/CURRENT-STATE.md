@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 15 review, 2026-10-18, commit 8ee85fa_
+_Updated: slice 16 review, 2026-10-18, commit 8e6d813_
 
 ## Branch
 `phase/4-group-corrections` (off `main` after the phase 3 merge, PR #3)
@@ -12,15 +12,15 @@ _Updated: slice 15 review, 2026-10-18, commit 8ee85fa_
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
 - **Grouping engine:** the pure `GroupingEngine.Group` proposes book groups from scanned file facts, with confidence, evidence and an estimated title and author; scenarios A–E pass. Every completed scan regroups the files it saw into `FileGroup` and `FileGroupFile` (replacing all groups), and `GET /api/groups` lists the groups (least confident first) and the unresolved files. The Incoming page (`/incoming`) shows them with confidence and evidence.
-- **Corrections:** `PUT /api/groups/{id}` sets a group's title and author and marks it `UserCorrected`. Rescans keep corrected groups and their files untouched and regroup only the rest. The Incoming page edits title and author in place and marks corrected books "Edited" (slice 14). `GET /api/groups/{id}` lists a group's files in order and `PUT /api/groups/{id}/order` reorders them (slice 15, no UI yet).
+- **Corrections:** `PUT /api/groups/{id}` sets a group's title and author and marks it `UserCorrected`. Rescans keep corrected groups and their files untouched and regroup only the rest. The Incoming page edits title and author in place and marks corrected books "Edited" (slice 14). `GET /api/groups/{id}` lists a group's files in order and `PUT /api/groups/{id}/order` reorders them (slice 15). Each Incoming row has a "Files" disclosure with keyboard-accessible Move up and Move down (slice 16).
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: in progress. Set title/author is done (API and UI). Reorder has its API. Still to do: the reorder UI, then merge, split, move file and exclude, plus the carried dashboard counts and real-collection rule tweaks.
+Phase 4, Group corrections: in progress. Set title/author is done (API and UI). Set title/author and reorder are done (API and UI). Still to do: merge, split, move file and exclude, plus the carried dashboard counts and real-collection rule tweaks.
 
 ## Last slice / next slice
-- Last: 15 group-files-and-reorder, Implemented
-- Next: 16, the file list and reorder UI on the Incoming page (not written yet)
+- Last: 16 reorder-files-ui, Implemented
+- Next: 17 (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -54,4 +54,4 @@ Phase 4, Group corrections: in progress. Set title/author is done (API and UI). 
 - 2026-10-18 (slice 13): Any user correction marks the whole group `UserCorrected`, which freezes its membership; rescans skip its files. New columns on existing tables are added by a guarded `ALTER TABLE ... ADD COLUMN` in `DatabaseInitializer`.
 
 ## Verification
-Full suite: backend 94 passed / 0 failed, frontend 65 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 94 passed / 0 failed, frontend 81 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
