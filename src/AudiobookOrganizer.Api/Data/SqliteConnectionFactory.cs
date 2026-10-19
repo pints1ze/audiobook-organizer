@@ -13,6 +13,12 @@ public class SqliteConnectionFactory(string databasePath)
     {
         var connection = new SqliteConnection(_connectionString);
         connection.Open();
+        // SQLite enforces foreign keys (and ON DELETE CASCADE) only when each connection asks for it.
+        using (var pragma = connection.CreateCommand())
+        {
+            pragma.CommandText = "PRAGMA foreign_keys = ON";
+            pragma.ExecuteNonQuery();
+        }
         return connection;
     }
 }

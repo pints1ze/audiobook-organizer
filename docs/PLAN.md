@@ -22,15 +22,15 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** validated directory settings save; a manual scan records every MP3/M4B with tags, duration, cover and chapter info, and a rescan skips unchanged files; dashboard shows last scan and counts; a TagLibSharp write-to-copy test proves M4B chapters and audio survive tagging.
 **Slices:** 04 (implemented), 05 (implemented), 06 (implemented), 07 (implemented), 08 (implemented), 09 (implemented). The tag round-trip went to ffmpeg for M4B per the slice 04 decision.
 
-### 3. Grouping (not started)
+### 3. Grouping (done)
 **Goal:** scanned files become proposed audiobook groups with confidence and evidence.
 **Done when:** PRD grouping scenarios A–E pass as automated tests; low-evidence files show as unresolved; Incoming screen lists groups with title, author, file count, duration, confidence.
-**Slices:** none yet. Carried in: move the dashboard query into a service when group counts are added (08); add `getDashboard` to the AppLayout test mock (09).
+**Slices:** 10 (implemented), 11 (implemented), 12 (implemented).
 
 ### 4. Group corrections (not started)
 **Goal:** the user can fix any grouping the rules got wrong.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
-**Slices:** none yet
+**Slices:** none yet. Carried in: dashboard group and status counts, moving the dashboard query into a service (from slices 08 and 12); grouping-rule tweaks from the developer's real-collection check at the end of phase 3.
 
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.

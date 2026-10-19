@@ -1,4 +1,5 @@
 import type { Dashboard, ScanRun, StartScanResult } from '../types/dashboard'
+import type { GroupsResponse } from '../types/groups'
 import type { HealthResponse } from '../types/health'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
@@ -64,4 +65,12 @@ export async function startScan(): Promise<StartScanResult> {
     return { started: false, message: problem.detail || problem.title || 'A scan is already running.' }
   }
   throw new Error(`Starting a scan failed with status ${response.status}`)
+}
+
+export async function getGroups(): Promise<GroupsResponse> {
+  const response = await fetch('/api/groups')
+  if (response.status !== 200) {
+    throw new Error(`Loading groups failed with status ${response.status}`)
+  }
+  return (await response.json()) as GroupsResponse
 }

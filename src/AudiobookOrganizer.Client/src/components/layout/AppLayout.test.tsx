@@ -2,9 +2,17 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../App'
-import { getHealth, getSettings } from '../../services/api'
+import { getDashboard, getGroups, getHealth, getSettings } from '../../services/api'
 
-vi.mock('../../services/api', () => ({ getHealth: vi.fn(), getSettings: vi.fn(), saveSettings: vi.fn() }))
+vi.mock('../../services/api', () => ({
+  getHealth: vi.fn(),
+  getSettings: vi.fn(),
+  saveSettings: vi.fn(),
+  getDashboard: vi.fn(),
+  getLatestScan: vi.fn(),
+  startScan: vi.fn(),
+  getGroups: vi.fn(),
+}))
 
 function renderAt(path: string) {
   return render(
@@ -18,6 +26,14 @@ describe('AppLayout', () => {
   beforeEach(() => {
     vi.mocked(getHealth).mockResolvedValue({ status: 'ok', database: 'ok' })
     vi.mocked(getSettings).mockResolvedValue({ incomingPath: null, libraryPath: null, keepSourceFiles: false })
+    vi.mocked(getDashboard).mockResolvedValue({
+      incomingPath: null,
+      libraryPath: null,
+      lastScan: null,
+      audioFileCount: 0,
+      filesWithErrors: 0,
+    })
+    vi.mocked(getGroups).mockResolvedValue({ groups: [], unresolved: [] })
   })
 
   it('renders the skip link first, the header and the main landmark', async () => {
@@ -39,6 +55,18 @@ describe('AppLayout', () => {
     expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument()
+  })
+
+  it('marks the Incoming nav link as the current page on /incoming', async () => {
+    renderAt('/incoming')
+
+    const incoming = screen.getByRole('link', { name: 'Incoming' })
+    expect(incoming).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current')
+    const navLinks = screen.getAllByRole('link').filter((l) => l.closest('nav'))
+    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'Settings'])
+    expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
   })
 
   it('shows "Page not found" with a link back to the dashboard for an unknown route', () => {

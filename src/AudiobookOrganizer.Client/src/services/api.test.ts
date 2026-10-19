@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDashboard, getHealth, getLatestScan, getSettings, saveSettings, startScan } from './api'
+import { getDashboard, getGroups, getHealth, getLatestScan, getSettings, saveSettings, startScan } from './api'
 
 function mockFetch(status: number, body: unknown) {
   const fetchMock = vi.fn().mockResolvedValue(
@@ -155,5 +155,30 @@ describe('scans', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(startScan()).rejects.toThrow()
+  })
+})
+
+describe('groups', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('getGroups returns the parsed body on a 200', async () => {
+    const body = {
+      groups: [
+        { id: 1, title: 'T', author: null, confidence: 'High', evidence: ['e'], fileCount: 2, totalDurationMs: 1000 },
+      ],
+      unresolved: [{ fileId: 3, relativePath: 'a.mp3', durationMs: null }],
+    }
+    const fetchMock = mockFetch(200, body)
+
+    await expect(getGroups()).resolves.toEqual(body)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups')
+  })
+
+  it('getGroups throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(getGroups()).rejects.toThrow()
   })
 })
