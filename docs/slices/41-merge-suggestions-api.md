@@ -47,3 +47,32 @@
 - This meets "the app suggests but never auto-merges aliases" for entries already in the catalog. Book metadata has `authors` and `narrators` but no genres yet (genres are manual in v1), and nothing yet links book values to entries. Whether the screen should also gather unresolved names from books is raised at the end of the phase with "resolving book values".
 - Remaining phase 6 piece after this: the management screen (list, create, edit, merge, suggestions), likely two slices (people page; genres reusing it plus suggestions).
 - Conflict check: read-only, matches the "never auto-merge" PRD rule and the slice 40 merge semantics (`keep` maps to the merge `id`, `merge` to `fromId`); no new package.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 243 passed, 0 failed | Was 222 |
+| Frontend tests | 195 passed, 0 failed | Unchanged (no client changes) |
+| New tests | 4 of 4 present, passing | `CanonicalSuggestionsTests` (19 cases: same letters, initials, not-suggested pairs, no initials for genres, keep choice, ordering); `PeopleControllerTests` (Stephen King / S. King pair with list unchanged, empty `[]`) |
+| Manual: create `J.R.R. Tolkien` and `J. R. R. Tolkien`, suggestions list the pair, list still has two | Not run | API (5070) not running. Start with `scripts/start-api.ps1` |
+
+Data checks for the developer: none (read-only endpoint).
+
+## Outcome (2026-10-19, commit 8734f46)
+
+**Status:** Implemented
+**Summary:** `GET /api/people/suggestions` and `GET /api/genres/suggestions` return `{ keep, merge, reason }` pairs that are probably the same entry, from the pure `CanonicalSuggestions.Suggest`: same letters and digits (both kinds) and matching initials (people only). Nothing is merged; the endpoints are read-only.
+**Changed:** 7 code files: `Services/CanonicalSuggestions.cs` (new), `CanonicalEntryDtos.cs` (`MergeSuggestionDto`), `CanonicalNameService.cs` (`Suggestions`), `PeopleController.cs`, `GenresController.cs`; tests `Services/CanonicalSuggestionsTests.cs` (new, 19 cases) and `Controllers/PeopleControllerTests.cs` (2). Plus this slice file, `docs/PLAN.md` and `docs/CURRENT-STATE.md`.
+**Deviations:**
+- An initials match needs at least one word to be an actual initial, and a tie on both names is broken by id so results don't depend on input order: *improvement*.
+- Words split on spaces only, so `J.R.R. Tolkien` doesn't initials-match `John Ronald Reuel Tolkien`; the same-letters key doesn't swap `Last, First`: *fine*, both within the slice's rules. Revisit if real catalogs miss obvious pairs.
+- No HTTP test for `/api/genres/suggestions`; the genre behavior is covered by unit tests and the endpoint shares the code path: *fine*.
+**Follow-ups:**
+- Dismissing a suggestion ("not the same") so it doesn't come back: the screen slice should decide whether it's needed for phase 6.
+- The O(n²) suggester carries a `// shortcut:` comment.
+- Manual check for 41 not run.
