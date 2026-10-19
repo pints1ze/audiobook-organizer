@@ -13,6 +13,7 @@ import type {
   UpdateGroupResult,
 } from '../types/groups'
 import type { HealthResponse } from '../types/health'
+import type { MetadataSearchResult, SearchMetadataResult } from '../types/metadata'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -190,4 +191,20 @@ export function excludeFiles(fileIds: number[]): Promise<FileListResult> {
 
 export function unresolveFiles(fileIds: number[]): Promise<FileListResult> {
   return postFileList('/api/groups/unresolved', fileIds, 'Sending the files to unresolved')
+}
+
+export async function searchMetadata(keywords: string): Promise<SearchMetadataResult> {
+  const response = await fetch(`/api/metadata/search?keywords=${encodeURIComponent(keywords)}`)
+  if (response.status === 200) {
+    return { ok: true, result: (await response.json()) as MetadataSearchResult }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { keywords?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 502) {
+    const problem = (await response.json()) as { title?: string; detail?: string }
+    return { ok: false, providerFailure: problem.detail || problem.title || 'The metadata providers failed.' }
+  }
+  throw new Error(`Searching metadata failed with status ${response.status}`)
 }

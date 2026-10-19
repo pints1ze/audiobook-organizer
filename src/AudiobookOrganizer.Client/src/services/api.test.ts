@@ -9,6 +9,7 @@ import {
   getLatestScan,
   getSettings,
   saveSettings,
+  searchMetadata,
   startScan,
   moveFilesToGroup,
   unresolveFiles,
@@ -392,5 +393,57 @@ describe.each([
     mockFetch(500, { title: 'error' })
 
     await expect(call([4])).rejects.toThrow()
+  })
+})
+
+describe('searchMetadata', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const candidate = {
+    provider: 'audible',
+    asin: 'B08G9PRS1K',
+    title: 'Project Hail Mary',
+    subtitle: null,
+    authors: ['Andy Weir'],
+    narrators: ['Ray Porter'],
+    series: null,
+    publisher: 'Audible Studios',
+    releaseDate: '2021-05-04',
+    language: 'english',
+    runtimeMinutes: 970,
+    format: 'unabridged',
+    coverUrl: 'https://example.test/cover.jpg',
+    isbn: null,
+  }
+
+  it('encodes the keywords and returns candidates and provider errors on a 200', async () => {
+    const result = { candidates: [candidate], providerErrors: ['Audible search failed: timeout'] }
+    const fetchMock = mockFetch(200, result)
+
+    await expect(searchMetadata('hail mary & co/2')).resolves.toEqual({ ok: true, result })
+    expect(fetchMock).toHaveBeenCalledWith('/api/metadata/search?keywords=hail%20mary%20%26%20co%2F2')
+  })
+
+  it('returns the field errors on a 400', async () => {
+    mockFetch(400, { title: 'One or more validation errors occurred.', errors: { keywords: ['Enter a title.'] } })
+
+    await expect(searchMetadata(' ')).resolves.toEqual({ ok: false, errors: { keywords: ['Enter a title.'] } })
+  })
+
+  it('returns the problem detail on a 502', async () => {
+    mockFetch(502, { title: 'Bad Gateway', status: 502, detail: 'Audible search failed. Open Library search failed.' })
+
+    await expect(searchMetadata('dune')).resolves.toEqual({
+      ok: false,
+      providerFailure: 'Audible search failed. Open Library search failed.',
+    })
+  })
+
+  it('throws for any other status', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(searchMetadata('dune')).rejects.toThrow()
   })
 })
