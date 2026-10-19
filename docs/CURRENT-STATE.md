@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 43 review, 2026-10-19, commit df7ae25_
+_Updated: slice 44 review, 2026-10-19, commit 0d6fa32_
 
 ## Branch
-`phase/6-normalization` (off `main` after the phase 5 merge, PR #5)
+`phase/7-naming-preview` (off `main` after the phase 6 merge, PR #6)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -15,14 +15,15 @@ _Updated: slice 43 review, 2026-10-19, commit df7ae25_
 - **Corrections:** `PUT /api/groups/{id}` sets a group's title and author and marks it `UserCorrected`. Rescans keep corrected groups and their files untouched and regroup only the rest. The Incoming page edits title and author in place and marks corrected books "Edited" (slice 14). `GET /api/groups/{id}` lists a group's files in order and `PUT /api/groups/{id}/order` reorders them (slice 15). Each Incoming row has a "Files" disclosure with keyboard-accessible Move up and Move down (slice 16). `POST /api/groups/{id}/files` moves files into a group and `POST /api/groups` creates a group from files; together they give move, merge and split (slice 17). Each Files list has checkboxes and a "Move selected to" bar that moves files to another book or a new book (slice 18). The Unresolved section has the same selection and move bar (slice 19, shared `MoveBar`). `POST /api/groups/excluded` and `POST /api/groups/unresolved` set a file's `UserState`, and `GET /api/groups` lists `excluded` (slice 20). The move bar also offers "Unresolved files" and "Excluded files", and an Excluded section sends files back (slice 21).
 - **Metadata search:** `GET /api/metadata/search?keywords=` searches Audible's catalog through `AudibleClient`, a typed `HttpClient` behind `IMetadataProvider`. It returns normalized candidates (ASIN, title, authors, narrators, series, publisher, release date, language, runtime, format, cover URL) (slice 27). `MetadataSearchService` falls back to `OpenLibraryClient` when Audible fails or finds nothing; ISBN keywords search Open Library by ISBN. The response is `{ candidates, providerErrors }`: 400 for blank keywords, 502 only when every provider failed (slice 28). Tests use real responses in `docs/fixtures/audible/` and `docs/fixtures/openlibrary/` through `FakeHttpMessageHandler`. Each Incoming book links ("Find metadata") to `/books/:groupId`, which shows the book and a catalog search prefilled with its title and author, listing candidates and provider errors (slice 29). `PUT /api/groups/{id}/match` stores a picked candidate as the book's `Audiobook` + `MetadataMatch` (one current match, raw candidate JSON) and marks the group `UserCorrected`; `GET` returns it or 204 (slice 30). The book page shows the chosen match and a "Use this match" button on each result (slice 31). Each book stores metadata values in `AudiobookField` with an origin (`file`, `provider`, `user`): `GET`/`PUT /api/groups/{id}/metadata` read them and save user edits, and picking a match copies the candidate in. User values are never overwritten, a gap in the candidate keeps the old value, and Open Library never replaces Audible (slice 32). The book page's Metadata section shows each value with its origin and a "Match: …" line where the chosen match differs, and edits save only the changed fields (slice 33). `GET /api/groups/{id}/cover` lists the files with embedded covers and the chosen cover, `GET .../files/{fileId}/cover` serves an embedded JPEG or PNG, `PUT .../cover` with `{ source: "embedded", fileId }` stores it in `AudiobookCover`, and `GET .../cover/image` serves the chosen one (slice 34). `PUT .../cover` with `{ source: "provider" }` downloads the stored match's cover through `CoverDownloadClient` (https on `m.media-amazon.com` or `covers.openlibrary.org` only, type from the bytes, 502 on a failed download) (slice 35). `PUT .../cover/upload` stores an uploaded JPEG or PNG (multipart `file`, at most 10 MB, typed by its bytes), and `services/api.ts` has typed calls for all cover endpoints (slice 36). The book page's Cover section shows the chosen cover and chooses an embedded cover, the match's cover or an upload (slice 37).
 - **Normalization:** `Person`/`PersonAlias` and `Genre`/`GenreAlias` store canonical people (authors and narrators), genres and their variants. `GET`/`POST /api/people`, `PUT /api/people/{id}` (replaces name and aliases) and `GET /api/people/resolve?name=` list, create, edit and resolve people by `NameKey` (whitespace, case and `Last, First` folded); a key owned by another person is a 400 (slice 38). `/api/genres` does the same for genres with `GenreKey` (`-`, `_`, `/` folded to spaces). Both go through `CanonicalNameRepository` and `CanonicalNameService` keyed by `CanonicalKind` (slice 39). `POST /api/{people|genres}/{id}/merge` with `{ fromId }` folds one entry into another: its name and aliases become aliases of the kept one (slice 40). `GET /api/{people|genres}/suggestions` lists likely duplicates (same letters; matching initials for people) with a reason, never merging them (slice 41). The People (`/people`) and Genres (`/genres`) pages list, add and edit entries with their aliases through one `NamesPage` (slice 42), and show possible duplicates and a per-row "Merge into…", each with an inline confirmation (slice 43).
+- **Naming:** `NamingTemplate.Render` (in `Services/Naming/`) renders a template into a sanitized relative path with `Missing` tokens or an `Error`, and `NamingTemplate.ResolveUnder` refuses any path outside the library root (slice 44). Nothing calls it yet.
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 6, Normalization: done (slices 38–43), waiting for the developer to verify it and merge its PR. Next is phase 7, Naming & preview. Excluded files never get an `Audiobook`.
+Phase 7, Naming & preview: the template engine is done (44). Left: templates in settings, mapping a book to tokens, and the preview endpoint and screen with missing values, duplicate targets and existing-file conflicts. Excluded files never get an `Audiobook`.
 
 ## Last slice / next slice
-- Last: 43 merge-on-names-page, Implemented
-- Next: phase 7's first slice, after the phase 6 PR is merged (not written)
+- Last: 44 naming-template-engine, Implemented
+- Next: 45, directory and file templates in settings (not written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -30,6 +31,7 @@ Phase 6, Normalization: done (slices 38–43), waiting for the developer to veri
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
 - Where does linking a book's authors, narrators and genres to canonical entries (the `normalized` origin) go? The PRD wants it before tag writing and naming; proposed as the start of phase 7 (raised in slice 43, needs a PLAN.md change)
+- The default file template: `[%track:3%. ]%album%` (overview's series example) or `[%track:3%. ]%album% (%artist%)` (its single-file example)? Needed for slice 45 (raised in slice 44)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
@@ -75,6 +77,7 @@ Phase 6, Normalization: done (slices 38–43), waiting for the developer to veri
 - 2026-10-19 (slice 41): Suggestions are computed on each request from the catalog (no table) by two deterministic rules: same letters and digits, and matching initials for people. `keep` is the entry with more aliases.
 - 2026-10-19 (slice 42): One `NamesPage` serves both kinds (`kind` prop, keyed route); after each save the list is reloaded from the API rather than patched locally.
 - 2026-10-19 (slice 43): Merges in the UI always need an inline confirmation (no modal); there is no undo.
+- 2026-10-19 (slice 44): Templates allow one level of `[ ]` (no nesting). Segments are sanitized with one Windows-safe rule set on every OS, and a `/` or `\` in a value becomes `-`, never a folder. Segments are capped at 200 characters (marked as a shortcut).
 
 ## Verification
-Full suite: backend 243 passed / 0 failed, frontend 215 passed / 0 failed. Manual checks for slices 33–43 not run yet. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 301 passed / 0 failed, frontend 215 passed / 0 failed. Manual checks for slices 33–43 not run yet; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.

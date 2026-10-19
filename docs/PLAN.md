@@ -42,10 +42,10 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** aliases map variants to one canonical entry; the app suggests but never auto-merges aliases; a management screen lets the user create, merge and edit canonical entries.
 **Slices:** 38 (implemented), 39 (implemented), 40 (implemented), 41 (implemented), 42 (implemented), 43 (implemented). People and genres APIs with aliases (38–39), merge (40), suggestions (41), the People and Genres pages (42–43). Not yet placed (open questions): linking book values to canonical entries; dismissing suggestions.
 
-### 7. Naming & preview (not started)
+### 7. Naming & preview (in progress)
 **Goal:** see exactly where every file will go before anything moves.
 **Done when:** the template engine handles tokens, padding and optional sections with sanitized, traversal-safe output; the preview screen shows source → destination per file and flags missing values, duplicate targets and existing-file conflicts.
-**Slices:** none yet
+**Slices:** 44 (implemented). Template engine with sanitizing and `ResolveUnder` (44). Next: templates in settings, book-to-token mapping, then the preview endpoint and screen.
 
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
