@@ -59,3 +59,33 @@
 - **Size:** 4 tasks, about 10 files: `DatabaseInitializer.cs`, `SqliteConnectionFactory.cs`, `GroupRepository.cs`, `GroupingService.cs`, `ScanService.cs`, `GroupDtos.cs`, `GroupsController.cs`, `Program.cs` and 2 test files. That's slightly over the guide; the DTO and controller files are thin.
 - **Commit:** `feat: slice 11 persist-groups`.
 - **Remaining in phase 3:** 12, the Incoming screen (client): a route and nav link, a list of groups and unresolved files, and the `AppLayout` test mock fix. Possibly 13: dashboard group counts via a `DashboardService`, plus grouping rule tweaks after the first real-collection run.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 85 passed, 0 failed | 6 new |
+| Frontend tests | 40 passed, 0 failed | |
+| New tests | 5 of 5 behaviours present, passing | plus 1 extra (a `ReplaceAll` foreign-key failure after the delete rolls back) |
+| Manual: scenario layouts through the real API | Passed | 15 files: scenario B folder, scenario C disc folders, scenario D root series x2, scenario A M4B, one stray root MP3. Result: 5 groups (all Medium with folder, disc-folder or filename evidence) and `random thing.mp3` unresolved. A rescan keeps 5 groups (no duplicates). `GET /api/groups` on a fresh DB returns empty lists |
+
+Observation: the fixture copies carry the artist tag "Fixture Author", so the estimated author comes from the tag rather than the folder ("ernest cline"). That's the rule as designed (tags win over folder names), but worth checking against real collections in slice 12.
+
+**Data:** test folders and the dev database deleted afterwards. Verification query: `SELECT g.Title, g.Confidence, COUNT(f.AudioFileId) FROM FileGroup g JOIN FileGroupFile f ON f.GroupId = g.Id GROUP BY g.Id;`
+
+## Outcome (2026-10-18, commit 0b8b97a)
+
+**Status:** Implemented
+**Summary:** This slice adds the `FileGroup` and `FileGroupFile` tables (foreign keys now enforced), `GroupRepository.ReplaceAll` (one transaction), and `GroupingService.Regroup`, which is called after each completed scan. A grouping failure marks the run `Failed` and keeps the earlier groups. It also adds `GET /api/groups` with groups ordered Low, then Medium, then High, then title, plus the unresolved files. All Done when items are met.
+**Changed:** 12 code files plus 2 docs. Key ones: `Services/Grouping/GroupingService.cs`, `Data/GroupRepository.cs`, `Controllers/GroupsController.cs`, `Models/Api/GroupDtos.cs`, `Data/DatabaseInitializer.cs`, `Data/SqliteConnectionFactory.cs`, `Services/ScanService.cs`.
+**Deviations:**
+- `PRAGMA foreign_keys = ON` also starts enforcing the existing `AudioFile` reference to `ScanRun`. The slice wrongly said there was none. *Fine*: the full suite passes, and the references are always valid.
+- `ScanServiceTests.cs` was touched for the new constructor parameter, and `Models/Local/FileGroup.cs` was added. *Fine*, by the repository's layout conventions.
+- `GroupingService.Regroup` is `virtual` as a test seam. *Fine.*
+- Unresolved paths are made relative to the *current* incoming setting, so if incoming changes after a scan they show `../`. *Debt (minor)*: it fixes itself on the next scan.
+**Follow-ups:**
+- Phase 4: the replace-all shortcut must give way to keeping user-confirmed groups (marked in code).
