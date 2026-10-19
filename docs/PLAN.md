@@ -35,7 +35,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.
 **Done when:** Audible catalog and Open Library searches return candidates the user can pick; the editor shows current vs proposed values with their origin and keeps user edits across re-searches; cover can come from the embedded image, a download, or an upload; a book can be completed manually with no match.
-**Slices:** none yet Carried in: skip files the user excluded (`AudioFile.UserState`, slice 20).
+**Slices:** none yet. Carried in: skipping files the user excluded (`AudioFile.UserState`, from slice 20).
 
 ### 6. Normalization (not started)
 **Goal:** authors, narrators and genres resolve to canonical names.
@@ -50,9 +50,9 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04). Carried in: never process excluded files (slice 20).
+**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04); never processing excluded files (from slice 20).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.
 **Done when:** end-to-end tests run against fixture audiobooks through scan → process, including the backend suite inside the Docker image (its ffmpeg 6.1 vs dev's 9.0); an interrupted job resumes or fails cleanly after restart; repeat scans don't duplicate processed books; Docker image documented and running on the home server.
-**Slices:** none yet Carried in: focus the Incoming load error when a failed save also fails the reload (slice 26).
+**Slices:** none yet. Carried in: focusing the Incoming load error when a failed save also fails the reload (from slice 26).
