@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { Link } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
+import GroupFiles from '../components/incoming/GroupFiles'
 import { getGroups, updateGroup } from '../services/api'
-import type { GroupConfidence, GroupFieldErrors, GroupSummary, GroupsResponse } from '../types/groups'
+import type { GroupConfidence, GroupDetail, GroupFieldErrors, GroupSummary, GroupsResponse } from '../types/groups'
 import { formatDuration } from '../utils/formatDuration'
 
 type IncomingState =
@@ -199,6 +200,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
                             ))}
                           </ul>
                         </details>
+                        <FilesDisclosure group={group} onReordered={onSaved} />
                       </td>
                     </tr>
                   ),
@@ -228,6 +230,29 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
         )}
       </section>
     </>
+  )
+}
+
+interface FilesDisclosureProps {
+  group: GroupSummary
+  onReordered: (group: GroupSummary) => void
+}
+
+// GroupFiles mounts only while open, so the files load when the user asks for them.
+function FilesDisclosure({ group, onReordered }: FilesDisclosureProps) {
+  const [open, setOpen] = useState(false)
+
+  function handleReordered(detail: GroupDetail) {
+    // Drop the files so the row keeps a plain summary.
+    const { files: _files, ...summary } = detail
+    onReordered(summary)
+  }
+
+  return (
+    <details className="mt-2" onToggle={(event) => setOpen(event.currentTarget.open)}>
+      <summary className="cursor-pointer rounded">Files ({group.fileCount})</summary>
+      {open && <GroupFiles groupId={group.id} onReordered={handleReordered} />}
+    </details>
   )
 }
 

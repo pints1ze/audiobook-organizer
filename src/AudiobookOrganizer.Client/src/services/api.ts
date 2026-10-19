@@ -1,8 +1,10 @@
 import type { Dashboard, ScanRun, StartScanResult } from '../types/dashboard'
 import type {
+  GroupDetail,
   GroupFieldErrors,
   GroupSummary,
   GroupsResponse,
+  ReorderGroupResult,
   UpdateGroupRequest,
   UpdateGroupResult,
 } from '../types/groups'
@@ -98,4 +100,31 @@ export async function updateGroup(id: number, request: UpdateGroupRequest): Prom
     return { ok: false, notFound: true }
   }
   throw new Error(`Saving the group failed with status ${response.status}`)
+}
+
+export async function getGroup(id: number): Promise<GroupDetail> {
+  const response = await fetch(`/api/groups/${id}`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the group failed with status ${response.status}`)
+  }
+  return (await response.json()) as GroupDetail
+}
+
+export async function reorderGroup(id: number, fileIds: number[]): Promise<ReorderGroupResult> {
+  const response = await fetch(`/api/groups/${id}/order`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileIds }),
+  })
+  if (response.status === 200) {
+    return { ok: true, group: (await response.json()) as GroupDetail }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { fileIds?: string[] } }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`Reordering the group failed with status ${response.status}`)
 }

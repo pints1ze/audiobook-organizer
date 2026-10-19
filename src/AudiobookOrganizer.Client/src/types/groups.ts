@@ -38,3 +38,24 @@ export type UpdateGroupResult =
   | { ok: true; group: GroupSummary }
   | { ok: false; errors: GroupFieldErrors }
   | { ok: false; notFound: true }
+
+export interface GroupFile {
+  fileId: number
+  /** Relative to incoming, with '/' separators. */
+  relativePath: string
+  /** 1-based place in the book. */
+  position: number
+  disc: number | null
+  track: number | null
+  durationMs: number | null
+}
+
+export interface GroupDetail extends GroupSummary {
+  /** In position order. */
+  files: GroupFile[]
+}
+
+export type ReorderGroupResult =
+  | { ok: true; group: GroupDetail }
+  | { ok: false; errors: { fileIds?: string[] } }
+  | { ok: false; notFound: true }

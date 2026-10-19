@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getDashboard,
+  getGroup,
   getGroups,
   getHealth,
   getLatestScan,
   getSettings,
   saveSettings,
   startScan,
+  reorderGroup,
   updateGroup,
 } from './api'
 
@@ -231,5 +233,55 @@ describe('groups', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(updateGroup(5, request)).rejects.toThrow()
+  })
+  const detail = {
+    ...group,
+    files: [
+      { fileId: 11, relativePath: 'book/01.mp3', position: 1, disc: null, track: 1, durationMs: 500 },
+      { fileId: 12, relativePath: 'book/02.mp3', position: 2, disc: null, track: 2, durationMs: 500 },
+    ],
+  }
+
+  it('getGroup returns the detail on a 200', async () => {
+    const fetchMock = mockFetch(200, detail)
+
+    await expect(getGroup(5)).resolves.toEqual(detail)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/5')
+  })
+
+  it('getGroup throws on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(getGroup(5)).rejects.toThrow()
+  })
+
+  it('reorderGroup sends a PUT of the file ids and returns the group on a 200', async () => {
+    const fetchMock = mockFetch(200, detail)
+
+    await expect(reorderGroup(5, [12, 11])).resolves.toEqual({ ok: true, group: detail })
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/5/order', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileIds: [12, 11] }),
+    })
+  })
+
+  it('reorderGroup returns the errors on a 400 problem body', async () => {
+    const errors = { fileIds: ['The list must contain every file in the group exactly once.'] }
+    mockFetch(400, { title: 'One or more validation errors occurred.', status: 400, errors })
+
+    await expect(reorderGroup(5, [11])).resolves.toEqual({ ok: false, errors })
+  })
+
+  it('reorderGroup returns notFound on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(reorderGroup(5, [11])).resolves.toEqual({ ok: false, notFound: true })
+  })
+
+  it('reorderGroup throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(reorderGroup(5, [11])).rejects.toThrow()
   })
 })

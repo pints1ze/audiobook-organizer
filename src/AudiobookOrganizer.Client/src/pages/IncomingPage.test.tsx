@@ -1,14 +1,21 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getGroups, updateGroup } from '../services/api'
-import type { GroupSummary, GroupsResponse } from '../types/groups'
+import { getGroup, getGroups, reorderGroup, updateGroup } from '../services/api'
+import type { GroupDetail, GroupSummary, GroupsResponse } from '../types/groups'
 import IncomingPage from './IncomingPage'
 
-vi.mock('../services/api', () => ({ getGroups: vi.fn(), updateGroup: vi.fn() }))
+vi.mock('../services/api', () => ({
+  getGroup: vi.fn(),
+  getGroups: vi.fn(),
+  reorderGroup: vi.fn(),
+  updateGroup: vi.fn(),
+}))
 
 const getGroupsMock = vi.mocked(getGroups)
 const updateGroupMock = vi.mocked(updateGroup)
+const getGroupMock = vi.mocked(getGroup)
+const reorderGroupMock = vi.mocked(reorderGroup)
 
 const response: GroupsResponse = {
   groups: [
@@ -51,6 +58,8 @@ describe('IncomingPage', () => {
   beforeEach(() => {
     getGroupsMock.mockReset()
     updateGroupMock.mockReset()
+    getGroupMock.mockReset()
+    reorderGroupMock.mockReset()
   })
 
   it('shows loading, then the groups in API order with their details and evidence', async () => {
@@ -262,6 +271,55 @@ describe('IncomingPage', () => {
 
       const editButton = await screen.findByRole('button', { name: 'Edit The Hobbit' })
       expect(within(editButton.closest('tr') as HTMLElement).getByText('Edited')).toBeInTheDocument()
+      expect(screen.getAllByText('Edited')).toHaveLength(1)
+    })
+  })
+  describe('reordering files', () => {
+    const files = [
+      { fileId: 21, relativePath: 'mystery/a.mp3', position: 1, disc: null, track: 1, durationMs: 20_000 },
+      { fileId: 22, relativePath: 'mystery/b.mp3', position: 2, disc: null, track: 2, durationMs: 20_000 },
+      { fileId: 23, relativePath: 'mystery/c.mp3', position: 3, disc: null, track: 3, durationMs: 21_000 },
+    ]
+    const detail: GroupDetail = { ...response.groups[0], files }
+
+    function openFiles(details: HTMLDetailsElement) {
+      details.open = true
+      fireEvent(details, new Event('toggle'))
+    }
+
+    it('shows a Files disclosure per row that loads only when opened', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      getGroupMock.mockResolvedValue(detail)
+      renderPage()
+
+      const summary = await screen.findByText('Files (3)', { selector: 'summary' })
+      expect(screen.getByText('Files (12)', { selector: 'summary' })).toBeInTheDocument()
+      expect(getGroupMock).not.toHaveBeenCalled()
+      expect(screen.getAllByRole('columnheader')).toHaveLength(6)
+
+      openFiles(summary.closest('details') as HTMLDetailsElement)
+
+      expect(await screen.findByRole('button', { name: 'Move c.mp3 up' })).toBeInTheDocument()
+      expect(getGroupMock).toHaveBeenCalledWith(2)
+      expect(getGroupMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('marks the row Edited after a successful reorder', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      getGroupMock.mockResolvedValue(detail)
+      reorderGroupMock.mockResolvedValue({
+        ok: true,
+        group: { ...detail, userCorrected: true, files: [files[0], { ...files[2], position: 2 }, { ...files[1], position: 3 }] },
+      })
+      renderPage()
+
+      const summary = await screen.findByText('Files (3)', { selector: 'summary' })
+      openFiles(summary.closest('details') as HTMLDetailsElement)
+      fireEvent.click(await screen.findByRole('button', { name: 'Move c.mp3 up' }))
+
+      await waitFor(() => expect(reorderGroupMock).toHaveBeenCalledWith(2, [21, 23, 22]))
+      const row = summary.closest('tr') as HTMLElement
+      expect(await within(row).findByText('Edited')).toBeInTheDocument()
       expect(screen.getAllByText('Edited')).toHaveLength(1)
     })
   })
