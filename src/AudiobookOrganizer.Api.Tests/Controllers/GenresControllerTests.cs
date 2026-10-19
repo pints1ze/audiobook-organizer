@@ -149,6 +149,39 @@ public class GenresControllerTests : IDisposable
             (await client.GetAsync("/api/people/resolve?name=science-fiction")).StatusCode);
     }
 
+    [Fact]
+    public async Task Merge_makes_the_merged_genre_resolve_to_the_kept_one()
+    {
+        var client = _factory.CreateClient();
+        var scienceFiction = await Create(client, "/api/genres", "Science Fiction");
+        var sciFi = await Create(client, "/api/genres", "Sci-Fi");
+
+        var response = await client.PostAsJsonAsync($"/api/genres/{scienceFiction.Id}/merge", new { fromId = sciFi.Id });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(new EntryBody(scienceFiction.Id, "Science Fiction", ["Sci-Fi"]),
+            await response.Content.ReadFromJsonAsync<EntryBody>(), EntryComparer);
+        Assert.Equal(scienceFiction.Id,
+            (await client.GetFromJsonAsync<EntryBody>("/api/genres/resolve?name=sci-fi"))!.Id);
+        Assert.Single((await client.GetFromJsonAsync<List<EntryBody>>("/api/genres"))!);
+    }
+
+    [Fact]
+    public async Task Merge_with_a_person_id_as_fromId_returns_404()
+    {
+        var client = _factory.CreateClient();
+        var genre = await Create(client, "/api/genres", "Horror");
+        await Create(client, "/api/people", "Neil Gaiman");
+        var person = await Create(client, "/api/people", "Stephen King");
+        Assert.NotEqual(genre.Id, person.Id);
+
+        var response = await client.PostAsJsonAsync($"/api/genres/{genre.Id}/merge", new { fromId = person.Id });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(2, (await client.GetFromJsonAsync<List<EntryBody>>("/api/people"))!.Count);
+        Assert.Single((await client.GetFromJsonAsync<List<EntryBody>>("/api/genres"))!);
+    }
+
     private static readonly IEqualityComparer<EntryBody?> EntryComparer = EqualityComparer<EntryBody?>.Create(
         (a, b) => a is not null && b is not null && a.Id == b.Id && a.Name == b.Name && a.Aliases.SequenceEqual(b.Aliases),
         e => e?.Id ?? 0);

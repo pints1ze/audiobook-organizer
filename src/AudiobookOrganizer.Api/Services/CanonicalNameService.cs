@@ -14,6 +14,7 @@ public partial class CanonicalNameService(CanonicalNameRepository repository)
     // Error keys match the camelCase JSON field names the client sends.
     public const string NameField = "name";
     public const string AliasesField = "aliases";
+    public const string FromIdField = "fromId";
 
     /// <summary>Display text: trimmed, with each run of whitespace collapsed to one space.</summary>
     public static string Clean(string name) => Whitespace().Replace(name.Trim(), " ");
@@ -48,6 +49,18 @@ public partial class CanonicalNameService(CanonicalNameRepository repository)
         if (repository.Get(kind, id) is null)
             return new CanonicalSaveResult(null, new Dictionary<string, string[]>(), NotFound: true);
         return Save(kind, id, request);
+    }
+
+    /// <summary>Folds entry <paramref name="fromId"/> into entry <paramref name="id"/>. Only ever the user's explicit action.</summary>
+    public CanonicalSaveResult Merge(CanonicalKind kind, long id, long? fromId)
+    {
+        if (fromId is null || fromId == id)
+            return new CanonicalSaveResult(null,
+                new Dictionary<string, string[]> { [FromIdField] = ["Choose another entry to merge in."] });
+        var merged = repository.Merge(kind, id, fromId.Value);
+        return merged is null
+            ? new CanonicalSaveResult(null, new Dictionary<string, string[]>(), NotFound: true)
+            : new CanonicalSaveResult(merged, new Dictionary<string, string[]>());
     }
 
     private CanonicalSaveResult Save(CanonicalKind kind, long? id, CanonicalEntryRequest request)

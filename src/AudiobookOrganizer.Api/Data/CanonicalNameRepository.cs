@@ -85,6 +85,29 @@ public class CanonicalNameRepository(SqliteConnectionFactory connections)
         return Get(connection, t, id);
     }
 
+    /// <summary>
+    /// Folds entry <paramref name="fromId"/> into <paramref name="intoId"/> in one transaction: its aliases move over,
+    /// its name becomes an alias and the entry is deleted. Returns null, changing nothing, if either entry is missing.
+    /// </summary>
+    public CanonicalEntryDto? Merge(CanonicalKind kind, long intoId, long fromId)
+    {
+        var t = TableMap[kind];
+        using var connection = connections.Open();
+        using var transaction = connection.BeginTransaction();
+        var into = connection.QuerySingleOrDefault<long?>($"SELECT Id FROM {t.Entry} WHERE Id = @intoId",
+            new { intoId }, transaction);
+        var from = connection.QuerySingleOrDefault<(string Name, string NameKey)?>(
+            $"SELECT Name, NameKey FROM {t.Entry} WHERE Id = @fromId", new { fromId }, transaction);
+        if (into is null || from is null) return null;
+        connection.Execute($"UPDATE {t.Alias} SET {t.ForeignKey} = @intoId WHERE {t.ForeignKey} = @fromId",
+            new { intoId, fromId }, transaction);
+        // Delete before inserting the old name as an alias, so its key is never held twice at once.
+        connection.Execute($"DELETE FROM {t.Entry} WHERE Id = @fromId", new { fromId }, transaction);
+        InsertAliases(connection, transaction, t, intoId, [new AliasRow(from.Value.Name, from.Value.NameKey)]);
+        transaction.Commit();
+        return Get(connection, t, intoId);
+    }
+
     private static void InsertAliases(SqliteConnection connection, SqliteTransaction transaction, Tables t, long id,
         IReadOnlyList<AliasRow> aliases)
     {

@@ -148,6 +148,55 @@ public class PeopleControllerTests : IDisposable
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/people/resolve")).StatusCode);
     }
 
+    [Fact]
+    public async Task Merge_folds_the_other_person_into_aliases_of_the_kept_one()
+    {
+        var client = _factory.CreateClient();
+        var king = await Create(client, "Stephen King", "John Swithen");
+        var bachman = await Create(client, "Richard Bachman", "R. Bachman");
+
+        var response = await client.PostAsJsonAsync($"/api/people/{king.Id}/merge", new { fromId = bachman.Id });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var merged = (await response.Content.ReadFromJsonAsync<PersonBody>())!;
+        Assert.Equal(new PersonBody(king.Id, "Stephen King", ["John Swithen", "R. Bachman", "Richard Bachman"]), merged,
+            PersonComparer);
+        Assert.Equal(king.Id,
+            (await client.GetFromJsonAsync<PersonBody>("/api/people/resolve?name=Bachman,%20Richard"))!.Id);
+        Assert.Equal(king.Id, (await client.GetFromJsonAsync<PersonBody>("/api/people/resolve?name=r.%20bachman"))!.Id);
+        Assert.Equal(merged, Assert.Single((await client.GetFromJsonAsync<List<PersonBody>>("/api/people"))!),
+            PersonComparer);
+    }
+
+    [Fact]
+    public async Task Merge_with_an_unknown_id_or_fromId_returns_404_and_changes_nothing()
+    {
+        var client = _factory.CreateClient();
+        var king = await Create(client, "Stephen King");
+
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.PostAsJsonAsync($"/api/people/{king.Id}/merge", new { fromId = 999 })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.PostAsJsonAsync($"/api/people/999/merge", new { fromId = king.Id })).StatusCode);
+        Assert.Equal(king, Assert.Single((await client.GetFromJsonAsync<List<PersonBody>>("/api/people"))!),
+            PersonComparer);
+    }
+
+    [Fact]
+    public async Task Merge_into_itself_or_without_fromId_returns_400_on_fromId()
+    {
+        var client = _factory.CreateClient();
+        var king = await Create(client, "Stephen King");
+
+        var self = await client.PostAsJsonAsync($"/api/people/{king.Id}/merge", new { fromId = king.Id });
+        Assert.Equal(HttpStatusCode.BadRequest, self.StatusCode);
+        Assert.Equal("Choose another entry to merge in.", (await ReadErrors(self)).GetProperty("fromId")[0].GetString());
+
+        var missing = await client.PostAsJsonAsync($"/api/people/{king.Id}/merge", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
+        Assert.True((await ReadErrors(missing)).TryGetProperty("fromId", out _));
+    }
+
     private static readonly IEqualityComparer<PersonBody?> PersonComparer = EqualityComparer<PersonBody?>.Create(
         (a, b) => a is not null && b is not null && a.Id == b.Id && a.Name == b.Name && a.Aliases.SequenceEqual(b.Aliases),
         p => p?.Id ?? 0);

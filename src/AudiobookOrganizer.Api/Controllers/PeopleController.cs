@@ -43,6 +43,14 @@ public class PeopleController(CanonicalNameService names) : ControllerBase
         return SaveFailed(result);
     }
 
+    [HttpPost("{id:long}/merge")]
+    public ActionResult<CanonicalEntryDto> Merge(long id, MergeRequest request)
+    {
+        var result = names.Merge(Kind, id, request.FromId);
+        if (result.Saved is not null) return result.Saved;
+        return SaveFailed(result);
+    }
+
     private ActionResult SaveFailed(CanonicalSaveResult result)
     {
         if (result.NotFound) return NotFound();
