@@ -35,7 +35,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 5. Metadata (in progress)
 **Goal:** identify a book and settle its canonical metadata.
 **Done when:** Audible catalog and Open Library searches return candidates the user can pick; the editor shows current vs proposed values with their origin and keeps user edits across re-searches; cover can come from the embedded image, a download, or an upload; a book can be completed manually with no match.
-**Slices:** 27 (implemented), 28 (implemented), 29 (implemented), 30 (implemented), 31 (implemented), 32 (implemented), 33 (implemented), 34 (implemented). Manual completion with no match is met by 33's editor (developer, 2026-10-19). Carried in: skipping files the user excluded (`AudioFile.UserState`, from slice 20).
+**Slices:** 27 (implemented), 28 (implemented), 29 (implemented), 30 (implemented), 31 (implemented), 32 (implemented), 33 (implemented), 34 (implemented), 35 (implemented). Manual completion with no match is met by 33's editor (developer, 2026-10-19). Carried in: skipping files the user excluded (`AudioFile.UserState`, from slice 20).
 
 ### 6. Normalization (not started)
 **Goal:** authors, narrators and genres resolve to canonical names.
