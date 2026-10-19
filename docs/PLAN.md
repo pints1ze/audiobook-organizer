@@ -32,10 +32,10 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
 **Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (implemented), 22 (implemented), 23 (implemented), 24 (implemented), 25 (implemented), 26 (implemented). Merge, split, move file, exclude (with undo), reorder and set title/author all work from the UI, and all survive rescans. Reopened 2026-10-18 at the developer's request and finished: dashboard book and file-state counts through `DashboardService` (22–23), stable group ids (24), the "Corrected by the user" evidence line (25), and Incoming polish (26). Grouping-rule tweaks were dropped by the developer.
 
-### 5. Metadata (not started)
+### 5. Metadata (in progress)
 **Goal:** identify a book and settle its canonical metadata.
 **Done when:** Audible catalog and Open Library searches return candidates the user can pick; the editor shows current vs proposed values with their origin and keeps user edits across re-searches; cover can come from the embedded image, a download, or an upload; a book can be completed manually with no match.
-**Slices:** none yet. Carried in: skipping files the user excluded (`AudioFile.UserState`, from slice 20).
+**Slices:** 27 (implemented). Carried in: skipping files the user excluded (`AudioFile.UserState`, from slice 20).
 
 ### 6. Normalization (not started)
 **Goal:** authors, narrators and genres resolve to canonical names.
