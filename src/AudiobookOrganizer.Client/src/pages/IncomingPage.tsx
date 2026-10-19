@@ -163,7 +163,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
         {groups.length === 0 ? (
           <p className="mt-2">No proposed books.</p>
         ) : (
-          <div className="mt-2 overflow-x-auto">
+          <div className="relative mt-2 overflow-x-auto">
             <table className="w-full text-left text-sm">
               <caption className="sr-only">Proposed books, least confident first</caption>
               <thead>
