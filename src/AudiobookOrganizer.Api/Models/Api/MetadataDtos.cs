@@ -64,3 +64,15 @@ public record UpdateBookMetadataFieldsDto(
 
 /// <summary>The body of PUT /api/groups/{id}/metadata: <c>{ fields: { name: value, ... } }</c>.</summary>
 public record UpdateBookMetadataDto(UpdateBookMetadataFieldsDto Fields);
+
+/// <summary>A book's chosen cover. Source is "embedded" (FileId is the file it was read from).</summary>
+public record ChosenCoverDto(string Source, long? FileId, string MimeType, DateTimeOffset ChosenAtUtc);
+
+/// <summary>A file of the book whose scan found an embedded cover.</summary>
+public record EmbeddedCoverDto(long FileId, string RelativePath);
+
+/// <summary>A book's (a group's) chosen cover, if any, and the embedded covers it can choose from, in file order.</summary>
+public record BookCoverDto(long GroupId, ChosenCoverDto? Chosen, IReadOnlyList<EmbeddedCoverDto> Embedded);
+
+/// <summary>The body of PUT /api/groups/{id}/cover: <c>{ source: "embedded", fileId }</c>.</summary>
+public record ChooseCoverDto(string? Source, long? FileId);

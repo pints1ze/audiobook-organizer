@@ -7,8 +7,29 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/groups")]
-public class GroupsController(GroupingService grouping, AudiobookService audiobooks) : ControllerBase
+public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers) : ControllerBase
 {
+    [HttpGet("{id:long}/cover")]
+    public ActionResult<BookCoverDto> GetCover(long id) => covers.GetCovers(id) is { } cover ? cover : NotFound();
+
+    [HttpPut("{id:long}/cover")]
+    public ActionResult<BookCoverDto> PutCover(long id, ChooseCoverDto request)
+    {
+        var result = covers.ChooseCover(id, request);
+        if (result.Cover is not null) return result.Cover;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
+    [HttpGet("{id:long}/cover/image")]
+    public IActionResult GetCoverImage(long id) =>
+        covers.GetChosenImage(id) is { } cover ? File(cover.Image, cover.MimeType) : NotFound();
+
+    [HttpGet("{id:long}/files/{fileId:long}/cover")]
+    public IActionResult GetFileCover(long id, long fileId) =>
+        covers.ReadEmbedded(id, fileId) is { } picture
+            ? File(picture.Data, picture.MimeType is "" ? "application/octet-stream" : picture.MimeType)
+            : NotFound();
+
     [HttpGet("{id:long}/match")]
     public ActionResult<BookMatchDto> GetMatch(long id)
     {

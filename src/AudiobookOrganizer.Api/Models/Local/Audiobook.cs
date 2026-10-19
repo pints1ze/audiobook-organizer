@@ -35,3 +35,17 @@ public class AudiobookField
     public string Origin { get; set; } = "";
     public string? Provider { get; set; }
 }
+
+/// <summary>
+/// The cover chosen for an Audiobook. Source is "embedded" (FileId is the AudioFile it was read from); Image is the
+/// picture's bytes (empty when read without the image).
+/// </summary>
+public class AudiobookCover
+{
+    public long AudiobookId { get; set; }
+    public string Source { get; set; } = "";
+    public long? FileId { get; set; }
+    public string MimeType { get; set; } = "";
+    public byte[] Image { get; set; } = [];
+    public string ChosenAtUtc { get; set; } = "";
+}

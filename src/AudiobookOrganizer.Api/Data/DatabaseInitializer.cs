@@ -108,6 +108,19 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 Provider TEXT,
                 PRIMARY KEY (AudiobookId, Field))
             """);
+        // The book's chosen cover, one per Audiobook. Source is "embedded" (FileId is the file it came from); the image
+        // is copied in, so the choice survives the source file being moved.
+        // shortcut: covers stored as BLOBs — revisit if the database grows past a few hundred MB
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS AudiobookCover (
+                AudiobookId INTEGER PRIMARY KEY REFERENCES Audiobook (Id) ON DELETE CASCADE,
+                Source TEXT NOT NULL,
+                FileId INTEGER,
+                MimeType TEXT NOT NULL,
+                Image BLOB NOT NULL,
+                ChosenAtUtc TEXT NOT NULL)
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404
