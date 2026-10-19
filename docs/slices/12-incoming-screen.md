@@ -65,3 +65,38 @@
 - **Size:** 4 tasks, about 9 files: `groups.ts`, `api.ts` and its test, `formatDuration.ts` and its test, `IncomingPage.tsx` and its test, `App.tsx`, `AppLayout.tsx` and its test.
 - **Commit:** `feat: slice 12 incoming-screen`.
 - **Phase 3:** this should complete phase 3's Done when. Dashboard group counts move to phase 4's carried items.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 85 passed, 0 failed | |
+| Frontend tests | 51 passed, 0 failed | 7 files, 11 new |
+| New tests | 5 of 5 behaviours present, passing | |
+| Manual: Incoming with scenario layouts | Passed | Playwright on :5173 after a 15-file scan. "Proposed books (5)" table with caption and column headers, durations 1:30, 0:30, 2:00, 1:30, 1:30, all Medium. "Unresolved files (1)": `random thing.mp3` 0:30 |
+| Manual: evidence disclosure by keyboard | Passed | Focus on the summary and press Enter: it opens and lists `Same folder "ready player one - ernest cline"` |
+| Manual: nav current | Passed | `aria-current="page"` on Incoming |
+| Manual: 375 px width | Passed | The page scroll width (360) is within the viewport (375); the table scrolls inside its `overflow-x: auto` container (422 vs 312) |
+| Manual: developer real-collection check | Not run | Agents don't touch real audiobook folders. It's the developer's step during phase verification |
+
+**Data:** test folders and the dev database deleted afterwards.
+
+## Outcome (2026-10-18, commit 5934d2c)
+
+**Status:** Implemented
+**Summary:** This slice adds the `/incoming` page and an "Incoming" nav link.
+- **Groups table:** proposed books in a table with caption and column headers, in API order. Columns: title and author ("Unknown" when missing), files, `h:mm:ss` duration, confidence as text, and a native `<details>` evidence disclosure.
+- **Unresolved and states:** an unresolved-files section, empty and error states, and a responsive table container.
+- **Supporting code:** `getGroups()` and `formatDuration`, each tested, plus the `AppLayout` test mock follow-up.
+
+All Done when items are met.
+**Changed:** 10 code files plus 2 docs. Key ones: `pages/IncomingPage.tsx`, `utils/formatDuration.ts`, `types/groups.ts`, `services/api.ts`, `components/layout/AppLayout.tsx`, `App.tsx`.
+**Deviations:**
+- When only one list is empty, it shows "No proposed books." or "None." in its section. *Improvement.*
+- The confidence level also changes the font weight (Low is semibold), and the level is always shown as text. *Fine.*
+- The `AppLayout` test mock also stubs `getLatestScan` and `startScan`. *Fine.*
+**Follow-ups:** none new. Phase 4 already carries dashboard group counts and real-collection rule tweaks.
