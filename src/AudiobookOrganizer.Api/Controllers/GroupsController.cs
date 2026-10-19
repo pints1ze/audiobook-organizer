@@ -25,6 +25,18 @@ public class GroupsController(GroupingService grouping, AudiobookService audiobo
         return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
     }
 
+    [HttpGet("{id:long}/metadata")]
+    public ActionResult<BookMetadataDto> GetMetadata(long id) =>
+        audiobooks.GetMetadata(id) is { } metadata ? metadata : NotFound();
+
+    [HttpPut("{id:long}/metadata")]
+    public ActionResult<BookMetadataDto> PutMetadata(long id, UpdateBookMetadataDto request)
+    {
+        var result = audiobooks.UpdateMetadata(id, request);
+        if (result.Metadata is not null) return result.Metadata;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
     [HttpGet]
     public ActionResult<GroupListDto> Get() => grouping.List();
 

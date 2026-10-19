@@ -96,6 +96,18 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 CandidateJson TEXT NOT NULL,
                 PickedAtUtc TEXT NOT NULL)
             """);
+        // A book's metadata values, one row per field. ValueJson is "text", ["a","b"] or null, so text and list
+        // fields share the table. Origin is file, provider or user; Provider is set only for provider values.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS AudiobookField (
+                AudiobookId INTEGER NOT NULL REFERENCES Audiobook (Id) ON DELETE CASCADE,
+                Field TEXT NOT NULL,
+                ValueJson TEXT NOT NULL,
+                Origin TEXT NOT NULL,
+                Provider TEXT,
+                PRIMARY KEY (AudiobookId, Field))
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404

@@ -22,3 +22,16 @@ public class MetadataMatch
     public string CandidateJson { get; set; } = "";
     public string PickedAtUtc { get; set; } = "";
 }
+
+/// <summary>
+/// One metadata value of an Audiobook. ValueJson is the value as JSON ("text", ["a","b"] or null). Origin is "file",
+/// "provider" or "user"; Provider (e.g. "audible") is set only when Origin is "provider".
+/// </summary>
+public class AudiobookField
+{
+    public long AudiobookId { get; set; }
+    public string Field { get; set; } = "";
+    public string ValueJson { get; set; } = "null";
+    public string Origin { get; set; } = "";
+    public string? Provider { get; set; }
+}
