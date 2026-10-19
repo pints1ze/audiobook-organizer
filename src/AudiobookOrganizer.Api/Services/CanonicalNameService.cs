@@ -40,6 +40,10 @@ public partial class CanonicalNameService(CanonicalNameRepository repository)
 
     public IReadOnlyList<CanonicalEntryDto> List(CanonicalKind kind) => repository.List(kind);
 
+    /// <summary>Pairs that are probably the same entry. Read-only: never merges.</summary>
+    public IReadOnlyList<MergeSuggestionDto> Suggestions(CanonicalKind kind) =>
+        CanonicalSuggestions.Suggest(kind, repository.List(kind));
+
     public CanonicalEntryDto? Resolve(CanonicalKind kind, string text) => repository.FindByKey(kind, KeyFor(kind, text));
 
     public CanonicalSaveResult Create(CanonicalKind kind, CanonicalEntryRequest request) => Save(kind, null, request);

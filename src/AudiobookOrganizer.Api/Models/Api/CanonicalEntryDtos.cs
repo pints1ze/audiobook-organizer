@@ -8,3 +8,6 @@ public record CanonicalEntryRequest(string? Name, IReadOnlyList<string>? Aliases
 
 /// <summary>Merge the entry <c>FromId</c> into the entry named in the URL.</summary>
 public record MergeRequest(long? FromId);
+
+/// <summary>Two entries that are probably the same: merging <c>Merge</c> into <c>Keep</c> is only ever suggested.</summary>
+public record MergeSuggestionDto(CanonicalEntryDto Keep, CanonicalEntryDto Merge, string Reason);

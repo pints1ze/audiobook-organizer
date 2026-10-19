@@ -14,6 +14,9 @@ public class PeopleController(CanonicalNameService names) : ControllerBase
     [HttpGet]
     public IReadOnlyList<CanonicalEntryDto> List() => names.List(Kind);
 
+    [HttpGet("suggestions")]
+    public IReadOnlyList<MergeSuggestionDto> Suggestions() => names.Suggestions(Kind);
+
     [HttpGet("resolve")]
     public ActionResult<CanonicalEntryDto> Resolve(string? name)
     {

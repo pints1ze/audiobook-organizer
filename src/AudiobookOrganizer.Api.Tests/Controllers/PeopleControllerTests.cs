@@ -197,6 +197,36 @@ public class PeopleControllerTests : IDisposable
         Assert.True((await ReadErrors(missing)).TryGetProperty("fromId", out _));
     }
 
+    private record SuggestionBody(PersonBody Keep, PersonBody Merge, string Reason);
+
+    [Fact]
+    public async Task Suggestions_list_the_pair_and_change_nothing()
+    {
+        var client = _factory.CreateClient();
+        var full = await Create(client, "Stephen King");
+        var initials = await Create(client, "S. King");
+
+        var suggestions = await client.GetFromJsonAsync<List<SuggestionBody>>("/api/people/suggestions");
+
+        var suggestion = Assert.Single(suggestions!);
+        Assert.Equal(full, suggestion.Keep, PersonComparer);
+        Assert.Equal(initials, suggestion.Merge, PersonComparer);
+        Assert.Equal("\"S. King\" may be \"Stephen King\" with initials.", suggestion.Reason);
+        var list = await client.GetFromJsonAsync<List<PersonBody>>("/api/people");
+        Assert.Equal([initials, full], list!, PersonComparer);
+    }
+
+    [Fact]
+    public async Task Suggestions_with_no_people_return_an_empty_list()
+    {
+        var client = _factory.CreateClient();
+
+        var response = await client.GetAsync("/api/people/suggestions");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("[]", await response.Content.ReadAsStringAsync());
+    }
+
     private static readonly IEqualityComparer<PersonBody?> PersonComparer = EqualityComparer<PersonBody?>.Create(
         (a, b) => a is not null && b is not null && a.Id == b.Id && a.Name == b.Name && a.Aliases.SequenceEqual(b.Aliases),
         p => p?.Id ?? 0);
