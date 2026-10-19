@@ -20,5 +20,8 @@ public record MetadataCandidateDto(
     string? CoverUrl,
     string? Isbn = null);
 
+/// <summary>The candidate the user picked for a book (a group), and when.</summary>
+public record BookMatchDto(long GroupId, MetadataCandidateDto Match, DateTimeOffset PickedAtUtc);
+
 /// <summary>Candidates from the first provider that found any, plus the errors of providers that failed before it.</summary>
 public record MetadataSearchResultDto(IReadOnlyList<MetadataCandidateDto> Candidates, IReadOnlyList<string> ProviderErrors);

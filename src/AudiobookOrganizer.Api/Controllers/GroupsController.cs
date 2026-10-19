@@ -1,4 +1,5 @@
 using AudiobookOrganizer.Api.Models.Api;
+using AudiobookOrganizer.Api.Services;
 using AudiobookOrganizer.Api.Services.Grouping;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,8 +7,24 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/groups")]
-public class GroupsController(GroupingService grouping) : ControllerBase
+public class GroupsController(GroupingService grouping, AudiobookService audiobooks) : ControllerBase
 {
+    [HttpGet("{id:long}/match")]
+    public ActionResult<BookMatchDto> GetMatch(long id)
+    {
+        var result = audiobooks.GetMatch(id);
+        if (!result.GroupFound) return NotFound();
+        return result.Match is { } match ? match : NoContent();
+    }
+
+    [HttpPut("{id:long}/match")]
+    public ActionResult<BookMatchDto> PutMatch(long id, MetadataCandidateDto candidate)
+    {
+        var result = audiobooks.PickMatch(id, candidate);
+        if (result.Match is not null) return result.Match;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
     [HttpGet]
     public ActionResult<GroupListDto> Get() => grouping.List();
 

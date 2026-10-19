@@ -77,6 +77,25 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 Track INTEGER)
             """);
         connection.Execute("CREATE INDEX IF NOT EXISTS IX_FileGroupFile_GroupId ON FileGroupFile (GroupId)");
+        // One Audiobook per group and one current match per Audiobook; both go when their group is deleted.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS Audiobook (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                GroupId INTEGER NOT NULL UNIQUE REFERENCES FileGroup (Id) ON DELETE CASCADE,
+                CreatedAtUtc TEXT NOT NULL,
+                UpdatedAtUtc TEXT NOT NULL)
+            """);
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS MetadataMatch (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                AudiobookId INTEGER NOT NULL UNIQUE REFERENCES Audiobook (Id) ON DELETE CASCADE,
+                Provider TEXT NOT NULL,
+                ProviderId TEXT,
+                CandidateJson TEXT NOT NULL,
+                PickedAtUtc TEXT NOT NULL)
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404
