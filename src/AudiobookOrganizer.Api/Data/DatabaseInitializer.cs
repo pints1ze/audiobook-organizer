@@ -63,8 +63,12 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 EvidenceJson TEXT NOT NULL,
                 FileCount INTEGER NOT NULL,
                 TotalDurationMs INTEGER NOT NULL,
-                ScanRunId INTEGER NOT NULL REFERENCES ScanRun (Id))
+                ScanRunId INTEGER NOT NULL REFERENCES ScanRun (Id),
+                UserCorrected INTEGER NOT NULL DEFAULT 0)
             """);
+        // Databases created before slice 13 have FileGroup without UserCorrected.
+        if (!connection.Query<string>("SELECT name FROM pragma_table_info('FileGroup')").Contains("UserCorrected"))
+            connection.Execute("ALTER TABLE FileGroup ADD COLUMN UserCorrected INTEGER NOT NULL DEFAULT 0");
         connection.Execute(
             """
             CREATE TABLE IF NOT EXISTS FileGroupFile (

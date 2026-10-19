@@ -3,7 +3,7 @@
 _Updated: slice 12 review, 2026-10-18, commit 5934d2c_
 
 ## Branch
-`phase/3-grouping` (phase done; PR to `main` open, waiting for the developer to verify and merge)
+`phase/4-group-corrections` (off `main` after the phase 3 merge, PR #3)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.

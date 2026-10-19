@@ -128,7 +128,7 @@ public class GroupingServiceTests : IDisposable
     }
 
     [Fact]
-    public void ReplaceAll_rolls_back_when_an_insert_fails()
+    public void ReplaceProposed_rolls_back_when_an_insert_fails()
     {
         var run = NewScanService(_grouping).Run(CancellationToken.None);
         var before = StoredGroups();
@@ -136,8 +136,65 @@ public class GroupingServiceTests : IDisposable
         // No AudioFile has Id 999999, so the foreign key fails after the delete has already run.
         var bad = new ProposedGroup("Bad", null, GroupConfidence.Low, [], [new GroupedFile(999_999, null, null)], 0);
 
-        Assert.Throws<SqliteException>(() => _groups.ReplaceAll([bad], run.Id));
+        Assert.Throws<SqliteException>(() => _groups.ReplaceProposed([bad], run.Id));
         Assert.Equal(before, StoredGroups());
+    }
+
+    /// <summary>The stored id of the group holding <paramref name="relativePath"/>.</summary>
+    private long GroupIdOf(string relativePath)
+    {
+        using var connection = _connections.Open();
+        return connection.ExecuteScalar<long>(
+            "SELECT g.GroupId FROM FileGroupFile g JOIN AudioFile a ON a.Id = g.AudioFileId WHERE a.SourcePath = @path",
+            new { path = Path.Combine(_incoming, relativePath.Replace('/', Path.DirectorySeparatorChar)) });
+    }
+
+    [Fact]
+    public void Renamed_group_keeps_its_id_title_author_and_files_after_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var id = GroupIdOf("book a/track1.mp3");
+
+        var renamed = _grouping.Rename(id, new UpdateGroupDto("My Book", "Me"));
+        Assert.Empty(renamed.Errors);
+        Assert.True(renamed.Group!.UserCorrected);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        var list = _grouping.List();
+        var group = Assert.Single(list.Groups, g => g.Id == id);
+        Assert.Equal(("My Book", "Me", true, 2), (group.Title, group.Author, group.UserCorrected, group.FileCount));
+        Assert.Single(StoredGroups(), g => g.Contains("book a/track1.mp3") || g.Contains("book a/track2.mp3"));
+        Assert.Contains(["book a/track1.mp3", "book a/track2.mp3"], StoredGroups());
+        Assert.Empty(list.Unresolved);
+        Assert.All(list.Groups.Where(g => g.Id != id), g => Assert.False(g.UserCorrected));
+    }
+
+    [Fact]
+    public void After_a_rename_new_files_are_still_grouped_and_uncorrected_groups_are_replaced()
+    {
+        var scanner = NewScanService(_grouping);
+        var first = scanner.Run(CancellationToken.None);
+        var id = GroupIdOf("book a/track1.mp3");
+        var singleId = GroupIdOf("single.m4b");
+        Assert.NotNull(_grouping.Rename(id, new UpdateGroupDto("My Book", null)).Group);
+
+        var bookB = Directory.CreateDirectory(Path.Combine(_incoming, "book b")).FullName;
+        File.Copy(ChapterReaderTests.Fixture("chapters.m4b"), Path.Combine(bookB, "new.m4b"));
+        var second = scanner.Run(CancellationToken.None);
+
+        Assert.Equal("Completed", second.Status);
+        Assert.Equal(
+            [["book a/track1.mp3", "book a/track2.mp3"], ["book b/new.m4b"], ["single.m4b"]],
+            StoredGroups());
+        Assert.Equal(id, GroupIdOf("book a/track1.mp3"));
+        Assert.NotEqual(singleId, GroupIdOf("single.m4b"));
+        using var connection = _connections.Open();
+        var runs = connection.Query<(long Id, long ScanRunId)>("SELECT Id, ScanRunId FROM FileGroup").ToDictionary(r => r.Id, r => r.ScanRunId);
+        Assert.Equal(first.Id, runs[id]);
+        Assert.All(runs.Where(r => r.Key != id), r => Assert.Equal(second.Id, r.Value));
+        Assert.Empty(_grouping.List().Unresolved);
     }
 
     private sealed class ThrowingGroupingService(SettingsService settings, ScanRepository scans, GroupRepository groups)

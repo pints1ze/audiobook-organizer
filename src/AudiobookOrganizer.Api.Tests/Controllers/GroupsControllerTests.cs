@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using AudiobookOrganizer.Api.Tests.Services;
 
@@ -74,6 +75,47 @@ public class GroupsControllerTests : IDisposable
 
         Assert.Equal(["Low", "Medium"], groups.Select(g => g.GetProperty("confidence").GetString()));
         Assert.Equal([2, 1], groups.Select(g => g.GetProperty("fileCount").GetInt32()));
+    }
+
+    [Fact]
+    public async Task Put_trims_the_title_stores_a_blank_author_as_null_and_marks_the_group_corrected()
+    {
+        var client = _factory.CreateClient();
+        await Scan(client);
+        var id = (await GetGroups(client)).GetProperty("groups")[0].GetProperty("id").GetInt64();
+
+        var response = await client.PutAsJsonAsync($"/api/groups/{id}", new { title = "  New Title  ", author = "   " });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await ScansControllerTests.ReadJson(response);
+        Assert.Equal(id, updated.GetProperty("id").GetInt64());
+        Assert.Equal("New Title", updated.GetProperty("title").GetString());
+        Assert.Equal(JsonValueKind.Null, updated.GetProperty("author").ValueKind);
+        Assert.True(updated.GetProperty("userCorrected").GetBoolean());
+
+        var listed = (await GetGroups(client)).GetProperty("groups").EnumerateArray().Single(g => g.GetProperty("id").GetInt64() == id);
+        Assert.Equal("New Title", listed.GetProperty("title").GetString());
+        Assert.Equal(JsonValueKind.Null, listed.GetProperty("author").ValueKind);
+        Assert.True(listed.GetProperty("userCorrected").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Put_returns_404_for_an_unknown_id_and_400_for_a_too_long_title_without_changing_anything()
+    {
+        var client = _factory.CreateClient();
+        await Scan(client);
+        var before = (await GetGroups(client)).GetProperty("groups").GetRawText();
+        var id = (await GetGroups(client)).GetProperty("groups")[0].GetProperty("id").GetInt64();
+
+        var missing = await client.PutAsJsonAsync("/api/groups/999999", new { title = "x", author = "y" });
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+
+        var tooLong = await client.PutAsJsonAsync($"/api/groups/{id}", new { title = new string('a', 501), author = "y" });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        var problem = await ScansControllerTests.ReadJson(tooLong);
+        Assert.True(problem.GetProperty("errors").TryGetProperty("title", out _));
+
+        Assert.Equal(before, (await GetGroups(client)).GetProperty("groups").GetRawText());
     }
 
     public void Dispose()
