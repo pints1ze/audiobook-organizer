@@ -313,6 +313,56 @@ public class GroupsControllerTests : IDisposable
         Assert.Equal(before, (await GetGroups(client)).GetRawText());
     }
 
+    [Fact]
+    public async Task Post_excluded_returns_the_list_with_the_file_excluded()
+    {
+        var client = _factory.CreateClient();
+        var (unresolved, _) = await ScanTwoUnresolved(client);
+
+        var response = await client.PostAsJsonAsync("/api/groups/excluded", new { fileIds = new[] { unresolved[0] } });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var list = await ScansControllerTests.ReadJson(response);
+        var excluded = Assert.Single(list.GetProperty("excluded").EnumerateArray());
+        Assert.Equal(unresolved[0], excluded.GetProperty("fileId").GetInt64());
+        Assert.Equal("alpha.mp3", excluded.GetProperty("relativePath").GetString());
+        Assert.InRange(excluded.GetProperty("durationMs").GetInt64(), 29_500, 30_500);
+        Assert.Equal([unresolved[1]],
+            list.GetProperty("unresolved").EnumerateArray().Select(u => u.GetProperty("fileId").GetInt64()));
+        Assert.Equal(list.GetRawText(), (await GetGroups(client)).GetRawText());
+    }
+
+    [Fact]
+    public async Task Bad_exclude_and_unresolve_requests_return_400_without_changing_anything()
+    {
+        var client = _factory.CreateClient();
+        var (unresolved, groupId) = await ScanTwoUnresolved(client);
+        var inGroup = FileIds(await GetDetail(client, groupId)).Single();
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PostAsJsonAsync("/api/groups/excluded", new { fileIds = new[] { unresolved[0] } })).StatusCode);
+        var before = (await GetGroups(client)).GetRawText();
+
+        (string Url, object Body)[] bad =
+        [
+            ("/api/groups/excluded", new { fileIds = Array.Empty<long>() }),
+            ("/api/groups/excluded", new { }),
+            ("/api/groups/excluded", new { fileIds = new[] { inGroup, inGroup } }),
+            ("/api/groups/excluded", new { fileIds = new[] { inGroup, 999_999L } }),
+            ("/api/groups/excluded", new { fileIds = new[] { inGroup, unresolved[0] } }),
+            ("/api/groups/unresolved", new { fileIds = Array.Empty<long>() }),
+            ("/api/groups/unresolved", new { fileIds = new[] { 999_999L } }),
+            ("/api/groups/unresolved", new { fileIds = new[] { inGroup, unresolved[1] } }),
+        ];
+        foreach (var (url, body) in bad)
+        {
+            var response = await client.PostAsJsonAsync(url, body);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var problem = await ScansControllerTests.ReadJson(response);
+            Assert.True(problem.GetProperty("errors").TryGetProperty("fileIds", out _), problem.GetRawText());
+        }
+        Assert.Equal(before, (await GetGroups(client)).GetRawText());
+    }
+
     public void Dispose()
     {
         _factory.Dispose();

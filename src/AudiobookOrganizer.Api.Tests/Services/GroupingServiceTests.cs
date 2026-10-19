@@ -302,6 +302,106 @@ public class GroupingServiceTests : IDisposable
         Assert.Equal(created, _grouping.GetDetail(created.Id), new DetailComparer());
     }
 
+    [Fact]
+    public void Excluding_a_file_renumbers_its_book_lists_it_as_excluded_and_survives_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var track1 = FileIdOf("book a/track1.mp3");
+
+        var result = _grouping.Exclude(new MoveFilesDto([track1]));
+
+        Assert.Empty(result.Errors);
+        var book = _grouping.GetDetail(bookId)!;
+        Assert.True(book.UserCorrected);
+        Assert.Equal(["book a/track2.mp3"], book.Files.Select(f => f.RelativePath));
+        Assert.Equal([1], book.Files.Select(f => f.Position));
+        Assert.Equal(1, book.FileCount);
+        Assert.Equal(book.Files[0].DurationMs, book.TotalDurationMs);
+        var list = result.List!;
+        var excluded = Assert.Single(list.Excluded);
+        Assert.Equal((track1, "book a/track1.mp3"), (excluded.FileId, excluded.RelativePath));
+        Assert.InRange(excluded.DurationMs!.Value, 29_500, 30_500);
+        Assert.Empty(list.Unresolved);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        Assert.Equal(book, _grouping.GetDetail(bookId), new DetailComparer());
+        var after = _grouping.List();
+        Assert.Equal([track1], after.Excluded.Select(f => f.FileId));
+        Assert.Empty(after.Unresolved);
+        Assert.Equal(2, after.Groups.Count);
+    }
+
+    [Fact]
+    public void An_unresolved_file_stays_unresolved_after_a_rescan_until_it_is_moved_into_a_group()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var track2 = FileIdOf("book a/track2.mp3");
+
+        var result = _grouping.Unresolve(new MoveFilesDto([track2]));
+
+        Assert.Empty(result.Errors);
+        Assert.Equal([track2], result.List!.Unresolved.Select(f => f.FileId));
+        Assert.Empty(result.List.Excluded);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+        Assert.Equal([track2], _grouping.List().Unresolved.Select(f => f.FileId));
+        Assert.DoesNotContain(StoredGroups(), g => g.Contains("book a/track2.mp3"));
+
+        // The rescan replaced the uncorrected M4B group, so look its id up again.
+        var singleId = GroupIdOf("single.m4b");
+        Assert.NotNull(_grouping.MoveFiles(singleId, new MoveFilesDto([track2])).Group);
+        Assert.Null(UserStateOf(track2));
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+        Assert.Equal(singleId, GroupIdOf("book a/track2.mp3"));
+        Assert.Empty(_grouping.List().Unresolved);
+    }
+
+    [Fact]
+    public void Excluding_the_only_file_deletes_its_group_and_unresolving_it_undoes_the_exclude()
+    {
+        NewScanService(_grouping).Run(CancellationToken.None);
+        var singleId = GroupIdOf("single.m4b");
+        var single = FileIdOf("single.m4b");
+
+        var excluded = _grouping.Exclude(new MoveFilesDto([single]));
+
+        Assert.Empty(excluded.Errors);
+        Assert.Null(_grouping.GetDetail(singleId));
+        Assert.Equal([single], excluded.List!.Excluded.Select(f => f.FileId));
+        Assert.Single(excluded.List.Groups);
+
+        var undone = _grouping.Unresolve(new MoveFilesDto([single]));
+
+        Assert.Empty(undone.Errors);
+        Assert.Empty(undone.List!.Excluded);
+        Assert.Equal([single], undone.List.Unresolved.Select(f => f.FileId));
+        Assert.Equal("Unresolved", UserStateOf(single));
+    }
+
+    [Fact]
+    public void Creating_a_group_clears_the_files_user_state()
+    {
+        NewScanService(_grouping).Run(CancellationToken.None);
+        var single = FileIdOf("single.m4b");
+        Assert.Empty(_grouping.Exclude(new MoveFilesDto([single])).Errors);
+
+        Assert.NotNull(_grouping.CreateGroup(new CreateGroupDto([single], null, null)).Group);
+
+        Assert.Null(UserStateOf(single));
+        Assert.Empty(_grouping.List().Excluded);
+    }
+
+    private string? UserStateOf(long fileId)
+    {
+        using var connection = _connections.Open();
+        return connection.ExecuteScalar<string?>("SELECT UserState FROM AudioFile WHERE Id = @fileId", new { fileId });
+    }
+
     /// <summary>Compares details by value, including their file lists.</summary>
     private sealed class DetailComparer : IEqualityComparer<GroupDetailDto?>
     {

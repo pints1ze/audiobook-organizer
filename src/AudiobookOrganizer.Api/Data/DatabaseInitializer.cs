@@ -51,8 +51,12 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 ChapterCount INTEGER,
                 ScanError TEXT,
                 FirstSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id),
-                LastSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id))
+                LastSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id),
+                UserState TEXT)
             """);
+        // Databases created before slice 20 have AudioFile without UserState ('Excluded', 'Unresolved' or null).
+        if (!connection.Query<string>("SELECT name FROM pragma_table_info('AudioFile')").Contains("UserState"))
+            connection.Execute("ALTER TABLE AudioFile ADD COLUMN UserState TEXT");
         connection.Execute(
             """
             CREATE TABLE IF NOT EXISTS FileGroup (

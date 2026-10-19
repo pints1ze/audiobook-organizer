@@ -53,6 +53,42 @@ public class DatabaseInitializerTests : IDisposable
         Assert.Equal((7L, "Old Book", "Old Author", 0L), row);
     }
 
+    [Fact]
+    public void Initialize_adds_UserState_to_an_existing_AudioFile_table_without_losing_rows()
+    {
+        Directory.CreateDirectory(_root);
+        var connections = new SqliteConnectionFactory(Path.Combine(_root, "old.db"));
+        using (var connection = connections.Open())
+        {
+            // The AudioFile schema from before slice 20, with no UserState column.
+            connection.Execute(
+                """
+                CREATE TABLE ScanRun (Id INTEGER PRIMARY KEY, StartedAt TEXT NOT NULL, FinishedAt TEXT, Status TEXT NOT NULL,
+                    FilesFound INTEGER NOT NULL DEFAULT 0, FilesAdded INTEGER NOT NULL DEFAULT 0,
+                    FilesUpdated INTEGER NOT NULL DEFAULT 0, FilesUnchanged INTEGER NOT NULL DEFAULT 0,
+                    FilesMissing INTEGER NOT NULL DEFAULT 0, FilesFailed INTEGER NOT NULL DEFAULT 0, Error TEXT);
+                CREATE TABLE AudioFile (Id INTEGER PRIMARY KEY, SourcePath TEXT NOT NULL UNIQUE, FileName TEXT NOT NULL,
+                    Extension TEXT NOT NULL, SizeBytes INTEGER NOT NULL, ModifiedAtUtc TEXT NOT NULL, DurationMs INTEGER,
+                    Title TEXT, Album TEXT, Artist TEXT, AlbumArtist TEXT, Composer TEXT, Genre TEXT, Year INTEGER,
+                    Track INTEGER, Disc INTEGER, Comment TEXT, HasCover INTEGER NOT NULL DEFAULT 0, ChapterCount INTEGER,
+                    ScanError TEXT, FirstSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id),
+                    LastSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id));
+                INSERT INTO ScanRun (Id, StartedAt, Status) VALUES (1, '2026-10-18T00:00:00Z', 'Completed');
+                INSERT INTO AudioFile (Id, SourcePath, FileName, Extension, SizeBytes, ModifiedAtUtc, FirstSeenScanId, LastSeenScanId)
+                VALUES (5, '/incoming/a.mp3', 'a.mp3', '.mp3', 100, '2026-10-18T00:00:00Z', 1, 1);
+                """);
+        }
+
+        var initializer = new DatabaseInitializer(connections);
+        initializer.Initialize();
+        initializer.Initialize();
+
+        using var check = connections.Open();
+        var row = check.QuerySingle<(long Id, string SourcePath, string? UserState)>(
+            "SELECT Id, SourcePath, UserState FROM AudioFile");
+        Assert.Equal((5L, "/incoming/a.mp3", (string?)null), row);
+    }
+
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();

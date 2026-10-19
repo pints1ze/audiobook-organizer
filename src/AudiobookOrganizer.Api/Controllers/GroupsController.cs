@@ -46,6 +46,20 @@ public class GroupsController(GroupingService grouping) : ControllerBase
         return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
     }
 
+    [HttpPost("excluded")]
+    public ActionResult<GroupListDto> PostExcluded(MoveFilesDto request)
+    {
+        var result = grouping.Exclude(request);
+        return result.List is not null ? result.List : Invalid(result.Errors);
+    }
+
+    [HttpPost("unresolved")]
+    public ActionResult<GroupListDto> PostUnresolved(MoveFilesDto request)
+    {
+        var result = grouping.Unresolve(request);
+        return result.List is not null ? result.List : Invalid(result.Errors);
+    }
+
     private ActionResult Invalid(IReadOnlyDictionary<string, string[]> errors)
     {
         foreach (var (field, messages) in errors)

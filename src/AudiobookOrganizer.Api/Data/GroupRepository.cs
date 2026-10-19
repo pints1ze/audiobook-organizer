@@ -9,8 +9,8 @@ namespace AudiobookOrganizer.Api.Data;
 public class GroupRepository(SqliteConnectionFactory connections)
 {
     /// <summary>
-    /// Files last seen in <paramref name="scanId"/> that were read without error and aren't in a user-corrected
-    /// group: the grouping input.
+    /// Files last seen in <paramref name="scanId"/> that were read without error, have no user state and aren't in a
+    /// user-corrected group: the grouping input.
     /// </summary>
     public IReadOnlyList<AudioFile> GetGroupableFiles(long scanId)
     {
@@ -18,7 +18,7 @@ public class GroupRepository(SqliteConnectionFactory connections)
         return connection.Query<AudioFile>(
             """
             SELECT * FROM AudioFile a
-            WHERE a.LastSeenScanId = @scanId AND a.ScanError IS NULL
+            WHERE a.LastSeenScanId = @scanId AND a.ScanError IS NULL AND a.UserState IS NULL
                 AND NOT EXISTS (SELECT 1 FROM FileGroupFile gf JOIN FileGroup g ON g.Id = gf.GroupId
                                 WHERE gf.AudioFileId = a.Id AND g.UserCorrected = 1)
             """,
@@ -171,8 +171,7 @@ public class GroupRepository(SqliteConnectionFactory connections)
     /// <summary>
     /// Takes the files out of their groups and inserts them into <paramref name="targetGroupId"/> after
     /// <paramref name="afterPosition"/>, keeping their disc and track (an
-    /// unresolved file's come from its tags). Then renumbers the source groups, deletes the
-    /// emptied ones, and recomputes totals for the target and surviving sources, marking them all user-corrected.
+    /// unresolved file's come from its tags), and clears their user state. Then tidies the source groups and the target.
     /// </summary>
     private static void PlaceFiles(
         SqliteConnection connection, SqliteTransaction transaction, long targetGroupId, IReadOnlyList<long> fileIds, int afterPosition)
@@ -190,6 +189,7 @@ public class GroupRepository(SqliteConnectionFactory connections)
         var sources = rows.Values.Where(r => r.GroupId is not null).Select(r => r.GroupId!.Value).Distinct().ToList();
 
         connection.Execute("DELETE FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }, transaction);
+        connection.Execute("UPDATE AudioFile SET UserState = NULL WHERE Id IN @fileIds", new { fileIds }, transaction);
         connection.Execute(
             """
             INSERT INTO FileGroupFile (GroupId, AudioFileId, Position, Disc, Track)
@@ -201,7 +201,17 @@ public class GroupRepository(SqliteConnectionFactory connections)
             }),
             transaction);
 
-        foreach (var source in sources.Where(s => s != targetGroupId))
+        TidyGroups(connection, transaction, sources.Where(s => s != targetGroupId).ToList(), [targetGroupId]);
+    }
+
+    /// <summary>
+    /// Renumbers <paramref name="sources"/> 1..n, deletes the emptied ones, and recomputes totals for the surviving
+    /// sources and <paramref name="alsoRecompute"/>, marking them all user-corrected.
+    /// </summary>
+    private static void TidyGroups(
+        SqliteConnection connection, SqliteTransaction transaction, IReadOnlyList<long> sources, IReadOnlyList<long> alsoRecompute)
+    {
+        foreach (var source in sources)
         {
             var remaining = connection.Query<long>(
                 "SELECT AudioFileId FROM FileGroupFile WHERE GroupId = @source ORDER BY Position, AudioFileId",
@@ -226,10 +236,52 @@ public class GroupRepository(SqliteConnectionFactory connections)
                                    WHERE gf.GroupId = FileGroup.Id)
             WHERE Id IN @ids
             """,
-            new { ids = sources.Append(targetGroupId).Distinct().ToList() }, transaction);
+            new { ids = sources.Concat(alsoRecompute).Distinct().ToList() }, transaction);
     }
 
-    /// <summary>Files seen in <paramref name="scanId"/>, read without error, that are in no group.</summary>
+    /// <summary>
+    /// Takes <paramref name="fileIds"/> out of their groups and sets their user state to <paramref name="state"/>
+    /// ("Excluded" or "Unresolved"), in one transaction. Source groups are tidied as a move tidies them.
+    /// </summary>
+    public void SetUserState(IReadOnlyList<long> fileIds, string state)
+    {
+        using var connection = connections.Open();
+        using var transaction = connection.BeginTransaction();
+        var sources = connection.Query<long>(
+            "SELECT DISTINCT GroupId FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }, transaction).ToList();
+        connection.Execute("DELETE FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }, transaction);
+        connection.Execute("UPDATE AudioFile SET UserState = @state WHERE Id IN @fileIds", new { fileIds, state }, transaction);
+        TidyGroups(connection, transaction, sources, []);
+        transaction.Commit();
+    }
+
+    /// <summary>Each of <paramref name="fileIds"/>' user state and whether it's in a group.</summary>
+    public IReadOnlyDictionary<long, (string? UserState, bool Grouped)> GetUserStates(IReadOnlyList<long> fileIds)
+    {
+        using var connection = connections.Open();
+        return connection.Query<(long Id, string? UserState, long Grouped)>(
+                """
+                SELECT a.Id, a.UserState, EXISTS (SELECT 1 FROM FileGroupFile gf WHERE gf.AudioFileId = a.Id)
+                FROM AudioFile a WHERE a.Id IN @fileIds
+                """,
+                new { fileIds })
+            .ToDictionary(r => r.Id, r => (r.UserState, r.Grouped != 0));
+    }
+
+    /// <summary>Files seen in <paramref name="scanId"/>, read without error, that the user excluded.</summary>
+    public IReadOnlyList<AudioFile> GetExcludedFiles(long scanId)
+    {
+        using var connection = connections.Open();
+        return connection.Query<AudioFile>(
+            """
+            SELECT * FROM AudioFile a
+            WHERE a.LastSeenScanId = @scanId AND a.ScanError IS NULL AND a.UserState = 'Excluded'
+            ORDER BY a.SourcePath
+            """,
+            new { scanId }).ToList();
+    }
+
+    /// <summary>Files seen in <paramref name="scanId"/>, read without error, that are in no group and not excluded.</summary>
     public IReadOnlyList<AudioFile> GetUngroupedFiles(long scanId)
     {
         using var connection = connections.Open();
@@ -238,6 +290,7 @@ public class GroupRepository(SqliteConnectionFactory connections)
             SELECT * FROM AudioFile a
             WHERE a.LastSeenScanId = @scanId AND a.ScanError IS NULL
                 AND NOT EXISTS (SELECT 1 FROM FileGroupFile g WHERE g.AudioFileId = a.Id)
+                AND (a.UserState IS NULL OR a.UserState <> 'Excluded')
             ORDER BY a.SourcePath
             """,
             new { scanId }).ToList();

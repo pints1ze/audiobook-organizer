@@ -14,6 +14,9 @@ public record GroupReorderResult(GroupDetailDto? Group, IReadOnlyDictionary<stri
 /// <summary>The moved-into or created group, or errors keyed by JSON field name. No group and no errors means the id is unknown.</summary>
 public record GroupFilesResult(GroupDetailDto? Group, IReadOnlyDictionary<string, string[]> Errors);
 
+/// <summary>The new group list after an exclude or unresolve, or errors keyed by JSON field name.</summary>
+public record GroupListResult(GroupListDto? List, IReadOnlyDictionary<string, string[]> Errors);
+
 /// <summary>Runs the grouping engine over a scan's files and stores the result; lists the stored groups for the API.</summary>
 public class GroupingService(SettingsService settings, ScanRepository scans, GroupRepository groups)
 {
@@ -116,6 +119,29 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
         return new GroupFilesResult(GetDetail(id), errors);
     }
 
+    /// <summary>Takes <paramref name="request"/>'s files out of their groups and excludes them; they stay excluded across rescans.</summary>
+    public GroupListResult Exclude(MoveFilesDto request) =>
+        SetUserState(request, "Excluded", s => s.UserState == "Excluded", "A file is already excluded.");
+
+    /// <summary>
+    /// Takes <paramref name="request"/>'s files out of their groups (or out of excluded: the undo) and keeps them
+    /// unresolved across rescans.
+    /// </summary>
+    public GroupListResult Unresolve(MoveFilesDto request) =>
+        SetUserState(request, "Unresolved", s => !s.Grouped && s.UserState != "Excluded", "A file is already unresolved.");
+
+    private GroupListResult SetUserState(
+        MoveFilesDto request, string state, Func<(string? UserState, bool Grouped), bool> alreadyThere, string alreadyMessage)
+    {
+        var fileIds = request.FileIds ?? [];
+        var error = FileIdsError(fileIds);
+        if (error is null && groups.GetUserStates(fileIds).Values.Any(alreadyThere)) error = alreadyMessage;
+        if (error is not null) return new GroupListResult(null, new Dictionary<string, string[]> { ["fileIds"] = [error] });
+
+        groups.SetUserState(fileIds, state);
+        return new GroupListResult(List(), new Dictionary<string, string[]>());
+    }
+
     /// <summary>
     /// Why <paramref name="fileIds"/> can't be moved: empty, duplicated, or not all error-free files from the latest
     /// completed scan. Null when they can.
@@ -129,7 +155,10 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
         return movable.Count != fileIds.Count ? "Every file must be one the latest scan read without error." : null;
     }
 
-    /// <summary>The stored groups, and the files from the latest completed scan that are in none of them.</summary>
+    /// <summary>
+    /// The stored groups, the files from the latest completed scan that are in none of them, and the files the user
+    /// excluded.
+    /// </summary>
     public GroupListDto List()
     {
         var summaries = groups.GetGroups().Select(ToSummary).ToList();
@@ -141,8 +170,13 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
             : groups.GetUngroupedFiles(latest.Id)
                 .Select(f => new UnresolvedFileDto(f.Id, RelativePath(root, f.SourcePath), f.DurationMs))
                 .ToList();
+        var excluded = latest is null
+            ? []
+            : groups.GetExcludedFiles(latest.Id)
+                .Select(f => new ExcludedFileDto(f.Id, RelativePath(root, f.SourcePath), f.DurationMs))
+                .ToList();
 
-        return new GroupListDto(summaries, unresolved);
+        return new GroupListDto(summaries, unresolved, excluded);
     }
 
     private static GroupSummaryDto ToSummary(FileGroup g) => new(g.Id, g.Title, g.Author, g.Confidence,
