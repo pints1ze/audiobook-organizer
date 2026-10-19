@@ -27,10 +27,10 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** PRD grouping scenarios A–E pass as automated tests; low-evidence files show as unresolved; Incoming screen lists groups with title, author, file count, duration, confidence.
 **Slices:** 10 (implemented), 11 (implemented), 12 (implemented).
 
-### 4. Group corrections (in progress)
+### 4. Group corrections (done)
 **Goal:** the user can fix any grouping the rules got wrong.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
-**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (written). Set title/author, reorder, move, merge and split work from the UI, including assigning unresolved files. Exclude and send back to unresolved have their API. Still to do: their UI. All survive rescans. Carried in: dashboard group and status counts, moving the dashboard query into a service (from slices 08 and 12); grouping-rule tweaks from the developer's real-collection check at the end of phase 3.
+**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (implemented). Merge, split, move file, exclude (with undo), reorder and set title/author all work from the UI, and all survive rescans. Not done in this phase, for the developer to place: the carried-in dashboard group and status counts and moving the dashboard query into a service (from slices 08 and 12); the grouping-rule tweaks from the real-collection check (waiting for the developer's list); rewording the Unresolved hint (slice 21).
 
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.
