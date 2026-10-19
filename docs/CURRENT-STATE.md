@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 27 review, 2026-10-19, commit 366c3e6_
+_Updated: slice 28 review, 2026-10-19, commit 9925b37_
 
 ## Branch
 `phase/5-metadata` (off `main` after the phase 4 merge, PR #4)
@@ -13,15 +13,15 @@ _Updated: slice 27 review, 2026-10-19, commit 366c3e6_
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
 - **Grouping engine:** the pure `GroupingEngine.Group` proposes book groups from scanned file facts, with confidence, evidence and an estimated title and author; scenarios A–E pass. Every completed scan regroups the files it saw into `FileGroup` and `FileGroupFile` (replacing all groups), and `GET /api/groups` lists the groups (least confident first) and the unresolved files. The Incoming page (`/incoming`) shows them with confidence and evidence.
 - **Corrections:** `PUT /api/groups/{id}` sets a group's title and author and marks it `UserCorrected`. Rescans keep corrected groups and their files untouched and regroup only the rest. The Incoming page edits title and author in place and marks corrected books "Edited" (slice 14). `GET /api/groups/{id}` lists a group's files in order and `PUT /api/groups/{id}/order` reorders them (slice 15). Each Incoming row has a "Files" disclosure with keyboard-accessible Move up and Move down (slice 16). `POST /api/groups/{id}/files` moves files into a group and `POST /api/groups` creates a group from files; together they give move, merge and split (slice 17). Each Files list has checkboxes and a "Move selected to" bar that moves files to another book or a new book (slice 18). The Unresolved section has the same selection and move bar (slice 19, shared `MoveBar`). `POST /api/groups/excluded` and `POST /api/groups/unresolved` set a file's `UserState`, and `GET /api/groups` lists `excluded` (slice 20). The move bar also offers "Unresolved files" and "Excluded files", and an Excluded section sends files back (slice 21).
-- **Metadata search:** `GET /api/metadata/search?keywords=` searches Audible's catalog through `AudibleClient`, a typed `HttpClient` behind `IMetadataProvider`. It returns normalized candidates (ASIN, title, authors, narrators, series, publisher, release date, language, runtime, format, cover URL), 400 for blank keywords and 502 when Audible fails. Tests use real responses in `docs/fixtures/audible/` through `FakeHttpMessageHandler` (slice 27).
+- **Metadata search:** `GET /api/metadata/search?keywords=` searches Audible's catalog through `AudibleClient`, a typed `HttpClient` behind `IMetadataProvider`. It returns normalized candidates (ASIN, title, authors, narrators, series, publisher, release date, language, runtime, format, cover URL) (slice 27). `MetadataSearchService` falls back to `OpenLibraryClient` when Audible fails or finds nothing; ISBN keywords search Open Library by ISBN. The response is `{ candidates, providerErrors }`: 400 for blank keywords, 502 only when every provider failed (slice 28). Tests use real responses in `docs/fixtures/audible/` and `docs/fixtures/openlibrary/` through `FakeHttpMessageHandler`.
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 5, Metadata: in progress. Audible search works (27). Left: Open Library fallback, search UI and picking a match (`Audiobook` + `MetadataMatch`), the editor with value origins that keeps user edits, manual completion, and covers (embedded, download, upload). Excluded files never get an `Audiobook`.
+Phase 5, Metadata: in progress. Audible search (27) and the Open Library fallback (28) work. Left: search UI and picking a match (`Audiobook` + `MetadataMatch`), the editor with value origins that keeps user edits, manual completion, and covers (embedded, download, upload). Excluded files never get an `Audiobook`.
 
 ## Last slice / next slice
-- Last: 27 audible-search, Implemented
-- Next: 28, Open Library fallback provider (not written)
+- Last: 28 open-library-fallback, Implemented
+- Next: 29, search UI and picking a match (not written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -57,6 +57,7 @@ Phase 5, Metadata: in progress. Audible search works (27). Left: Open Library fa
 - 2026-10-18 (developer): Phase 4 is reopened for its leftovers. The grouping-rule tweaks are dropped (no real-collection list). Group ids must stay stable: never reused after a group is deleted. (Done in slice 24: `FileGroup` is `AUTOINCREMENT`, and old databases are rebuilt once at startup.)
 - 2026-10-18 (slice 18): A bug found by a manual check inside a slice gets its own `fix: slice NN` commit, with the developer's OK.
 - 2026-10-19 (slice 27): Providers sit behind `IMetadataProvider` and throw only `MetadataProviderException`, which the API returns as a 502 problem. Search candidates aren't stored until a match is picked. The series part stays a string, and format is passed through from the provider.
+- 2026-10-19 (slice 28): Providers are tried in registration order (Audible, then Open Library) and the first non-empty result wins; there's no merging. Open Library candidates leave publisher and language empty because its search data mixes print editions.
 
 ## Verification
-Full suite: backend 132 passed / 0 failed, frontend 129 passed / 0 failed. While the dev API is running it locks `bin/`, so slice 27 ran build and tests with `--artifacts-path` in a scratch folder. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 155 passed / 0 failed, frontend 129 passed / 0 failed. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
