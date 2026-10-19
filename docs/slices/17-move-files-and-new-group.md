@@ -62,3 +62,39 @@
 - **One primitive:** merge is a move of all of B's files into A, and split is a create from the chosen files. Separate merge or split endpoints would duplicate the same transaction (AGENTS.md section 4).
 - **Size:** 4 tasks, 6 files: `GroupRepository.cs`, `GroupingService.cs` and its test, `GroupsController.cs` and its test, `GroupDtos.cs`.
 - **Commit:** `feat: slice 17 move-files-and-new-group`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 100 passed, 0 failed | 94 before plus 6 new |
+| Frontend tests | 81 passed, 0 failed | no frontend change in this slice |
+| New tests | 4 of 4 behaviours present, passing | `Moving_a_file_appends_it_renumbers_the_source_recomputes_totals_and_survives_a_rescan`, `Merging_deletes_the_emptied_group`, `Creating_a_group_takes_files_in_order_and_deletes_emptied_groups`, `Post_creates_a_group_from_unresolved_files_and_returns_201_with_a_location`, `Post_files_moves_an_unresolved_file_into_a_group`, `Bad_move_and_create_requests_return_400_without_changing_anything_and_an_unknown_target_404s` |
+| Manual: move the stray file in | Passed | API on :5070 with a scratch DB (`Database__Path`). Scenario A (3 tracks), one M4B and a stray root MP3; the scan gave 2 groups and 1 unresolved. `POST /api/groups/2/files` `[2]` returned 200 with the file at position 4, 4 files, 120000 ms and `userCorrected: true`. `unresolved` was then empty |
+| Manual: create (split) | Passed | `POST /api/groups` with files 3 and 4, title "Split Book": 201 with `Location: /api/groups/3`, High, "Grouped by the user", 2 files, 60000 ms. Group 2 kept `03 track.mp3` and `stray thing.mp3`, renumbered 1–2, with 60000 ms |
+| Manual: merge | Passed | Moving the M4B group's file into group 3 returned 200; `GET /api/groups/1` then returned 404 |
+| Manual: rescan | Passed | Completed with 5 unchanged. `GET /api/groups` was byte-identical before and after; the files, order and totals match |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The server and all scratch data were removed afterwards.
+
+## Outcome (2026-10-18, commit e1569b4)
+
+**Status:** Implemented
+**Summary:** Two endpoints give move file, merge and split:
+- `POST /api/groups/{id}/files` moves files (from groups or unresolved) into a group.
+- `POST /api/groups` creates a user-made group (High, "Grouped by the user") from chosen files.
+
+Both share one transactional `PlaceFiles` helper. It renumbers the source groups, deletes emptied ones, recomputes totals and marks every touched group user-corrected. Bad lists or titles return 400 with nothing changed. The groups survived a rescan byte for byte. All Done when items are met.
+**Changed:** 6 code files plus 3 docs. Key ones: `Data/GroupRepository.cs`, `Services/Grouping/GroupingService.cs`, `Controllers/GroupsController.cs`, `Models/Api/GroupDtos.cs`.
+**Deviations:**
+- A moved file keeps the disc and track from its old group; an unresolved file takes them from its tags. *Fine:* the slice didn't say.
+- On create, file-list and title/author errors come back together in one 400. *Improvement.*
+- New `GroupFilesResult` record. *Fine.*
+- Title/author cleaning moved into a shared `CleanTitleAuthor` helper used by `Rename`. *Fine*, as the slice asked.
+**Follow-ups:**
+- Next slice: the move, merge and split UI on the Incoming page.
+- A group's evidence isn't updated when files are moved in or out. In the manual run, group 2 still said "Same folder" after it gained the stray root file. *Minor debt:* consider an extra evidence line such as "Corrected by the user" when the UI shows it.
