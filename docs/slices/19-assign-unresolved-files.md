@@ -72,3 +72,36 @@
 - **Unresolved across rescans:** a moved file sits in a user-corrected group, so rescans leave it there (slice 13 decision). Files still unresolved are regrouped by the rules as today.
 - **Size:** 4 tasks, 6 files: `MoveBar.tsx` (new), `GroupFiles.tsx`, `UnresolvedFiles.tsx` (new) and its test, `IncomingPage.tsx` and its test.
 - **Commit:** `feat: slice 19 assign-unresolved-files`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 100 passed, 0 failed | no backend change in this slice |
+| Frontend tests | 109 passed, 0 failed | 9 files, 11 new; the 16 `GroupFiles` tests pass unchanged |
+| New tests | 4 of 4 behaviours present, passing | `UnresolvedFiles`: Move disabled with nothing selected; Select all with the mixed state; move to "The Hobbit" calls `moveFilesToGroup(1, [8])` and `onMoved`; move both to "New book" calls `createGroup([7, 8])`; alert and `onFailed` on a rejected or `notFound` move. Page: the bar lists every book plus "New book"; reload, file gone and focused status after a move. Extra: a failed move shows the alert and reloads the page |
+| Manual: keyboard move into a book | Passed | Playwright on :5173 against a scratch DB; scenario A (3 tracks), one M4B and two stray root MP3s. Tab only (13 presses) to "Select odd bit.mp3", Space, Tab Tab to "Move selected to", ArrowDown to "track", Tab, Enter. Focus landed on `role="status"` "Moved 1 file to track"; Unresolved showed 1 file and "track" showed "Files (4)" |
+| Manual: keyboard move to a new book | Passed | Tab from the status message to "Select stray thing.mp3", Space, Tab, ArrowDown twice to "New book", Tab, Enter. Focused status "Moved 1 file to a new book", 3 books, Unresolved "(0)" with "None." |
+| Manual: Files-list move still works | Passed | Opened the M4B book's "Files (1)", ticked Select all and clicked Move to the default target (by script clicks, not keyboard). Status "Moved 1 file to Unknown (group 3)", and the M4B book disappeared |
+| Manual: rescan keeps moves | Passed | Rescan through `POST /api/scans` (the endpoint the Dashboard button calls) completed with 6 unchanged; `GET /api/groups` was byte-identical before and after |
+| Manual: 375 px width | Passed | After adding a stray file with a 78-character name with no spaces, at 375 px with every Files list and all three move bars open, the page scroll width is 360 |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the browser, the scratch data and the `.playwright-mcp/` output were removed afterwards.
+
+## Outcome (2026-10-18, commit 5b8e382)
+
+**Status:** Implemented
+**Summary:** the Unresolved section has a checkbox per file, "Select all unresolved files" with the mixed state, and the move bar, so stray files can go into an existing book or a new one. The move bar is now the shared `MoveBar` component, used by both `GroupFiles` and `UnresolvedFiles`. All Done when items are met.
+**Changed:** 6 code files plus 2 docs. Key ones: `components/incoming/MoveBar.tsx` (new), `components/incoming/UnresolvedFiles.tsx` (new) and its test, `components/incoming/GroupFiles.tsx`, `pages/IncomingPage.tsx` and its test.
+**Deviations:**
+- One existing page test now scopes its "Move" button lookup to the book's Files list, because the page has two Move buttons. Its assertions are unchanged. *Fine.*
+- `MoveBar` calls `onSaving(false)` only on success; after a failure the parent clears it, so `GroupFiles` stays disabled until its reload. *Fine.*
+- One extra page test covers a failed move. *Improvement.*
+**Follow-ups:**
+- If a failed move's reload leaves Unresolved empty, the section shows "None." and the alert goes with the component. *Minor.* Unlikely, since a failure means the files didn't move.
+- Next slice: exclude a file and send it back to unresolved (API), as decided.
+
