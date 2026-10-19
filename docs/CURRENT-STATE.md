@@ -16,7 +16,7 @@ _Updated: slice 25 review, 2026-10-18, commit f0f19df_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Group ids are never reused (slice 24). Books whose files the user changed get the evidence line "Corrected by the user" (slice 25). Still to do: and Incoming polish.
+Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Group ids are never reused (slice 24). Books whose files the user changed get the evidence line "Corrected by the user" (slice 25). Still to do: Incoming polish.
 
 ## Last slice / next slice
 - Last: 25 correction-evidence, Implemented

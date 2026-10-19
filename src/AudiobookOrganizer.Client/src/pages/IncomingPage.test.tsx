@@ -115,7 +115,7 @@ describe('IncomingPage', () => {
 
     const heading = await screen.findByRole('heading', { level: 2, name: 'Unresolved files (2)' })
     const section = heading.closest('section') as HTMLElement
-    expect(within(section).getByText(/too little evidence/i)).toBeInTheDocument()
+    expect(within(section).getByText("These files aren't in a book yet.")).toBeInTheDocument()
     const items = within(section).getAllByRole('listitem')
     expect(items).toHaveLength(2)
     expect(items[0]).toHaveTextContent('stray/track.mp3')
@@ -159,6 +159,23 @@ describe('IncomingPage', () => {
       expect(await screen.findByRole('button', { name: 'Edit The Hobbit' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Edit Unknown (group 2)' })).toBeInTheDocument()
       expect(screen.queryByText('Edited')).not.toBeInTheDocument()
+    })
+
+    it('adds the group id to Edit names when books share a title', async () => {
+      const book = response.groups[1]
+      getGroupsMock.mockResolvedValue({
+        ...response,
+        groups: [
+          { ...book, id: 3, title: 'Dune' },
+          { ...book, id: 4, title: 'Dune' },
+          { ...book, id: 5, title: 'Emma' },
+        ],
+      })
+      renderPage()
+
+      expect(await screen.findByRole('button', { name: 'Edit Dune (group 3)' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit Dune (group 4)' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Edit Emma' })).toBeInTheDocument()
     })
 
     it('opens a prefilled form with focus on Title, saves, then shows the new values with Edited', async () => {
@@ -261,6 +278,19 @@ describe('IncomingPage', () => {
       await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
     })
 
+    it('focuses the failure alert after the reload when saving throws', async () => {
+      await openHobbitEditor()
+      updateGroupMock.mockRejectedValue(new Error('offline'))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent(/couldn't be saved/)
+      expect(alert).toHaveAttribute('tabindex', '-1')
+      await waitFor(() => expect(alert).toHaveFocus())
+    })
+
     it('treats a 400 with no title or author message as a failed save', async () => {
       await openHobbitEditor()
       updateGroupMock.mockResolvedValue({ ok: false, errors: {} })
@@ -311,6 +341,30 @@ describe('IncomingPage', () => {
       expect(await screen.findByRole('button', { name: 'Move c.mp3 up' })).toBeInTheDocument()
       expect(getGroupMock).toHaveBeenCalledWith(2)
       expect(getGroupMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('keeps the Files list open while editing and after Cancel', async () => {
+      getGroupsMock.mockResolvedValue(response)
+      getGroupMock.mockResolvedValue(detail)
+      renderPage()
+
+      const summary = await screen.findByText('Files (3)', { selector: 'summary' })
+      openFiles(summary.closest('details') as HTMLDetailsElement)
+      expect(await screen.findByRole('button', { name: 'Move c.mp3 up' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Unknown (group 2)' }))
+
+      const form = screen.getByLabelText('Title').closest('form') as HTMLElement
+      const editCell = form.closest('td') as HTMLElement
+      const editDetails = within(editCell).getByText('Files (3)', { selector: 'summary' }).closest('details')
+      expect(editDetails).toHaveAttribute('open')
+      expect(await within(editCell).findByRole('button', { name: 'Move c.mp3 up' })).toBeInTheDocument()
+
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      const rowDetails = screen.getByText('Files (3)', { selector: 'summary' }).closest('details')
+      expect(rowDetails).toHaveAttribute('open')
+      expect(await screen.findByRole('button', { name: 'Move c.mp3 up' })).toBeInTheDocument()
     })
 
     it('marks the row Edited after a successful reorder', async () => {

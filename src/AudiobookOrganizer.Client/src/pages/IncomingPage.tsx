@@ -87,6 +87,9 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
   const { groups, unresolved, excluded } = data
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saveFailed, setSaveFailed] = useState(false)
+  const saveFailedAlert = useRef<HTMLParagraphElement>(null)
+  // Kept here, by group id, so a book's Files list stays open across its edit form.
+  const [openFiles, setOpenFiles] = useState<Set<number>>(() => new Set())
   const editButtons = useRef(new Map<number, HTMLButtonElement>())
   const focusAfterClose = useRef<number | null>(null)
   const [moveMessage, setMoveMessage] = useState('')
@@ -96,6 +99,11 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
   useEffect(() => {
     if (moveMessage) moveStatus.current?.focus()
   }, [moveMessage])
+
+  // The edit form has gone, so focus the failure alert rather than leave it at the top of the page.
+  useEffect(() => {
+    if (saveFailed) saveFailedAlert.current?.focus()
+  }, [saveFailed])
 
   // Return focus to the row's Edit button once its form has closed.
   useEffect(() => {
@@ -133,7 +141,42 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
     onReload()
   }
 
+  function setFilesOpen(id: number, open: boolean) {
+    setOpenFiles((current) => {
+      if (current.has(id) === open) return current
+      const next = new Set(current)
+      if (open) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
   const allBooks = groups.map((g) => ({ id: g.id, label: bookLabel(g) }))
+
+  const titleCounts = new Map<string, number>()
+  for (const g of groups) {
+    if (g.title) titleCounts.set(g.title, (titleCounts.get(g.title) ?? 0) + 1)
+  }
+
+  // Books that share a title get their id too, so every Edit button has a unique name.
+  function editLabel(group: GroupSummary) {
+    if (!group.title) return `Edit Unknown (group ${group.id})`
+    return (titleCounts.get(group.title) ?? 0) > 1 ? `Edit ${group.title} (group ${group.id})` : `Edit ${group.title}`
+  }
+
+  function filesDisclosure(group: GroupSummary) {
+    return (
+      <FilesDisclosure
+        group={group}
+        open={openFiles.has(group.id)}
+        onToggle={(open) => setFilesOpen(group.id, open)}
+        targets={groups.filter((g) => g.id !== group.id).map((g) => ({ id: g.id, label: bookLabel(g) }))}
+        onReordered={onSaved}
+        onMoveStart={() => setMoveMessage('')}
+        onMoved={handleMoved}
+      />
+    )
+  }
 
   if (groups.length === 0 && unresolved.length === 0 && excluded.length === 0) {
     return (
@@ -153,7 +196,12 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
           Proposed books ({groups.length})
         </h2>
         {saveFailed && (
-          <p role="alert" className="mt-2 flex items-center gap-2 text-destructive">
+          <p
+            ref={saveFailedAlert}
+            role="alert"
+            tabIndex={-1}
+            className="mt-2 flex items-center gap-2 rounded text-destructive"
+          >
             <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
             That book couldn't be saved. The list has been reloaded.
           </p>
@@ -190,6 +238,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
                           onCancel={() => closeEditor(group.id)}
                           onFailed={handleFailed}
                         />
+                        {filesDisclosure(group)}
                       </td>
                     </tr>
                   ) : (
@@ -205,7 +254,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
                               else editButtons.current.delete(group.id)
                             }}
                             onClick={() => openEditor(group.id)}
-                            aria-label={group.title ? `Edit ${group.title}` : `Edit Unknown (group ${group.id})`}
+                            aria-label={editLabel(group)}
                             className="rounded underline underline-offset-4"
                           >
                             Edit
@@ -225,13 +274,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
                             ))}
                           </ul>
                         </details>
-                        <FilesDisclosure
-                          group={group}
-                          targets={groups.filter((g) => g.id !== group.id).map((g) => ({ id: g.id, label: bookLabel(g) }))}
-                          onReordered={onSaved}
-                          onMoveStart={() => setMoveMessage('')}
-                          onMoved={handleMoved}
-                        />
+                        {filesDisclosure(group)}
                       </td>
                     </tr>
                   ),
@@ -246,7 +289,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
         <h2 id="unresolved-heading" className="text-xl font-semibold">
           Unresolved files ({unresolved.length})
         </h2>
-        <p className="text-sm text-muted">These files had too little evidence to group.</p>
+        <p className="text-sm text-muted">These files aren't in a book yet.</p>
         {unresolved.length === 0 ? (
           <p className="mt-2">None.</p>
         ) : (
@@ -285,6 +328,8 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
 
 interface FilesDisclosureProps {
   group: GroupSummary
+  open: boolean
+  onToggle: (open: boolean) => void
   targets: MoveTarget[]
   onReordered: (group: GroupSummary) => void
   onMoveStart: () => void
@@ -292,9 +337,7 @@ interface FilesDisclosureProps {
 }
 
 // GroupFiles mounts only while open, so the files load when the user asks for them.
-function FilesDisclosure({ group, targets, onReordered, onMoveStart, onMoved }: FilesDisclosureProps) {
-  const [open, setOpen] = useState(false)
-
+function FilesDisclosure({ group, open, onToggle, targets, onReordered, onMoveStart, onMoved }: FilesDisclosureProps) {
   function handleReordered(detail: GroupDetail) {
     // Drop the files so the row keeps a plain summary.
     const { files: _files, ...summary } = detail
@@ -302,7 +345,7 @@ function FilesDisclosure({ group, targets, onReordered, onMoveStart, onMoved }: 
   }
 
   return (
-    <details className="mt-2" onToggle={(event) => setOpen(event.currentTarget.open)}>
+    <details className="mt-2" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}>
       <summary className="cursor-pointer rounded">Files ({group.fileCount})</summary>
       {/* Keyed by the count so the list reloads when files move in or out of this book. */}
       {open && (
