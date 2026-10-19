@@ -47,3 +47,33 @@
 - Remaining phase 6 pieces after this: merge two entries; alias suggestions; the management screen (people and genres: create, edit, merge, accept a suggestion).
 - Resolving a book's author, narrator and genre values to canonical entries isn't in phase 6's done-when lines; it's raised at the end of the phase for the developer to place (likely phase 7, before naming).
 - Conflict check: no new package; SQLite + Dapper, `CREATE TABLE IF NOT EXISTS`, AUTOINCREMENT ids; the slice 38 decision that a key belongs to one entry (now per kind).
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 217 passed, 0 failed | Was 200; `PeopleControllerTests` unchanged and passing |
+| Frontend tests | 195 passed, 0 failed | Unchanged (no client changes) |
+| New tests | 4 of 4 present, passing | `CanonicalNameServiceTests` (genre key variants, no comma swap) and `GenresControllerTests` (create/list/resolve, clash 400, PUT replace/404, resolve 400/404, no cross-kind clash): 33 tests across the three people/genre files |
+| Manual: POST Science Fiction + Sci-Fi, resolve `science-fiction` and `SCI-FI`, people unaffected | Not run | API (5070) not running. Start with `scripts/start-api.ps1` |
+
+Data checks for the developer (not run): `SELECT g.Id, g.Name, g.NameKey, a.Alias, a.AliasKey FROM Genre g LEFT JOIN GenreAlias a ON a.GenreId = g.Id;`
+
+## Outcome (2026-10-19, commit f51cd34)
+
+**Status:** Implemented
+**Summary:** Genres have their own `Genre` / `GenreAlias` tables and `GET`/`POST /api/genres`, `PUT /api/genres/{id}` and `GET /api/genres/resolve?name=`, with the same rules as people. People and genres now share one `CanonicalNameRepository` and `CanonicalNameService` keyed by `CanonicalKind`; genres use `GenreKey` (case, spacing and `-`/`_`/`/` folded, no comma swap).
+**Changed:** 11 code files: `Data/CanonicalNameRepository.cs`, `Services/CanonicalNameService.cs`, `Models/Api/CanonicalEntryDtos.cs` (replacing the `Person*` files), `Controllers/GenresController.cs` (new), `PeopleController.cs`, `DatabaseInitializer.cs`, `Program.cs`; tests `Services/CanonicalNameServiceTests.cs` (replacing `PersonServiceTests.cs`), `Controllers/GenresControllerTests.cs` (new). Plus this slice file and `docs/PLAN.md`.
+**Deviations:**
+- 11 files vs the slice's estimate of 9: the estimate counted each rename once, but git counts the old and new file separately. The task list didn't change: *fine*.
+- Git records the renames as a delete plus an add because so much of each file changed: *fine*.
+- `GenresController` repeats `PeopleController`'s thin body instead of sharing a base class: *fine*. Two small controllers don't justify a base class.
+- Tests beyond the list (`Science - Fiction`, genre ordering, dropped duplicate aliases, blank 400, people keys unaffected by genre folding): *improvement*.
+**Follow-ups:**
+- Remaining phase 6 pieces: merge two entries, alias suggestions, the management screen.
+- The slice 38 race debt (UNIQUE clash returns 500) now applies to both kinds.
+- Manual check for 39 not run.
