@@ -45,3 +45,31 @@
 - `fromId` from the other kind is a 404 because each kind's tables are separate.
 - Remaining phase 6 pieces after this: alias suggestions API; the management screen (list, create, edit, merge, suggestions).
 - Conflict check: matches the slice 38/39 decisions (one key per entry within a kind) and the PRD; no new package.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 222 passed, 0 failed | Was 217 |
+| Frontend tests | 195 passed, 0 failed | Unchanged (no client changes) |
+| New tests | 3 of 3 present, passing | 5 merge tests: people merge + resolve, 404s, 400s on `fromId`; genres merge + resolve, cross-kind `fromId` 404 |
+| Manual: merge two people via the running API, one entry with the other's name as alias | Not run | API (5070) not running. Start with `scripts/start-api.ps1` |
+
+Data checks for the developer (not run): `SELECT p.Id, p.Name, a.Alias FROM Person p LEFT JOIN PersonAlias a ON a.PersonId = p.Id;` (the merged entry's row is gone and its name is an alias).
+
+## Outcome (2026-10-19, commit 92af862)
+
+**Status:** Implemented
+**Summary:** `POST /api/people/{id}/merge` and `POST /api/genres/{id}/merge` with `{ fromId }` fold one entry into another in one transaction: its aliases move over, its name becomes an alias and the entry is deleted. Missing entries (including the other kind's ids) return 404; a missing or self `fromId` returns 400.
+**Changed:** 7 code files: `Data/CanonicalNameRepository.cs` (`Merge`), `Services/CanonicalNameService.cs` (`Merge`, `FromIdField`), `Models/Api/CanonicalEntryDtos.cs` (`MergeRequest`), `PeopleController.cs`, `GenresController.cs`, and 5 tests across `PeopleControllerTests.cs` and `GenresControllerTests.cs`. Plus this slice file, `docs/PLAN.md` and `docs/CURRENT-STATE.md`.
+**Deviations:**
+- The "one transaction" item is met in code (one transaction, early return before any write) but no test forces a mid-merge failure: *fine*; the 404 test checks that nothing changes.
+- Aliases are re-pointed before the merged entry is deleted, so the `ON DELETE CASCADE` doesn't take them: *fine*, noted for the book-link slice, which must move links before the delete too.
+**Follow-ups:**
+- Remaining phase 6 pieces: alias suggestions API; the management screen (list, create, edit, merge, accept a suggestion).
+- When books link to people and genres, `Merge` must move those links in the same transaction.
+- Manual check for 40 not run.
