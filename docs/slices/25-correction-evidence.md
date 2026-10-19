@@ -45,3 +45,31 @@
 - **Why `TidyGroups`:** it already runs for every group a move, merge, split, exclude or send to unresolved touches, in the same transaction. So one statement covers every path.
 - **Size:** 2 tasks, 2 files: `GroupRepository.cs` and `GroupingServiceTests.cs`.
 - **Commit:** `feat: slice 25 correction-evidence`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 117 passed, 0 failed | 114 before plus 3 new |
+| Frontend tests | 126 passed, 0 failed | no frontend change in this slice |
+| New tests | 3 of 3 present, passing | move adds the line to both groups, once only; an exclude adds it, and a user-made group keeps just "Grouped by the user"; rename and reorder leave evidence alone, and the line survives a rescan |
+| Manual: move the stray file in | Passed | API on :5070 with a scratch DB; scenario A (3 tracks), one M4B and a stray MP3. `POST /api/groups/1/files` `[1]` returned evidence `["Same folder \"book a\"", "Filename pattern \"track\"", "Corrected by the user"]` |
+| Manual: rescan | Passed | Completed with 5 unchanged. Group 1 (corrected) was byte-identical, with the line still last. The whole list was identical apart from the uncorrected M4B group's id, which went from 2 to 3: since slice 24, a replaced uncorrected group gets a new id instead of reusing the old one, as that slice intended |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The server and the scratch data were removed afterwards.
+
+## Outcome (2026-10-18, commit f0f19df)
+
+**Status:** Implemented
+**Summary:** `TidyGroups` now appends "Corrected by the user" to the evidence of every group a move, merge, split, exclude or send to unresolved changes, in the same transaction and only once. User-made groups keep "Grouped by the user" alone, and renames and reorders don't add the line. All Done when items are met, which resolves the slice 17 evidence follow-up.
+**Changed:** 2 code files plus 2 docs: `Data/GroupRepository.cs`, `Services/GroupingServiceTests.cs`.
+**Deviations:**
+- The two evidence texts are public constants on `GroupRepository`, and `CreateGroup` now uses `UserMadeEvidence`. *Improvement*: each text is defined once.
+**Follow-ups:**
+- Noticed while testing: since slice 24, every rescan gives uncorrected groups new ids, because they are replaced and freed ids are never reused. A Files list open in another tab gets a 404 and reloads, which is the intended behaviour. *Fine*; no change.
+- Next slice: the Incoming page polish.
+

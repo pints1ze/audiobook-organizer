@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 24 review, 2026-10-18, commit 61afe71_
+_Updated: slice 25 review, 2026-10-18, commit f0f19df_
 
 ## Branch
 `phase/4-group-corrections` (off `main` after the phase 3 merge, PR #3)
@@ -16,11 +16,11 @@ _Updated: slice 24 review, 2026-10-18, commit 61afe71_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Group ids are never reused (slice 24). Still to do: the correction evidence line, and Incoming polish.
+Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Group ids are never reused (slice 24). Books whose files the user changed get the evidence line "Corrected by the user" (slice 25). Still to do: and Incoming polish.
 
 ## Last slice / next slice
-- Last: 24 stable-group-ids, Implemented
-- Next: 25, a "Corrected by the user" evidence line on groups changed by moves (not written yet)
+- Last: 25 correction-evidence, Implemented
+- Next: 26, Incoming polish: the Unresolved hint, focus after a failed title save, unique Edit names, and Edit keeping the Files list open (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -57,4 +57,4 @@ Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and pic
 - 2026-10-18 (slice 18): A bug found by a manual check inside a slice gets its own `fix: slice NN` commit, with the developer's OK.
 
 ## Verification
-Full suite: backend 114 passed / 0 failed, frontend 126 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 117 passed / 0 failed, frontend 126 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
