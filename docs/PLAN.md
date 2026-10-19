@@ -27,10 +27,10 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** PRD grouping scenarios A–E pass as automated tests; low-evidence files show as unresolved; Incoming screen lists groups with title, author, file count, duration, confidence.
 **Slices:** 10 (implemented), 11 (implemented), 12 (implemented).
 
-### 4. Group corrections (done)
+### 4. Group corrections (in progress)
 **Goal:** the user can fix any grouping the rules got wrong.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
-**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (implemented). Merge, split, move file, exclude (with undo), reorder and set title/author all work from the UI, and all survive rescans. Not done in this phase, for the developer to place: the carried-in dashboard group and status counts and moving the dashboard query into a service (from slices 08 and 12); the grouping-rule tweaks from the real-collection check (waiting for the developer's list); rewording the Unresolved hint (slice 21).
+**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (implemented), 22 (written). Merge, split, move file, exclude (with undo), reorder and set title/author all work from the UI, and all survive rescans. Reopened 2026-10-18 at the developer's request for the leftovers: dashboard group and status counts with the dashboard query moved into a service (carried from slices 08 and 12), stable group ids, a "Corrected by the user" evidence line, and Incoming polish (Unresolved hint wording, focus after a failed title save, unique Edit names, Edit keeping the Files list open). Grouping-rule tweaks were dropped by the developer.
 
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.

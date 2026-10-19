@@ -16,19 +16,17 @@ _Updated: slice 21 review, 2026-10-18, commit 7823778_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: done, PR open for review. Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. Not done and still to be placed in a phase: the carried dashboard counts and dashboard service, the real-collection rule tweaks (waiting for the developer's list) and rewording the Unresolved hint.
+Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. Still to do: dashboard counts and service, stable group ids, the correction evidence line, and Incoming polish.
 
 ## Last slice / next slice
 - Last: 21 exclude-and-unresolve-ui, Implemented
-- Next: none until the developer verifies phase 4 and merges its PR. Then phase 5, Metadata
+- Next: 22, dashboard group and status counts through a dashboard service (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
-- Which grouping rules went wrong in the developer's real-collection check at the end of phase 3 (phase 4 rule tweaks)
-- Do group ids need to stay stable across rescans? Without `AUTOINCREMENT`, a replaced group's id can be reused (slice 13)
 
 ## Decisions
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
@@ -55,6 +53,7 @@ Phase 4, Group corrections: done, PR open for review. Merge, split, move file, e
 - 2026-10-18 (slice 17): Merge and split aren't separate endpoints. Merge moves all of B's files into A (B is deleted when empty); split creates a user-made group (`High`, "Grouped by the user") from the chosen files.
 - 2026-10-18 (slice 18, developer): An excluded file stays excluded until the user undoes it, survives rescans, and can be sent back to unresolved. Unresolved files stay unresolved across rescans.
 - 2026-10-18 (slice 20): The exclude and keep-unresolved states live in `AudioFile.UserState`. The grouping engine skips any file with a state; placing a file in a group clears it, and undoing an exclude sends the file to unresolved.
+- 2026-10-18 (developer): Phase 4 is reopened for its leftovers. The grouping-rule tweaks are dropped (no real-collection list). Group ids must stay stable: never reused after a group is deleted.
 - 2026-10-18 (slice 18): A bug found by a manual check inside a slice gets its own `fix: slice NN` commit, with the developer's OK.
 
 ## Verification

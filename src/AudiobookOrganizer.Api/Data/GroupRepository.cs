@@ -268,6 +268,40 @@ public class GroupRepository(SqliteConnectionFactory connections)
             .ToDictionary(r => r.Id, r => (r.UserState, r.Grouped != 0));
     }
 
+    /// <summary>How many groups there are, by confidence, and how many the user corrected. Zeros when there are none.</summary>
+    public GroupCounts CountGroups()
+    {
+        using var connection = connections.Open();
+        return connection.QuerySingle<GroupCounts>(
+            """
+            SELECT COUNT(*) AS Total,
+                COALESCE(SUM(CASE WHEN Confidence = 'Low' THEN 1 ELSE 0 END), 0) AS Low,
+                COALESCE(SUM(CASE WHEN Confidence = 'Medium' THEN 1 ELSE 0 END), 0) AS Medium,
+                COALESCE(SUM(CASE WHEN Confidence = 'High' THEN 1 ELSE 0 END), 0) AS High,
+                COALESCE(SUM(CASE WHEN UserCorrected = 1 THEN 1 ELSE 0 END), 0) AS Corrected
+            FROM FileGroup
+            """);
+    }
+
+    /// <summary>
+    /// How many files <see cref="GetUngroupedFiles"/> and <see cref="GetExcludedFiles"/> return for
+    /// <paramref name="scanId"/>, using the same filters.
+    /// </summary>
+    public (int Unresolved, int Excluded) CountUnresolvedAndExcluded(long scanId)
+    {
+        using var connection = connections.Open();
+        return connection.QuerySingle<(int, int)>(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN NOT EXISTS (SELECT 1 FROM FileGroupFile g WHERE g.AudioFileId = a.Id)
+                                   AND (a.UserState IS NULL OR a.UserState <> 'Excluded') THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN a.UserState = 'Excluded' THEN 1 ELSE 0 END), 0)
+            FROM AudioFile a
+            WHERE a.LastSeenScanId = @scanId AND a.ScanError IS NULL
+            """,
+            new { scanId });
+    }
+
     /// <summary>Files seen in <paramref name="scanId"/>, read without error, that the user excluded.</summary>
     public IReadOnlyList<AudioFile> GetExcludedFiles(long scanId)
     {
@@ -306,4 +340,14 @@ public class GroupFileRow
     public int? Disc { get; init; }
     public int? Track { get; init; }
     public long? DurationMs { get; init; }
+}
+
+/// <summary>The result of <see cref="GroupRepository.CountGroups"/>.</summary>
+public class GroupCounts
+{
+    public int Total { get; init; }
+    public int Low { get; init; }
+    public int Medium { get; init; }
+    public int High { get; init; }
+    public int Corrected { get; init; }
 }

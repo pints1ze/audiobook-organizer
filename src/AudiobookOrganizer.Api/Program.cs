@@ -31,6 +31,7 @@ builder.Services.AddSingleton<GroupRepository>();
 builder.Services.AddSingleton<GroupingService>();
 builder.Services.AddSingleton<ScanService>();
 builder.Services.AddSingleton<ScanRunner>();
+builder.Services.AddSingleton<DashboardService>();
 
 builder.Services.AddControllers();
 
