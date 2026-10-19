@@ -3,6 +3,7 @@ using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Api;
 using AudiobookOrganizer.Api.Models.Local;
 using AudiobookOrganizer.Api.Services;
+using AudiobookOrganizer.Api.Services.Grouping;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -19,6 +20,7 @@ public class ScanServiceTests : IDisposable
     private readonly string _library;
     private readonly SettingsService _settings;
     private readonly ScanRepository _repository;
+    private readonly GroupingService _grouping;
     private readonly ScanService _service;
 
     public ScanServiceTests()
@@ -36,7 +38,8 @@ public class ScanServiceTests : IDisposable
         new DatabaseInitializer(connections).Initialize();
         _settings = new SettingsService(new SettingsRepository(connections));
         _repository = new ScanRepository(connections);
-        _service = new ScanService(_settings, _repository, AudioFileReaderTests.NewReader(),
+        _grouping = new GroupingService(_settings, _repository, new GroupRepository(connections));
+        _service = new ScanService(_settings, _repository, AudioFileReaderTests.NewReader(), _grouping,
             NullLogger<ScanService>.Instance);
     }
 
@@ -151,7 +154,7 @@ public class ScanServiceTests : IDisposable
         ConfigureIncoming();
         for (var i = 0; i < 28; i++) File.WriteAllBytes(Path.Combine(_incoming, $"file{i:00}.mp3"), [0]);
         var reader = new GatedAudioFileReader(blockAfter: 25);
-        var service = new ScanService(_settings, _repository, reader, NullLogger<ScanService>.Instance);
+        var service = new ScanService(_settings, _repository, reader, _grouping, NullLogger<ScanService>.Instance);
         var run = service.Start();
 
         var scan = Task.Run(() => service.Execute(run, CancellationToken.None));

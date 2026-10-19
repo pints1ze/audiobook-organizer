@@ -1,6 +1,7 @@
 using AudiobookOrganizer.Api.Configuration;
 using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Services;
+using AudiobookOrganizer.Api.Services.Grouping;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -26,6 +27,8 @@ builder.Services.AddSingleton<FfmpegRunner>();
 builder.Services.AddSingleton<ChapterReader>();
 builder.Services.AddSingleton<AudioFileReader>();
 builder.Services.AddSingleton<ScanRepository>();
+builder.Services.AddSingleton<GroupRepository>();
+builder.Services.AddSingleton<GroupingService>();
 builder.Services.AddSingleton<ScanService>();
 builder.Services.AddSingleton<ScanRunner>();
 

@@ -1,17 +1,20 @@
 using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Local;
+using AudiobookOrganizer.Api.Services.Grouping;
 
 namespace AudiobookOrganizer.Api.Services;
 
 /// <summary>
 /// Inventories every MP3 and M4B under the configured incoming directory into SQLite. Read-only on disk:
 /// files are only enumerated, stat'ed and opened for reading. Unchanged files (same size and last-write time)
-/// are not re-read; an unreadable file gets a row with ScanError and never ends the scan.
+/// are not re-read; an unreadable file gets a row with ScanError and never ends the scan. A scan that reads incoming
+/// successfully then regroups its files; if grouping fails, the run fails and the previous groups stay.
 /// </summary>
 public class ScanService(
     SettingsService settings,
     ScanRepository repository,
     AudioFileReader reader,
+    GroupingService grouping,
     ILogger<ScanService> logger)
 {
     private static readonly string[] AudioExtensions = [".mp3", ".m4b"];
@@ -61,6 +64,17 @@ public class ScanService(
 
             repository.MarkSeen(unchanged, run.Id);
             run.FilesMissing = known.Count - seenKnown.Count;
+
+            try
+            {
+                grouping.Regroup(run.Id);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Grouping for scan {ScanId} failed", run.Id);
+                return Finish(run, ScanRun.Failed, $"Grouping failed: {ex.Message}");
+            }
+
             return Finish(run, ScanRun.Completed, null);
         }
         catch (OperationCanceledException)

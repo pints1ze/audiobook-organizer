@@ -53,5 +53,27 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 FirstSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id),
                 LastSeenScanId INTEGER NOT NULL REFERENCES ScanRun (Id))
             """);
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS FileGroup (
+                Id INTEGER PRIMARY KEY,
+                Title TEXT,
+                Author TEXT,
+                Confidence TEXT NOT NULL,
+                EvidenceJson TEXT NOT NULL,
+                FileCount INTEGER NOT NULL,
+                TotalDurationMs INTEGER NOT NULL,
+                ScanRunId INTEGER NOT NULL REFERENCES ScanRun (Id))
+            """);
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS FileGroupFile (
+                GroupId INTEGER NOT NULL REFERENCES FileGroup (Id) ON DELETE CASCADE,
+                AudioFileId INTEGER NOT NULL UNIQUE REFERENCES AudioFile (Id),
+                Position INTEGER NOT NULL,
+                Disc INTEGER,
+                Track INTEGER)
+            """);
+        connection.Execute("CREATE INDEX IF NOT EXISTS IX_FileGroupFile_GroupId ON FileGroupFile (GroupId)");
     }
 }
