@@ -216,6 +216,103 @@ public class GroupingServiceTests : IDisposable
         Assert.Equal(ids, _grouping.GetDetail(id)!.Files.Select(f => f.FileId));
     }
 
+    /// <summary>The stored file id of <paramref name="relativePath"/>.</summary>
+    private long FileIdOf(string relativePath)
+    {
+        using var connection = _connections.Open();
+        return connection.ExecuteScalar<long>(
+            "SELECT Id FROM AudioFile WHERE SourcePath = @path",
+            new { path = Path.Combine(_incoming, relativePath.Replace('/', Path.DirectorySeparatorChar)) });
+    }
+
+    [Fact]
+    public void Moving_a_file_appends_it_renumbers_the_source_recomputes_totals_and_survives_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var targetId = GroupIdOf("single.m4b");
+        var single = _grouping.GetDetail(targetId)!;
+        var track1 = _grouping.GetDetail(bookId)!.Files[0];
+
+        var moved = _grouping.MoveFiles(targetId, new MoveFilesDto([track1.FileId]));
+
+        Assert.Empty(moved.Errors);
+        var target = moved.Group!;
+        Assert.True(target.UserCorrected);
+        Assert.Equal(["single.m4b", "book a/track1.mp3"], target.Files.Select(f => f.RelativePath));
+        Assert.Equal([1, 2], target.Files.Select(f => f.Position));
+        Assert.Equal(2, target.FileCount);
+        Assert.Equal(single.TotalDurationMs + track1.DurationMs, target.TotalDurationMs);
+
+        var book = _grouping.GetDetail(bookId)!;
+        Assert.True(book.UserCorrected);
+        Assert.Equal(["book a/track2.mp3"], book.Files.Select(f => f.RelativePath));
+        Assert.Equal([1], book.Files.Select(f => f.Position));
+        Assert.Equal(1, book.FileCount);
+        Assert.Equal(book.Files[0].DurationMs, book.TotalDurationMs);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        Assert.Equal(target, _grouping.GetDetail(targetId), new DetailComparer());
+        Assert.Equal(book, _grouping.GetDetail(bookId), new DetailComparer());
+        Assert.Equal(2, _grouping.List().Groups.Count);
+        Assert.Empty(_grouping.List().Unresolved);
+    }
+
+    [Fact]
+    public void Merging_deletes_the_emptied_group()
+    {
+        NewScanService(_grouping).Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var targetId = GroupIdOf("single.m4b");
+        var ids = _grouping.GetDetail(bookId)!.Files.Select(f => f.FileId).ToList();
+
+        var merged = _grouping.MoveFiles(targetId, new MoveFilesDto(ids));
+
+        Assert.Empty(merged.Errors);
+        Assert.Equal(3, merged.Group!.FileCount);
+        Assert.Equal([1, 2, 3], merged.Group.Files.Select(f => f.Position));
+        Assert.Null(_grouping.GetDetail(bookId));
+        Assert.Equal(targetId, Assert.Single(_grouping.List().Groups).Id);
+    }
+
+    [Fact]
+    public void Creating_a_group_takes_files_in_order_and_deletes_emptied_groups()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var bookId = GroupIdOf("book a/track1.mp3");
+        var singleId = GroupIdOf("single.m4b");
+        var ids = new[] { FileIdOf("single.m4b"), FileIdOf("book a/track2.mp3") };
+
+        var created = _grouping.CreateGroup(new CreateGroupDto(ids, "  Split Book ", " ")).Group!;
+
+        Assert.Equal(("Split Book", null, "High", true), (created.Title, created.Author, created.Confidence, created.UserCorrected));
+        Assert.Equal(["Grouped by the user"], created.Evidence);
+        Assert.Equal(["single.m4b", "book a/track2.mp3"], created.Files.Select(f => f.RelativePath));
+        Assert.Equal([1, 2], created.Files.Select(f => f.Position));
+        Assert.Equal(created.Files.Sum(f => f.DurationMs), created.TotalDurationMs);
+        Assert.Null(_grouping.GetDetail(singleId));
+        var book = _grouping.GetDetail(bookId)!;
+        Assert.Equal(["book a/track1.mp3"], book.Files.Select(f => f.RelativePath));
+        Assert.True(book.UserCorrected);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+        Assert.Equal(created, _grouping.GetDetail(created.Id), new DetailComparer());
+    }
+
+    /// <summary>Compares details by value, including their file lists.</summary>
+    private sealed class DetailComparer : IEqualityComparer<GroupDetailDto?>
+    {
+        public bool Equals(GroupDetailDto? x, GroupDetailDto? y) =>
+            x is not null && y is not null
+            && x with { Evidence = [], Files = [] } == y with { Evidence = [], Files = [] }
+            && x.Evidence.SequenceEqual(y.Evidence) && x.Files.SequenceEqual(y.Files);
+
+        public int GetHashCode(GroupDetailDto? obj) => obj?.Id.GetHashCode() ?? 0;
+    }
+
     private sealed class ThrowingGroupingService(SettingsService settings, ScanRepository scans, GroupRepository groups)
         : GroupingService(settings, scans, groups)
     {

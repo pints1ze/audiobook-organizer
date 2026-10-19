@@ -16,7 +16,7 @@ _Updated: slice 16 review, 2026-10-18, commit 8e6d813_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: in progress. Set title/author is done (API and UI). Set title/author and reorder are done (API and UI). Still to do: merge, split, move file and exclude, plus the carried dashboard counts and real-collection rule tweaks.
+Phase 4, Group corrections: in progress. Set title/author and reorder are done (API and UI). Still to do: merge, split, move file and exclude, plus the carried dashboard counts and real-collection rule tweaks.
 
 ## Last slice / next slice
 - Last: 16 reorder-files-ui, Implemented
@@ -28,6 +28,7 @@ Phase 4, Group corrections: in progress. Set title/author is done (API and UI). 
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
 - Which grouping rules went wrong in the developer's real-collection check at the end of phase 3 (phase 4 rule tweaks)
+- What does "exclude" mean for a file: hidden from processing for good or until undone, kept across rescans, and can a file be sent back to unresolved? (raised in slice 17, needed before the exclude slice)
 - Do group ids need to stay stable across rescans? Without `AUTOINCREMENT`, a replaced group's id can be reused (slice 13)
 
 ## Decisions

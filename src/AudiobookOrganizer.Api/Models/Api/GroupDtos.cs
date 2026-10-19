@@ -36,3 +36,9 @@ public record GroupDetailDto(
 
 /// <summary>The body of PUT /api/groups/{id}/order: every file id in the group, in the new order.</summary>
 public record ReorderGroupDto(IReadOnlyList<long>? FileIds);
+
+/// <summary>The body of POST /api/groups/{id}/files: files to append to the group, in order, taken from their old groups.</summary>
+public record MoveFilesDto(IReadOnlyList<long>? FileIds);
+
+/// <summary>The body of POST /api/groups: a new user-made group from these files, in order. Text is trimmed; blank becomes null.</summary>
+public record CreateGroupDto(IReadOnlyList<long>? FileIds, string? Title, string? Author);

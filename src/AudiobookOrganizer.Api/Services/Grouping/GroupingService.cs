@@ -11,6 +11,9 @@ public record GroupRenameResult(GroupSummaryDto? Group, IReadOnlyDictionary<stri
 /// <summary>The reordered group, or errors keyed by JSON field name. No group and no errors means the id is unknown.</summary>
 public record GroupReorderResult(GroupDetailDto? Group, IReadOnlyDictionary<string, string[]> Errors);
 
+/// <summary>The moved-into or created group, or errors keyed by JSON field name. No group and no errors means the id is unknown.</summary>
+public record GroupFilesResult(GroupDetailDto? Group, IReadOnlyDictionary<string, string[]> Errors);
+
 /// <summary>Runs the grouping engine over a scan's files and stores the result; lists the stored groups for the API.</summary>
 public class GroupingService(SettingsService settings, ScanRepository scans, GroupRepository groups)
 {
@@ -37,12 +40,7 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
     /// <summary>Sets a group's title and author (trimmed, blank as null) and marks it user-corrected.</summary>
     public GroupRenameResult Rename(long id, UpdateGroupDto request)
     {
-        var title = Clean(request.Title);
-        var author = Clean(request.Author);
-
-        var errors = new Dictionary<string, string[]>();
-        if (title?.Length > MaxTextLength) errors["title"] = [$"The title can be at most {MaxTextLength} characters."];
-        if (author?.Length > MaxTextLength) errors["author"] = [$"The author can be at most {MaxTextLength} characters."];
+        var (title, author, errors) = CleanTitleAuthor(request.Title, request.Author);
         if (errors.Count > 0 || !groups.UpdateTitleAuthor(id, title, author)) return new GroupRenameResult(null, errors);
 
         return new GroupRenameResult(ToSummary(groups.GetGroup(id)!), errors);
@@ -85,6 +83,52 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
         return new GroupReorderResult(GetDetail(id), noErrors);
     }
 
+    /// <summary>
+    /// Moves <paramref name="request"/>'s files (from other groups or unresolved) to the end of group
+    /// <paramref name="id"/>. Emptied groups are deleted; the target and surviving sources are marked user-corrected.
+    /// </summary>
+    public GroupFilesResult MoveFiles(long id, MoveFilesDto request)
+    {
+        if (groups.GetGroup(id) is null) return new GroupFilesResult(null, new Dictionary<string, string[]>());
+
+        var fileIds = request.FileIds ?? [];
+        var error = FileIdsError(fileIds);
+        if (error is null)
+        {
+            var inTarget = groups.GetGroupFiles(id).Select(f => f.FileId).ToHashSet();
+            if (fileIds.Any(inTarget.Contains)) error = "A file is already in this group.";
+        }
+        if (error is not null) return new GroupFilesResult(null, new Dictionary<string, string[]> { ["fileIds"] = [error] });
+
+        groups.MoveFiles(id, fileIds);
+        return new GroupFilesResult(GetDetail(id), new Dictionary<string, string[]>());
+    }
+
+    /// <summary>Creates a user-made group from <paramref name="request"/>'s files, in order, taking them out of their groups.</summary>
+    public GroupFilesResult CreateGroup(CreateGroupDto request)
+    {
+        var fileIds = request.FileIds ?? [];
+        var (title, author, errors) = CleanTitleAuthor(request.Title, request.Author);
+        if (FileIdsError(fileIds) is { } error) errors["fileIds"] = [error];
+        if (errors.Count > 0) return new GroupFilesResult(null, errors);
+
+        var id = groups.CreateGroup(title, author, fileIds, scans.GetLatestCompletedRun()!.Id);
+        return new GroupFilesResult(GetDetail(id), errors);
+    }
+
+    /// <summary>
+    /// Why <paramref name="fileIds"/> can't be moved: empty, duplicated, or not all error-free files from the latest
+    /// completed scan. Null when they can.
+    /// </summary>
+    private string? FileIdsError(IReadOnlyList<long> fileIds)
+    {
+        if (fileIds.Count == 0) return "Choose at least one file.";
+        if (fileIds.Distinct().Count() != fileIds.Count) return "Each file can appear only once.";
+        var latest = scans.GetLatestCompletedRun();
+        var movable = latest is null ? new HashSet<long>() : groups.GetMovableFileIds(latest.Id, fileIds);
+        return movable.Count != fileIds.Count ? "Every file must be one the latest scan read without error." : null;
+    }
+
     /// <summary>The stored groups, and the files from the latest completed scan that are in none of them.</summary>
     public GroupListDto List()
     {
@@ -105,6 +149,16 @@ public class GroupingService(SettingsService settings, ScanRepository scans, Gro
         JsonSerializer.Deserialize<string[]>(g.EvidenceJson) ?? [], g.FileCount, g.TotalDurationMs, g.UserCorrected);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>Trims the title and author (blank as null) and checks their length; errors are keyed "title" and "author".</summary>
+    private static (string? Title, string? Author, Dictionary<string, string[]> Errors) CleanTitleAuthor(string? title, string? author)
+    {
+        var (t, a) = (Clean(title), Clean(author));
+        var errors = new Dictionary<string, string[]>();
+        if (t?.Length > MaxTextLength) errors["title"] = [$"The title can be at most {MaxTextLength} characters."];
+        if (a?.Length > MaxTextLength) errors["author"] = [$"The author can be at most {MaxTextLength} characters."];
+        return (t, a, errors);
+    }
 
     /// <summary>The saved incoming directory, normalised as ScanService does; null when it isn't set.</summary>
     private string? IncomingRoot()

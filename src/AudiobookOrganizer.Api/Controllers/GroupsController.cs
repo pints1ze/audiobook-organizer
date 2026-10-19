@@ -30,6 +30,22 @@ public class GroupsController(GroupingService grouping) : ControllerBase
         return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
     }
 
+    [HttpPost]
+    public ActionResult<GroupDetailDto> Post(CreateGroupDto request)
+    {
+        var result = grouping.CreateGroup(request);
+        if (result.Group is not null) return CreatedAtAction(nameof(GetById), new { id = result.Group.Id }, result.Group);
+        return Invalid(result.Errors);
+    }
+
+    [HttpPost("{id:long}/files")]
+    public ActionResult<GroupDetailDto> PostFiles(long id, MoveFilesDto request)
+    {
+        var result = grouping.MoveFiles(id, request);
+        if (result.Group is not null) return result.Group;
+        return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
+    }
+
     private ActionResult Invalid(IReadOnlyDictionary<string, string[]> errors)
     {
         foreach (var (field, messages) in errors)
