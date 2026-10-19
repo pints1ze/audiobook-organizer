@@ -21,6 +21,8 @@ builder.Services.AddSingleton(services =>
 builder.Services.AddSingleton<DatabaseInitializer>();
 builder.Services.AddSingleton<SettingsRepository>();
 builder.Services.AddSingleton<SettingsService>();
+builder.Services.AddSingleton<CanonicalNameRepository>();
+builder.Services.AddSingleton<CanonicalNameService>();
 
 builder.Services.Configure<ToolSettings>(builder.Configuration.GetSection(ToolSettings.SectionName));
 builder.Services.AddSingleton<FfmpegRunner>();

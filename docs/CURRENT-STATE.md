@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 37 review, 2026-10-19, commit 55b6ac9_
+_Updated: slice 43 review, 2026-10-19, commit df7ae25_
 
 ## Branch
-`phase/5-metadata` (off `main` after the phase 4 merge, PR #4)
+`phase/6-normalization` (off `main` after the phase 5 merge, PR #5)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -14,20 +14,23 @@ _Updated: slice 37 review, 2026-10-19, commit 55b6ac9_
 - **Grouping engine:** the pure `GroupingEngine.Group` proposes book groups from scanned file facts, with confidence, evidence and an estimated title and author; scenarios A–E pass. Every completed scan regroups the files it saw into `FileGroup` and `FileGroupFile` (replacing all groups), and `GET /api/groups` lists the groups (least confident first) and the unresolved files. The Incoming page (`/incoming`) shows them with confidence and evidence.
 - **Corrections:** `PUT /api/groups/{id}` sets a group's title and author and marks it `UserCorrected`. Rescans keep corrected groups and their files untouched and regroup only the rest. The Incoming page edits title and author in place and marks corrected books "Edited" (slice 14). `GET /api/groups/{id}` lists a group's files in order and `PUT /api/groups/{id}/order` reorders them (slice 15). Each Incoming row has a "Files" disclosure with keyboard-accessible Move up and Move down (slice 16). `POST /api/groups/{id}/files` moves files into a group and `POST /api/groups` creates a group from files; together they give move, merge and split (slice 17). Each Files list has checkboxes and a "Move selected to" bar that moves files to another book or a new book (slice 18). The Unresolved section has the same selection and move bar (slice 19, shared `MoveBar`). `POST /api/groups/excluded` and `POST /api/groups/unresolved` set a file's `UserState`, and `GET /api/groups` lists `excluded` (slice 20). The move bar also offers "Unresolved files" and "Excluded files", and an Excluded section sends files back (slice 21).
 - **Metadata search:** `GET /api/metadata/search?keywords=` searches Audible's catalog through `AudibleClient`, a typed `HttpClient` behind `IMetadataProvider`. It returns normalized candidates (ASIN, title, authors, narrators, series, publisher, release date, language, runtime, format, cover URL) (slice 27). `MetadataSearchService` falls back to `OpenLibraryClient` when Audible fails or finds nothing; ISBN keywords search Open Library by ISBN. The response is `{ candidates, providerErrors }`: 400 for blank keywords, 502 only when every provider failed (slice 28). Tests use real responses in `docs/fixtures/audible/` and `docs/fixtures/openlibrary/` through `FakeHttpMessageHandler`. Each Incoming book links ("Find metadata") to `/books/:groupId`, which shows the book and a catalog search prefilled with its title and author, listing candidates and provider errors (slice 29). `PUT /api/groups/{id}/match` stores a picked candidate as the book's `Audiobook` + `MetadataMatch` (one current match, raw candidate JSON) and marks the group `UserCorrected`; `GET` returns it or 204 (slice 30). The book page shows the chosen match and a "Use this match" button on each result (slice 31). Each book stores metadata values in `AudiobookField` with an origin (`file`, `provider`, `user`): `GET`/`PUT /api/groups/{id}/metadata` read them and save user edits, and picking a match copies the candidate in. User values are never overwritten, a gap in the candidate keeps the old value, and Open Library never replaces Audible (slice 32). The book page's Metadata section shows each value with its origin and a "Match: …" line where the chosen match differs, and edits save only the changed fields (slice 33). `GET /api/groups/{id}/cover` lists the files with embedded covers and the chosen cover, `GET .../files/{fileId}/cover` serves an embedded JPEG or PNG, `PUT .../cover` with `{ source: "embedded", fileId }` stores it in `AudiobookCover`, and `GET .../cover/image` serves the chosen one (slice 34). `PUT .../cover` with `{ source: "provider" }` downloads the stored match's cover through `CoverDownloadClient` (https on `m.media-amazon.com` or `covers.openlibrary.org` only, type from the bytes, 502 on a failed download) (slice 35). `PUT .../cover/upload` stores an uploaded JPEG or PNG (multipart `file`, at most 10 MB, typed by its bytes), and `services/api.ts` has typed calls for all cover endpoints (slice 36). The book page's Cover section shows the chosen cover and chooses an embedded cover, the match's cover or an upload (slice 37).
+- **Normalization:** `Person`/`PersonAlias` and `Genre`/`GenreAlias` store canonical people (authors and narrators), genres and their variants. `GET`/`POST /api/people`, `PUT /api/people/{id}` (replaces name and aliases) and `GET /api/people/resolve?name=` list, create, edit and resolve people by `NameKey` (whitespace, case and `Last, First` folded); a key owned by another person is a 400 (slice 38). `/api/genres` does the same for genres with `GenreKey` (`-`, `_`, `/` folded to spaces). Both go through `CanonicalNameRepository` and `CanonicalNameService` keyed by `CanonicalKind` (slice 39). `POST /api/{people|genres}/{id}/merge` with `{ fromId }` folds one entry into another: its name and aliases become aliases of the kept one (slice 40). `GET /api/{people|genres}/suggestions` lists likely duplicates (same letters; matching initials for people) with a reason, never merging them (slice 41). The People (`/people`) and Genres (`/genres`) pages list, add and edit entries with their aliases through one `NamesPage` (slice 42), and show possible duplicates and a per-row "Merge into…", each with an inline confirmation (slice 43).
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 5, Metadata: done (slices 27–37), waiting for the developer to verify it and merge its PR. Next is phase 6, Normalization. Excluded files never get an `Audiobook`.
+Phase 6, Normalization: done (slices 38–43), waiting for the developer to verify it and merge its PR. Next is phase 7, Naming & preview. Excluded files never get an `Audiobook`.
 
 ## Last slice / next slice
-- Last: 37 cover-picker, Implemented
-- Next: phase 6's first slice, after the phase 5 PR is merged (not written)
+- Last: 43 merge-on-names-page, Implemented
+- Next: phase 7's first slice, after the phase 6 PR is merged (not written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
+- Where does linking a book's authors, narrators and genres to canonical entries (the `normalized` origin) go? The PRD wants it before tag writing and naming; proposed as the start of phase 7 (raised in slice 43, needs a PLAN.md change)
+- Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
@@ -66,6 +69,12 @@ Phase 5, Metadata: done (slices 27–37), waiting for the developer to verify it
 - 2026-10-19 (slice 34): The chosen cover is stored as a BLOB in `AudiobookCover` (one per book, cascade-deleted), not as a file under `/data`. Only JPEG and PNG are accepted or served, at most 10 MB. Choosing a cover marks the group `UserCorrected`.
 - 2026-10-19 (slice 35): Provider covers are downloaded only from the stored match's URL, never a URL in the request, and only over `https` from the two catalog image hosts. Only the first URL is checked, because Open Library redirects to archive.org (marked as a shortcut).
 - 2026-10-19 (slice 35, developer): A flaky test is fixed, not accepted. `UnresolvedFiles` resets its selection during render, not in an effect, so an early tick isn't lost.
+- 2026-10-19 (slice 38): One `Person` table for authors and narrators (role goes on the book link later). Exact-key variants resolve automatically; joining two entries or fuzzy matches are only ever suggested. A key belongs to one person, as name or alias.
+- 2026-10-19 (slice 39): People and genres share one repository and service (`CanonicalKind`), with separate tables and key namespaces. Genre keys fold `-`, `_` and `/`; abbreviations like `Sci-Fi` need an alias.
+- 2026-10-19 (slice 40): A merge keeps the target entry; the merged entry's name and aliases become its aliases and the entry is deleted. No undo; merges only happen on an explicit user request.
+- 2026-10-19 (slice 41): Suggestions are computed on each request from the catalog (no table) by two deterministic rules: same letters and digits, and matching initials for people. `keep` is the entry with more aliases.
+- 2026-10-19 (slice 42): One `NamesPage` serves both kinds (`kind` prop, keyed route); after each save the list is reloaded from the API rather than patched locally.
+- 2026-10-19 (slice 43): Merges in the UI always need an inline confirmation (no modal); there is no undo.
 
 ## Verification
-Full suite: backend 184 passed / 0 failed, frontend 195 passed / 0 failed. Manual checks for slices 33–37 not run yet. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 243 passed / 0 failed, frontend 215 passed / 0 failed. Manual checks for slices 33–43 not run yet. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
