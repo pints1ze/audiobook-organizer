@@ -27,15 +27,15 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** PRD grouping scenarios A–E pass as automated tests; low-evidence files show as unresolved; Incoming screen lists groups with title, author, file count, duration, confidence.
 **Slices:** 10 (implemented), 11 (implemented), 12 (implemented).
 
-### 4. Group corrections (in progress)
+### 4. Group corrections (done)
 **Goal:** the user can fix any grouping the rules got wrong.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
-**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (implemented), 22 (implemented), 23 (implemented), 24 (implemented), 25 (implemented), 26 (written). Merge, split, move file, exclude (with undo), reorder and set title/author all work from the UI, and all survive rescans. Reopened 2026-10-18 at the developer's request for the leftovers: dashboard group and status counts with the dashboard query moved into a service (carried from slices 08 and 12), stable group ids, a "Corrected by the user" evidence line, and Incoming polish (Unresolved hint wording, focus after a failed title save, unique Edit names, Edit keeping the Files list open). Grouping-rule tweaks were dropped by the developer.
+**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented), 21 (implemented), 22 (implemented), 23 (implemented), 24 (implemented), 25 (implemented), 26 (implemented). Merge, split, move file, exclude (with undo), reorder and set title/author all work from the UI, and all survive rescans. Reopened 2026-10-18 at the developer's request and finished: dashboard book and file-state counts through `DashboardService` (22–23), stable group ids (24), the "Corrected by the user" evidence line (25), and Incoming polish (26). Grouping-rule tweaks were dropped by the developer.
 
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.
 **Done when:** Audible catalog and Open Library searches return candidates the user can pick; the editor shows current vs proposed values with their origin and keeps user edits across re-searches; cover can come from the embedded image, a download, or an upload; a book can be completed manually with no match.
-**Slices:** none yet
+**Slices:** none yet Carried in: skip files the user excluded (`AudioFile.UserState`, slice 20).
 
 ### 6. Normalization (not started)
 **Goal:** authors, narrators and genres resolve to canonical names.
@@ -50,9 +50,9 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04).
+**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04). Carried in: never process excluded files (slice 20).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.
 **Done when:** end-to-end tests run against fixture audiobooks through scan → process, including the backend suite inside the Docker image (its ffmpeg 6.1 vs dev's 9.0); an interrupted job resumes or fails cleanly after restart; repeat scans don't duplicate processed books; Docker image documented and running on the home server.
-**Slices:** none yet
+**Slices:** none yet Carried in: focus the Incoming load error when a failed save also fails the reload (slice 26).

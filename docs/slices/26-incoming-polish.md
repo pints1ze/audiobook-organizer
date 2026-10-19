@@ -61,3 +61,40 @@
 - **Focus pattern:** the same as the page's move status message (a ref, `tabIndex={-1}`, focus in an effect), so the page uses one pattern.
 - **Size:** 4 tasks, 2 files: `pages/IncomingPage.tsx` and its test.
 - **Commit:** `feat: slice 26 incoming-polish`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 117 passed, 0 failed | no backend change in this slice |
+| Frontend tests | 129 passed, 0 failed | 9 files, 3 new; one existing hint assertion updated to the new text |
+| New tests | 3 of 3 present, passing | the alert is focused after a thrown save and the reload; distinct Edit names for two "Dune" books and one "Emma"; the Files list stays open under the form and after Cancel |
+| Manual: keyboard Edit keeps Files open | Passed | Playwright on :5173 against a scratch DB; scenario A (3 tracks), one M4B and a stray MP3, scanned with "Scan incoming". Tab to "Files (3)" and press Enter, Shift+Tab twice to "Edit track", Enter: focus in the title field, with the 3-file list open under the form. Escape: the form closes, focus is back on "Edit track", and "Files (3)" is still open with 3 files. The hint reads "These files aren't in a book yet." |
+| Manual: duplicate titles | Passed | After renaming both books to "Same Title", the accessibility tree shows "Edit Same Title (group 2)" and "Edit Same Title (group 1)" |
+| Manual: failed save focuses the alert | Passed | Opened Edit on group 2, merged its file into group 1 behind it through the API (group 2 then 404s), and pressed Enter to save. Focus landed on `role="alert"` with `tabindex="-1"`: "That book couldn't be saved. The list has been reloaded." |
+| Manual: with the API stopped | Noted | The slice's step "stop the API, then save" leads somewhere else: the reload also fails, so the whole page shows its "The incoming groups couldn't be loaded." alert. It's announced (`role="alert"`), but focus falls back to the page body. The case the slice covers, a failed save with a working reload, passed above |
+| Manual: 375 px width | Passed | Edit form open with the 4-file list under it: page scroll width 360 in a 375 viewport |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the browser, the scratch data and the `.playwright-mcp/` output were removed afterwards.
+
+## Outcome (2026-10-18, commit 76cfbd9)
+
+**Status:** Implemented
+**Summary:** four fixes, all on the Incoming page:
+- the Unresolved hint reads "These files aren't in a book yet.";
+- the failed-save alert takes focus after the reload;
+- Edit buttons get " (group N)" when titles collide;
+- which Files lists are open now lives in the page, so a book's Files list stays open under its Edit form and after Save or Cancel.
+
+All Done when items are met. This completes the reopened phase 4 scope.
+**Changed:** 2 code files plus 4 docs: `pages/IncomingPage.tsx` and its test.
+**Deviations:**
+- Only the thrown-error case has a focus test. The 404 and empty-400 cases share the same `handleFailed` path, and the 404 case was checked by hand. *Fine.*
+- The Files list under the form reloads its files when the form opens (a new component instance). *Fine.*
+**Follow-ups:**
+- When the API is unreachable, a failed save also fails the reload, so the whole page swaps to its load error and focus falls back to the body. The error is announced, but focus could go to it. *Minor*: phase 9 (hardening).
+
