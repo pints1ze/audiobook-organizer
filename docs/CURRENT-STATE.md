@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 22 review, 2026-10-18, commit 718d680_
+_Updated: slice 23 review, 2026-10-18, commit 38bd4fc_
 
 ## Branch
 `phase/4-group-corrections` (off `main` after the phase 3 merge, PR #3)
@@ -16,11 +16,11 @@ _Updated: slice 22 review, 2026-10-18, commit 718d680_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard API has the counts through `DashboardService` (slice 22). Still to do: the dashboard counts UI, stable group ids, the correction evidence line, and Incoming polish.
+Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and picks up the new commits). Merge, split, move file, exclude (with undo), reorder and set title/author work from the UI and survive rescans. The dashboard shows book and file-state counts through `DashboardService` (slices 22–23). Still to do: stable group ids, the correction evidence line, and Incoming polish.
 
 ## Last slice / next slice
-- Last: 22 dashboard-group-counts-api, Implemented
-- Next: 23, show the book and file-state counts on the Dashboard page (not written yet)
+- Last: 23 dashboard-group-counts-ui, Implemented
+- Next: 24, stable group ids (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -57,4 +57,4 @@ Phase 4, Group corrections: reopened for the leftovers (PR #4 stays open and pic
 - 2026-10-18 (slice 18): A bug found by a manual check inside a slice gets its own `fix: slice NN` commit, with the developer's OK.
 
 ## Verification
-Full suite: backend 110 passed / 0 failed, frontend 125 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 110 passed / 0 failed, frontend 126 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.

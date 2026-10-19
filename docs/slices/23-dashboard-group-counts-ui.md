@@ -47,3 +47,31 @@
 - **Conflict check:** consistent with PLAN.md phase 4 (reopened for "dashboard group and status counts"), the PRD dashboard, the slice 22 contract and AGENTS.md (plain HTML, no new packages). No `[NEEDS CLARIFICATION]` in scope.
 - **Size:** 3 tasks, 5 files: `types/dashboard.ts`, `DashboardPage.tsx` and its test, `AppLayout.test.tsx`, `api.test.ts`.
 - **Commit:** `feat: slice 23 dashboard-group-counts-ui`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 110 passed, 0 failed | no backend change in this slice |
+| Frontend tests | 126 passed, 0 failed | 9 files; 1 new test and 1 extended |
+| New tests | 2 of 2 present, passing | "shows the book and file-state counts with a link to the Incoming page"; the scan test now also checks the reloaded `bookCount` (8) |
+| Manual: counts after a scan | Passed | Playwright on :5173 against a scratch DB; scenario A (3 tracks), one M4B and a stray MP3, scanned with "Scan incoming". Without a reload, Books showed 2 proposed, 0 low, 1 medium, 1 high, 0 corrected, 1 unresolved and 0 excluded. The section is `aria-labelledby` its `h2`, and the link goes to `/incoming` |
+| Manual: counts follow an exclude | Passed | Followed the link, excluded the stray file on Incoming (status "Excluded 1 file"), and returned through the Dashboard nav link: 0 unresolved, 1 excluded |
+| Manual: 375 px width | Passed | Dashboard page scroll width 360 in a 375 viewport |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the browser, the scratch data and the `.playwright-mcp/` output were removed afterwards.
+
+## Outcome (2026-10-18, commit 38bd4fc)
+
+**Status:** Implemented
+**Summary:** the Dashboard has a "Books" section under Inventory. It lists proposed books, low, medium and high confidence, corrected, unresolved and excluded counts, with a link to the Incoming page. The counts refresh when a scan completes, through the existing reload. All Done when items are met, which completes the carried-in dashboard counts.
+**Changed:** 5 code files plus 2 docs. Key ones: `pages/DashboardPage.tsx` and its test, `types/dashboard.ts`.
+**Deviations:**
+- `api.test.ts` already typechecked, because its fixture is untyped; the fields were added anyway so it matches the type. *Fine.*
+**Follow-ups:**
+- Next slice: stable group ids (never reuse a deleted group's id).
+
