@@ -18,7 +18,7 @@ export default function AppLayout() {
             Audiobook Organizer
           </Link>
           <nav aria-label="Main">
-            <ul className="flex gap-2">
+            <ul className="flex flex-wrap gap-2">
               <li>
                 <NavLink to="/" end className={navLinkClass}>
                   Dashboard
@@ -27,6 +27,16 @@ export default function AppLayout() {
               <li>
                 <NavLink to="/incoming" className={navLinkClass}>
                   Incoming
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="/people" className={navLinkClass}>
+                  People
+                </NavLink>
+              </li>
+              <li>
+                <NavLink to="/genres" className={navLinkClass}>
+                  Genres
                 </NavLink>
               </li>
               <li>

@@ -26,6 +26,7 @@ import type {
   SearchMetadataResult,
   UpdateBookMetadataFields,
 } from '../types/metadata'
+import type { CanonicalEntry, EntryFieldErrors, EntryRequest, NameKind, SaveEntryResult } from '../types/names'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -327,4 +328,45 @@ export async function uploadCover(groupId: number, file: File): Promise<SaveCove
   const response = await fetch(`/api/groups/${groupId}/cover/upload`, { method: 'PUT', body })
   if (response.status === 502) throw new Error('Uploading the cover failed with status 502')
   return toSaveCoverResult(response, 'Uploading the cover')
+}
+
+export async function getEntries(kind: NameKind): Promise<CanonicalEntry[]> {
+  const response = await fetch(`/api/${kind}`)
+  if (response.status !== 200) {
+    throw new Error(`Loading ${kind} failed with status ${response.status}`)
+  }
+  return (await response.json()) as CanonicalEntry[]
+}
+
+/** Maps a create (201) or update (200) response, its 400 and its 404; throws for any other status. */
+async function toSaveEntryResult(response: Response, successStatus: number, action: string): Promise<SaveEntryResult> {
+  if (response.status === successStatus) {
+    return { ok: true, entry: (await response.json()) as CanonicalEntry }
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: EntryFieldErrors }
+    return { ok: false, errors: problem.errors ?? {} }
+  }
+  if (response.status === 404) {
+    return { ok: false, notFound: true }
+  }
+  throw new Error(`${action} failed with status ${response.status}`)
+}
+
+export async function createEntry(kind: NameKind, request: EntryRequest): Promise<SaveEntryResult> {
+  const response = await fetch(`/api/${kind}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  return toSaveEntryResult(response, 201, 'Creating the entry')
+}
+
+export async function updateEntry(kind: NameKind, id: number, request: EntryRequest): Promise<SaveEntryResult> {
+  const response = await fetch(`/api/${kind}/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  return toSaveEntryResult(response, 200, 'Saving the entry')
 }
