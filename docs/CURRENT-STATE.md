@@ -1,24 +1,24 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 08 review, 2026-10-18, commit 1c6d531_
+_Updated: slice 09 review, 2026-10-18, commit 15485d5_
 
 ## Branch
-`phase/2-settings-scan`
+`phase/2-settings-scan` (phase done; PR to `main` open, waiting for the developer to verify and merge)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
 - **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default.
 - **Tag safety:** proven by tests. MP3 writes go through TagLibSharp and M4B writes through an ffmpeg `-c copy` remux; chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
-- **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. There is no dashboard UI yet.
+- **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Current phase 2, Settings & scan. Still to do: the dashboard UI with a Scan button (09).
+Phase 2, Settings & scan: done and awaiting merge. Phase 3, Grouping, starts after the merge.
 
 ## Last slice / next slice
-- Last: 08 scan-api, Implemented
-- Next: 09 dashboard-ui
+- Last: 09 dashboard-ui, Implemented
+- Next: 10, the first slice of phase 3 (not written yet)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
@@ -47,4 +47,4 @@ Current phase 2, Settings & scan. Still to do: the dashboard UI with a Scan butt
 - 2026-10-18 (slice 08): Only one scan runs at a time (409 otherwise). Runs still `Running` at startup are marked `Failed`. Dashboard counts come from the latest completed run.
 
 ## Verification
-Full suite: backend 59 passed / 0 failed, frontend 20 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1, and the M4B remux was checked by hand there.
+Full suite: backend 59 passed / 0 failed, frontend 40 passed / 0 failed. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1, and the M4B remux was checked by hand there.

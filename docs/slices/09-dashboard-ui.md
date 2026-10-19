@@ -75,3 +75,35 @@
 - **Size:** 4 tasks, 7 files: `dashboard.ts`, `api.ts` and its test, `formatDateTime.ts` and its test, `DashboardPage.tsx` and its test.
 - **Commit:** `feat: slice 09 dashboard-ui`.
 - **Phase 2:** this should complete phase 2's Done when. The tag round trip (04), validated settings (05/06), scan with rescan skip (07/08) and dashboard (09) are all covered.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 59 passed, 0 failed | |
+| Frontend tests | 40 passed, 0 failed | 5 files |
+| New tests | 5 of 5 behaviours present, passing | |
+| Manual: fresh dashboard | Passed | Playwright on :5173. "Not set." with "Set it in Settings" links; "Scan incoming" disabled with "Set the incoming directory in Settings first."; "No scans yet."; counts 0 |
+| Manual: scan 151 files | Passed | Status went "Scanning… 0", then 100, then 125 files found, then "Scan completed". The page reloaded with found 151, added 151, audio files 151, errors 0. Focus stayed on the button |
+| Manual: keyboard rescan (Enter) | Passed | "Scan completed"; unchanged 151, added 0; focus stayed on the button |
+| Manual: screen reader | Not run | `role="status"` text changes checked instead |
+| Manual: Docker end to end (Linux, image ffmpeg 6.1) | Passed | `/incoming/Book A` rejected as library (nested). `/Incoming` rejected as missing (case-sensitive). `/incoming` + `/library` saved. A scan of 4 files (incl. `Single.M4B`) completed with 4 added and 0 failed, and the dashboard showed 4. The library stayed empty |
+
+**Data:** the test folders, the dev database and the Docker scratch volumes were deleted afterwards.
+
+## Outcome (2026-10-18, commit 15485d5)
+
+**Status:** Implemented
+**Summary:** The dashboard now shows system health, the directories (with Settings links when they aren't set), the last scan (status, local finish time, six counts, the error) and the inventory counts from the last completed scan. "Scan incoming" starts a scan, and the page polls every second, announcing progress and the result in `role="status"`. It resumes polling if a scan is already running on load, and it handles 409 and load or poll failures with visible messages. All Done when items are met.
+**Changed:** 7 code files plus 2 docs. Key ones: `pages/DashboardPage.tsx`, `services/api.ts`, `types/dashboard.ts`, `utils/formatDateTime.ts`.
+**Deviations:**
+- While a scan is running, the button uses `aria-disabled` and ignores clicks rather than `disabled`, so focus isn't lost. *Improvement*: it meets the focus requirement, and the real `disabled` attribute is used when incoming isn't set.
+- The health section has a visually hidden h2, "System health". *Fine.*
+- Extra messages for an unexpected start failure and "No scans yet". *Improvement.*
+- `AppLayout.test.tsx`'s API mock lacks `getDashboard`. Its tests pass because the page shows its load-failure alert. *Debt (test hygiene):* add it to the mock when that file is next touched.
+**Follow-ups:**
+- Phase 3: move the dashboard query into a service when group counts are added (from slice 08). Add `getDashboard` to the `AppLayout` test mock.
