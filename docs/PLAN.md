@@ -17,15 +17,15 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 **Done when:** four checks pass; API health endpoint returns 200; `docker compose up` serves the client and API with a SQLite file on a mounted volume.
 **Slices:** 01 (implemented), 02 (implemented), 03 (implemented).
 
-### 2. Settings & scan (not started)
+### 2. Settings & scan (done)
 **Goal:** configure directories and inventory the incoming folder without touching it.
 **Done when:** validated directory settings save; a manual scan records every MP3/M4B with tags, duration, cover and chapter info, and a rescan skips unchanged files; dashboard shows last scan and counts; a TagLibSharp write-to-copy test proves M4B chapters and audio survive tagging.
-**Slices:** none yet. Carried in: a layout shell with navigation and a not-found route (from slice 03).
+**Slices:** 04 (implemented), 05 (implemented), 06 (implemented), 07 (implemented), 08 (implemented), 09 (implemented). The tag round-trip went to ffmpeg for M4B per the slice 04 decision.
 
 ### 3. Grouping (not started)
 **Goal:** scanned files become proposed audiobook groups with confidence and evidence.
 **Done when:** PRD grouping scenarios A–E pass as automated tests; low-evidence files show as unresolved; Incoming screen lists groups with title, author, file count, duration, confidence.
-**Slices:** none yet
+**Slices:** none yet. Carried in: move the dashboard query into a service when group counts are added (08); add `getDashboard` to the AppLayout test mock (09).
 
 ### 4. Group corrections (not started)
 **Goal:** the user can fix any grouping the rules got wrong.
@@ -50,9 +50,9 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03).
+**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.
-**Done when:** end-to-end tests run against fixture audiobooks through scan → process; an interrupted job resumes or fails cleanly after restart; repeat scans don't duplicate processed books; Docker image documented and running on the home server.
+**Done when:** end-to-end tests run against fixture audiobooks through scan → process, including the backend suite inside the Docker image (its ffmpeg 6.1 vs dev's 9.0); an interrupted job resumes or fails cleanly after restart; repeat scans don't duplicate processed books; Docker image documented and running on the home server.
 **Slices:** none yet

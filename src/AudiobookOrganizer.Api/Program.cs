@@ -1,5 +1,6 @@
 using AudiobookOrganizer.Api.Configuration;
 using AudiobookOrganizer.Api.Data;
+using AudiobookOrganizer.Api.Services;
 using Microsoft.Extensions.Options;
 using Serilog;
 
@@ -17,12 +18,25 @@ builder.Services.AddSingleton(services =>
     return new SqliteConnectionFactory(Path.GetFullPath(settings.Path, contentRoot));
 });
 builder.Services.AddSingleton<DatabaseInitializer>();
+builder.Services.AddSingleton<SettingsRepository>();
+builder.Services.AddSingleton<SettingsService>();
+
+builder.Services.Configure<ToolSettings>(builder.Configuration.GetSection(ToolSettings.SectionName));
+builder.Services.AddSingleton<FfmpegRunner>();
+builder.Services.AddSingleton<ChapterReader>();
+builder.Services.AddSingleton<AudioFileReader>();
+builder.Services.AddSingleton<ScanRepository>();
+builder.Services.AddSingleton<ScanService>();
+builder.Services.AddSingleton<ScanRunner>();
 
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
 app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
+// Nothing can still be scanning at startup, so a Running row is left over from a stopped or crashed process.
+app.Services.GetRequiredService<ScanRepository>()
+    .FailInterruptedRuns("Interrupted by an application restart.", DateTime.UtcNow.ToString("O"));
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
