@@ -73,3 +73,37 @@
 - **Assumption:** a file that changes on disk keeps its `UserState` (the upsert doesn't touch it).
 - **Size:** 4 tasks, 8 files: `DatabaseInitializer.cs` and its test, `GroupRepository.cs`, `GroupingService.cs` and its test, `GroupsController.cs` and its test, `GroupDtos.cs`.
 - **Commit:** `feat: slice 20 exclude-and-unresolve-api`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 107 passed, 0 failed | 100 before plus 7 new |
+| Frontend tests | 109 passed, 0 failed | no frontend change in this slice |
+| New tests | 5 of 5 behaviours present, passing | service: exclude renumbers the source and survives a rescan; unresolve survives a rescan and a later move clears the state; excluding the only file deletes its group, and unresolve undoes an exclude; extra: create clears the state. Controller: `POST /api/groups/excluded` 200 and its 400s; `POST /api/groups/unresolved` 400 for an already-unresolved file. Schema: an old `AudioFile` table gains `UserState` and keeps its rows |
+| Manual: exclude a track | Passed | API on :5070 with a scratch DB; scenario A (3 tracks), one M4B and a stray MP3. `POST /api/groups/excluded` `[2]`: 200, group 1 has files 3 and 4 at positions 1–2, 60000 ms, `userCorrected: true`, and `excluded` lists `book a/01 track.mp3` |
+| Manual: send a track to unresolved | Passed | `POST /api/groups/unresolved` `[3]`: 200, `unresolved` lists `book a/02 track.mp3` and the stray file |
+| Manual: bad requests | Passed | 400 keyed `fileIds` for an empty list, an already-excluded file, an already-unresolved file and an unknown id |
+| Manual: rescan keeps both states | Passed | Rescan completed with 5 unchanged; `GET /api/groups` was byte-identical before and after |
+| Manual: undo, then move back | Passed | `POST /api/groups/unresolved` `[2]` moved it from `excluded` to `unresolved`; `POST /api/groups/1/files` `[2]` gave 2 files. After a rescan, group 1 still has 2 files and file 2 isn't unresolved |
+| Manual: upgrade from slice 19 | Passed | Built 5b8e382 in a temporary worktree, created a DB with it and scanned (5 added). The new API on that DB served `GET /api/groups` (200, `excluded: []`), and excluding a file worked. Worktree removed |
+
+**Data:** scratch DBs and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the worktree and the scratch data were removed afterwards.
+
+## Outcome (2026-10-18, commit b0779c5)
+
+**Status:** Implemented
+**Summary:** each file now carries a `UserState` (`Excluded`, `Unresolved` or null). `POST /api/groups/excluded` and `POST /api/groups/unresolved` take files out of their groups and set that state; undoing an exclude means sending the file to unresolved. Both states survive rescans because the grouping engine skips any file with a state, and moving a file into a group clears its state. `GET /api/groups` gains an `excluded` list. All Done when items are met.
+**Changed:** 8 code files plus 2 docs. Key ones: `Data/DatabaseInitializer.cs`, `Data/GroupRepository.cs`, `Services/Grouping/GroupingService.cs`, `Controllers/GroupsController.cs`, `Models/Api/GroupDtos.cs`.
+**Deviations:**
+- `GetUserStates` returns both the state and whether the file is in a group, because "already unresolved" also covers files the rules left unresolved. *Fine.*
+- New `ExcludedFileDto` and `GroupListResult` records, and the shared `TidyGroups` helper split out of `PlaceFiles`. *Fine*, as the slice asked.
+- One extra service test: creating a group clears the state. *Improvement.*
+**Follow-ups:**
+- Next slice: the UI. It needs Exclude and "Send to unresolved" on a book's files and on unresolved files, an Excluded section with an undo, and `excluded` added to the client's `GroupsResponse` type.
+- Excluded files must be skipped by the metadata and processing phases (phases 5 and 8). Note it when they start.
+

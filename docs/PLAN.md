@@ -30,7 +30,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 4. Group corrections (in progress)
 **Goal:** the user can fix any grouping the rules got wrong.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
-**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (written). Set title/author, reorder, move, merge and split work from the UI, including assigning unresolved files. Still to do: exclude and send back to unresolved. All survive rescans. Carried in: dashboard group and status counts, moving the dashboard query into a service (from slices 08 and 12); grouping-rule tweaks from the developer's real-collection check at the end of phase 3.
+**Slices:** 13 (implemented), 14 (implemented), 15 (implemented), 16 (implemented), 17 (implemented), 18 (implemented), 19 (implemented), 20 (implemented). Set title/author, reorder, move, merge and split work from the UI, including assigning unresolved files. Exclude and send back to unresolved have their API. Still to do: their UI. All survive rescans. Carried in: dashboard group and status counts, moving the dashboard query into a service (from slices 08 and 12); grouping-rule tweaks from the developer's real-collection check at the end of phase 3.
 
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.
