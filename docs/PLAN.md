@@ -25,12 +25,12 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 3. Grouping (in progress)
 **Goal:** scanned files become proposed audiobook groups with confidence and evidence.
 **Done when:** PRD grouping scenarios A–E pass as automated tests; low-evidence files show as unresolved; Incoming screen lists groups with title, author, file count, duration, confidence.
-**Slices:** 10 (implemented), 11 (implemented). Carried in: move the dashboard query into a service when group counts are added (08); add `getDashboard` to the AppLayout test mock (09).
+**Slices:** 10 (implemented), 11 (implemented), 12.
 
 ### 4. Group corrections (not started)
 **Goal:** the user can fix any grouping the rules got wrong.
 **Done when:** merge, split, move file, exclude, reorder and set title/author work from the UI; corrections survive a rescan of unchanged files.
-**Slices:** none yet
+**Slices:** none yet. Carried in: dashboard group and status counts, moving the dashboard query into a service (from slices 08 and 12); grouping-rule tweaks from the developer's real-collection check at the end of phase 3.
 
 ### 5. Metadata (not started)
 **Goal:** identify a book and settle its canonical metadata.

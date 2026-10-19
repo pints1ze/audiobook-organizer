@@ -25,6 +25,11 @@ export default function AppLayout() {
                 </NavLink>
               </li>
               <li>
+                <NavLink to="/incoming" className={navLinkClass}>
+                  Incoming
+                </NavLink>
+              </li>
+              <li>
                 <NavLink to="/settings" className={navLinkClass}>
                   Settings
                 </NavLink>
