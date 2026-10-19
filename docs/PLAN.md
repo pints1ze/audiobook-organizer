@@ -40,12 +40,12 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 6. Normalization (done)
 **Goal:** authors, narrators and genres resolve to canonical names.
 **Done when:** aliases map variants to one canonical entry; the app suggests but never auto-merges aliases; a management screen lets the user create, merge and edit canonical entries.
-**Slices:** 38 (implemented), 39 (implemented), 40 (implemented), 41 (implemented), 42 (implemented), 43 (implemented). People and genres APIs with aliases (38–39), merge (40), suggestions (41), the People and Genres pages (42–43). Not yet placed (open questions): linking book values to canonical entries; dismissing suggestions.
+**Slices:** 38 (implemented), 39 (implemented), 40 (implemented), 41 (implemented), 42 (implemented), 43 (implemented). People and genres APIs with aliases (38–39), merge (40), suggestions (41), the People and Genres pages (42–43). Linking book values to canonical entries moved to phase 7 (developer, 2026-10-19). Dismissing suggestions is still an open question.
 
 ### 7. Naming & preview (in progress)
 **Goal:** see exactly where every file will go before anything moves.
-**Done when:** the template engine handles tokens, padding and optional sections with sanitized, traversal-safe output; the preview screen shows source → destination per file and flags missing values, duplicate targets and existing-file conflicts.
-**Slices:** 44 (implemented). Template engine with sanitizing and `ResolveUnder` (44). Next: templates in settings, book-to-token mapping, then the preview endpoint and screen.
+**Done when:** the template engine handles tokens, padding and optional sections with sanitized, traversal-safe output; a book's authors, narrators and genres link to canonical entries (exact alias matches resolve automatically, anything else is suggested) and linked values show the `normalized` origin; the preview screen shows source → destination per file and flags missing values, duplicate targets and existing-file conflicts.
+**Slices:** 44 (implemented). Template engine with sanitizing and `ResolveUnder` (44). Next: templates in settings, linking book values to canonical entries (API, then book page), book-to-token mapping using canonical names, then the preview endpoint and screen. Linking was added 2026-10-19 with the developer's OK.
 
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.

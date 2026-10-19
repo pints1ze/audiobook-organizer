@@ -19,7 +19,7 @@ _Updated: slice 44 review, 2026-10-19, commit 0d6fa32_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 7, Naming & preview: the template engine is done (44). Left: templates in settings, mapping a book to tokens, and the preview endpoint and screen with missing values, duplicate targets and existing-file conflicts. Excluded files never get an `Audiobook`.
+Phase 7, Naming & preview: the template engine is done (44). Left: templates in settings, linking book values to canonical entries (API, then book page), mapping a book to tokens, and the preview endpoint and screen with missing values, duplicate targets and existing-file conflicts. Excluded files never get an `Audiobook`.
 
 ## Last slice / next slice
 - Last: 44 naming-template-engine, Implemented
@@ -30,8 +30,6 @@ Phase 7, Naming & preview: the template engine is done (44). Left: templates in 
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
-- Where does linking a book's authors, narrators and genres to canonical entries (the `normalized` origin) go? The PRD wants it before tag writing and naming; proposed as the start of phase 7 (raised in slice 43, needs a PLAN.md change)
-- The default file template: `[%track:3%. ]%album%` (overview's series example) or `[%track:3%. ]%album% (%artist%)` (its single-file example)? Needed for slice 45 (raised in slice 44)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
@@ -78,6 +76,8 @@ Phase 7, Naming & preview: the template engine is done (44). Left: templates in 
 - 2026-10-19 (slice 42): One `NamesPage` serves both kinds (`kind` prop, keyed route); after each save the list is reloaded from the API rather than patched locally.
 - 2026-10-19 (slice 43): Merges in the UI always need an inline confirmation (no modal); there is no undo.
 - 2026-10-19 (slice 44): Templates allow one level of `[ ]` (no nesting). Segments are sanitized with one Windows-safe rule set on every OS, and a `/` or `\` in a value becomes `-`, never a folder. Segments are capped at 200 characters (marked as a shortcut).
+- 2026-10-19 (developer): Linking a book's authors, narrators and genres to canonical entries joins phase 7, after templates in settings and before book-to-token mapping (PLAN.md updated).
+- 2026-10-19 (developer): The default file template is `[%track:3%. ]%album% (%artist%)`. The directory default stays `%artist%/[%series%/Book %series-part:2% - ]%album%`.
 
 ## Verification
 Full suite: backend 301 passed / 0 failed, frontend 215 passed / 0 failed. Manual checks for slices 33–43 not run yet; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. No accepted failures. The tests run against dev ffmpeg 9.0; the image has 6.1.
