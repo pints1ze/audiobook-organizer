@@ -59,3 +59,35 @@
 - **Id reuse:** handled here by reloading the list after a 404 or error and by the page refetching on each visit. A wrong-group rename still needs a rescan from a second tab while the form is open. That's acceptable for one user on a LAN until the open question is decided.
 - **Size:** 4 tasks, 5 files: `types/groups.ts`, `services/api.ts` and its test, `IncomingPage.tsx` and its test.
 - **Commit:** `feat: slice 14 edit-group-title-author`.
+
+## Test results (2026-10-18)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 90 passed, 0 failed | no backend change in this slice |
+| Frontend tests | 65 passed, 0 failed | 7 files, 14 new |
+| New tests | 4 of 4 behaviours present, passing | api: the four `updateGroup` cases (200, 400, 404, 500). Page: prefilled form with focus, then save, new values, "Edited" and focus back; 400 errors linked with `aria-invalid`; Cancel and Escape each restore and refocus; `notFound` and a thrown save both alert and reload; "Edited" on load. Extra: unique button names, one row at a time, an empty-400 fallback |
+| Manual: keyboard edit and save | Passed | Playwright on :5173 against a scratch DB (`Database__Path`), scenario A plus one M4B. Focus on "Edit book a", then Enter: focus is on the Title input (`group-2-title`, labelled "Title", value "book a"). Typed a new title, then Enter. The row shows "Ready Player One" and "Edited", and focus is on "Edit Ready Player One" |
+| Manual: Escape | Passed | Enter on Edit, then Escape: the form closes and focus returns to "Edit Ready Player One" |
+| Manual: rescan keeps the edit | Passed | "Scan incoming" on the Dashboard: completed, 3 unchanged. Back on Incoming the row still shows "Ready Player One" and "Edited" |
+| Manual: 375 px width | Passed | Page scroll width 375 equals the viewport. The open form (373 px) is wider than the table container (327 px), so it scrolls inside the `overflow-x-auto` container (389 vs 327). The page itself doesn't scroll sideways |
+
+**Data:** a scratch DB and folders in the session scratchpad, not the dev `data/audiobooks.db`. The servers, the browser, the scratch data and the `.playwright-mcp/` output were removed afterwards.
+
+## Outcome (2026-10-18, commit 93eef65)
+
+**Status:** Implemented
+**Summary:** The Incoming page now edits a book's title and author in place. Each row has an Edit button named after its book, which opens an inline form with labelled inputs, focus handling and Escape to cancel. The form saves through `updateGroup` (`PUT /api/groups/{id}`), shows 400 field errors in place, and on a 404 or error shows an alert and reloads the list. Corrected books show "Edited". All Done when items are met.
+**Changed:** 5 code files plus 2 docs. They are `pages/IncomingPage.tsx` and its test, `services/api.ts` and its test, and `types/groups.ts`.
+**Deviations:**
+- The Edit button sits in the Title cell, after the title and "Edited", so the table keeps 6 columns. *Fine.*
+- A 400 with no title or author message is handled like a 404 (alert and reload). *Fine:* it has its own test.
+- Named type `GroupFieldErrors`. *Fine.*
+**Follow-ups:**
+- After a failed save the form closes and focus falls back to the page. The alert is announced, but a later slice could move focus to it. *Minor debt.*
+- Two books with the same title get the same Edit button name. *Minor debt:* add the author or id when titles collide.
+- At 375 px the open form is wider than the table container and scrolls inside it. The page itself doesn't scroll. *Fine for now.*
