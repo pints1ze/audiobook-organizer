@@ -32,6 +32,11 @@ describe('AppLayout', () => {
       lastScan: null,
       audioFileCount: 0,
       filesWithErrors: 0,
+      bookCount: 0,
+      booksByConfidence: { low: 0, medium: 0, high: 0 },
+      correctedBookCount: 0,
+      unresolvedFileCount: 0,
+      excludedFileCount: 0,
     })
     vi.mocked(getGroups).mockResolvedValue({ groups: [], unresolved: [], excluded: [] })
   })

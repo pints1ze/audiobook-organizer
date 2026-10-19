@@ -20,6 +20,11 @@ export interface Dashboard {
   lastScan: ScanRun | null
   audioFileCount: number
   filesWithErrors: number
+  bookCount: number
+  booksByConfidence: { low: number; medium: number; high: number }
+  correctedBookCount: number
+  unresolvedFileCount: number
+  excludedFileCount: number
 }
 
 export type StartScanResult = { started: true; run: ScanRun } | { started: false; message: string }

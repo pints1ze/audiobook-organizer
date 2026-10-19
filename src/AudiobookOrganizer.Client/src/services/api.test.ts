@@ -120,7 +120,18 @@ describe('scans', () => {
   }
 
   it('getDashboard returns the parsed body', async () => {
-    const dashboard = { incomingPath: '/in', libraryPath: '/lib', lastScan: null, audioFileCount: 3, filesWithErrors: 1 }
+    const dashboard = {
+      incomingPath: '/in',
+      libraryPath: '/lib',
+      lastScan: null,
+      audioFileCount: 3,
+      filesWithErrors: 1,
+      bookCount: 2,
+      booksByConfidence: { low: 0, medium: 1, high: 1 },
+      correctedBookCount: 0,
+      unresolvedFileCount: 1,
+      excludedFileCount: 0,
+    }
     const fetchMock = mockFetch(200, dashboard)
 
     await expect(getDashboard()).resolves.toEqual(dashboard)

@@ -50,6 +50,11 @@ const dashboard: Dashboard = {
   lastScan: completedRun,
   audioFileCount: 42,
   filesWithErrors: 4,
+  bookCount: 5,
+  booksByConfidence: { low: 1, medium: 1, high: 3 },
+  correctedBookCount: 2,
+  unresolvedFileCount: 4,
+  excludedFileCount: 1,
 }
 
 function renderPage() {
@@ -138,6 +143,24 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Scan incoming' })).toBeEnabled()
   })
 
+  it('shows the book and file-state counts with a link to the Incoming page', async () => {
+    renderPage()
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Books' })).toBeInTheDocument()
+    const books = section('Books')
+    expect(valueOf(books, 'Proposed books')).toHaveTextContent('5')
+    expect(valueOf(books, 'Low confidence')).toHaveTextContent('1')
+    expect(valueOf(books, 'Medium confidence')).toHaveTextContent('1')
+    expect(valueOf(books, 'High confidence')).toHaveTextContent('3')
+    expect(valueOf(books, 'Corrected by you')).toHaveTextContent('2')
+    expect(valueOf(books, 'Unresolved files')).toHaveTextContent('4')
+    expect(valueOf(books, 'Excluded files')).toHaveTextContent('1')
+    expect(within(books).getByRole('link', { name: 'Review on the Incoming page' })).toHaveAttribute(
+      'href',
+      '/incoming',
+    )
+  })
+
   it('shows the error text of a failed last scan', async () => {
     getDashboardMock.mockResolvedValue({
       ...dashboard,
@@ -206,12 +229,13 @@ describe('DashboardPage', () => {
     expect(scanStatus()).toHaveAttribute('role', 'status')
     expect(scanStatus()).toHaveTextContent('Scanning… 5 files found')
 
-    getDashboardMock.mockResolvedValue({ ...dashboard, audioFileCount: 50 })
+    getDashboardMock.mockResolvedValue({ ...dashboard, audioFileCount: 50, bookCount: 8 })
     await advance(1000)
     expect(getLatestScanMock).toHaveBeenCalledTimes(2)
     expect(getDashboardMock).toHaveBeenCalledTimes(2)
     expect(scanStatus()).toHaveTextContent('Scan completed')
     expect(valueOf(section('Inventory'), 'Audio files')).toHaveTextContent('50')
+    expect(valueOf(section('Books'), 'Proposed books')).toHaveTextContent('8')
     expect(button).not.toHaveAttribute('aria-disabled')
     expect(button).toHaveFocus()
 

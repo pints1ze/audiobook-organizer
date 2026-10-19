@@ -217,6 +217,33 @@ export default function DashboardPage() {
               <dd>{dashboard.filesWithErrors}</dd>
             </dl>
           </section>
+
+          <section aria-labelledby="books-heading" className="mt-6">
+            <h2 id="books-heading" className="text-xl font-semibold">
+              Books
+            </h2>
+            <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+              <dt className="font-medium">Proposed books</dt>
+              <dd>{dashboard.bookCount}</dd>
+              <dt className="font-medium">Low confidence</dt>
+              <dd>{dashboard.booksByConfidence.low}</dd>
+              <dt className="font-medium">Medium confidence</dt>
+              <dd>{dashboard.booksByConfidence.medium}</dd>
+              <dt className="font-medium">High confidence</dt>
+              <dd>{dashboard.booksByConfidence.high}</dd>
+              <dt className="font-medium">Corrected by you</dt>
+              <dd>{dashboard.correctedBookCount}</dd>
+              <dt className="font-medium">Unresolved files</dt>
+              <dd>{dashboard.unresolvedFileCount}</dd>
+              <dt className="font-medium">Excluded files</dt>
+              <dd>{dashboard.excludedFileCount}</dd>
+            </dl>
+            <p className="mt-2">
+              <Link to="/incoming" className="underline underline-offset-4">
+                Review on the Incoming page
+              </Link>
+            </p>
+          </section>
         </>
       )}
     </>
