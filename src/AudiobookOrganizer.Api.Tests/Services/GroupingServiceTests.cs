@@ -198,6 +198,25 @@ public class GroupingServiceTests : IDisposable
     }
 
     [Fact]
+    public void Rescan_that_replaces_the_highest_id_group_never_reuses_its_id()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        List<long> idsBefore;
+        using (var connection = _connections.Open())
+            idsBefore = connection.Query<long>("SELECT Id FROM FileGroup").ToList();
+        var highest = idsBefore.Max();
+        // Correct the other group so it survives the rescan and the highest id is the one replaced.
+        Assert.NotNull(_grouping.Rename(idsBefore.Min(), new UpdateGroupDto("Kept", null)).Group);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        var replaced = Assert.Single(_grouping.List().Groups, g => !g.UserCorrected);
+        Assert.True(replaced.Id > highest, $"Expected an id above {highest}, got {replaced.Id}");
+        Assert.Null(_grouping.GetDetail(highest));
+    }
+
+    [Fact]
     public void Reordered_group_keeps_its_order_after_a_rescan_of_unchanged_files()
     {
         var scanner = NewScanService(_grouping);
