@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  approveBook,
   chooseCover,
   chosenCoverUrl,
   createGroup,
@@ -717,5 +718,60 @@ describe('getPreview', () => {
   it('throws on any other status', async () => {
     mockFetch(500, { title: 'Server error' })
     await expect(getPreview()).rejects.toThrow()
+  })
+})
+
+describe('approveBook', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  const job = {
+    id: 3,
+    groupId: 1,
+    title: 'The Hobbit',
+    status: 'Queued',
+    createdAtUtc: '2026-10-19T10:00:00+00:00',
+    startedAtUtc: null,
+    finishedAtUtc: null,
+    error: null,
+    files: [
+      { fileId: 10, sourcePath: '/in/01.mp3', destinationPath: '/lib/01.mp3', status: 'Pending', error: null },
+    ],
+  }
+
+  it('POSTs the group id and returns the job on a 201', async () => {
+    const fetchMock = mockFetch(201, job)
+
+    await expect(approveBook(1)).resolves.toEqual({ ok: true, job })
+    expect(fetchMock).toHaveBeenCalledWith('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId: 1 }),
+    })
+  })
+
+  it.each([400, 409])('returns the problem detail on a %i', async (status) => {
+    mockFetch(status, { title: 'The book can\'t be approved yet.', detail: 'A file is already at X.', status })
+
+    await expect(approveBook(1)).resolves.toEqual({ ok: false, message: 'A file is already at X.' })
+  })
+
+  it.each([400, 409])('falls back to the problem title on a %i without detail', async (status) => {
+    mockFetch(status, { title: 'The book is already queued.', status })
+
+    await expect(approveBook(1)).resolves.toEqual({ ok: false, message: 'The book is already queued.' })
+  })
+
+  it('says the book is gone on a 404', async () => {
+    mockFetch(404, { title: 'Not Found', status: 404 })
+
+    await expect(approveBook(1)).resolves.toEqual({ ok: false, message: 'The book is no longer in the library.' })
+  })
+
+  it('throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(approveBook(1)).rejects.toThrow()
   })
 })

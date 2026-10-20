@@ -4,10 +4,10 @@
 **Goal:** each book on the Preview page with no problems has an "Approve" button that queues it for processing (`POST /api/jobs`) and says so; a refusal shows the API's reason.
 
 ## Done when
-- [ ] `services/api.ts` has `approveBook(groupId)` returning `{ ok: true, job }` on 201, `{ ok: false, message }` on 400 and 409 (the problem's `detail`, else its `title`) and on 404 ("The book is no longer in the library."), and throwing on anything else; `types/jobs.ts` mirrors `Models/Api/ProcessingDtos.cs`
-- [ ] on `/preview`, every book whose files have no problems shows an "Approve" button under its heading; books with problems show "Fix the problems above to approve this book." instead and no button
-- [ ] pressing Approve disables the button and shows "Approving…"; on success the button is replaced by "Queued for processing." and focus moves to that message; on a refusal the button stays and a `role="alert"` message shows the reason; a thrown error shows "The book couldn't be approved."
-- [ ] all four checks pass
+- [x] `services/api.ts` has `approveBook(groupId)` returning `{ ok: true, job }` on 201, `{ ok: false, message }` on 400 and 409 (the problem's `detail`, else its `title`) and on 404 ("The book is no longer in the library."), and throwing on anything else; `types/jobs.ts` mirrors `Models/Api/ProcessingDtos.cs`
+- [x] on `/preview`, every book whose files have no problems shows an "Approve" button under its heading; books with problems show "Fix the problems above to approve this book." instead and no button
+- [x] pressing Approve disables the button and shows "Approving…"; on success the button is replaced by "Queued for processing." and focus moves to that message; on a refusal the button stays and a `role="alert"` message shows the reason; a thrown error shows "The book couldn't be approved."
+- [x] all four checks pass
 
 ## Read first
 - `src/AudiobookOrganizer.Client/src/pages/PreviewPage.tsx` and `PreviewPage.test.tsx` (`BookSection`, `fileProblems`, `hasProblems`, the test builders)
@@ -16,10 +16,10 @@
 - `docs/slices/54-approve-book-queue.md` (what approval refuses and why)
 
 ## Tasks
-- [ ] **Types.** New `src/types/jobs.ts`: `ProcessingJobFile` (`fileId`, `sourcePath`, `destinationPath`, `status`, `error`), `ProcessingJob` (`id`, `groupId | null`, `title | null`, `status`, `createdAtUtc`, `startedAtUtc`, `finishedAtUtc`, `error`, `files`), and `ApproveBookResult` = `{ ok: true; job: ProcessingJob } | { ok: false; message: string }`. Statuses stay `string` (the API's text values).
-- [ ] **API call.** `approveBook(groupId: number)` in `services/api.ts`: `POST /api/jobs` with JSON `{ groupId }`, mapped as in Done when.
-- [ ] **Preview page.** In `BookSection`, below the heading, a small `ApproveBook` component (same file; it's used once) with its own state (`idle | approving | queued | refused(message)`). The button's accessible name is "Approve", described by the book's heading (`aria-describedby={headingId}`) so screen readers hear which book. The "Queued for processing." message is a `<p role="status" tabIndex={-1}>` focused with a ref after success. Books with problems render the "Fix the problems…" note instead. Plain `<button>` styled like the page's other controls; no new UI components.
-- [ ] **Tests** (below). Run all four checks.
+- [x] **Types.** New `src/types/jobs.ts`: `ProcessingJobFile` (`fileId`, `sourcePath`, `destinationPath`, `status`, `error`), `ProcessingJob` (`id`, `groupId | null`, `title | null`, `status`, `createdAtUtc`, `startedAtUtc`, `finishedAtUtc`, `error`, `files`), and `ApproveBookResult` = `{ ok: true; job: ProcessingJob } | { ok: false; message: string }`. Statuses stay `string` (the API's text values).
+- [x] **API call.** `approveBook(groupId: number)` in `services/api.ts`: `POST /api/jobs` with JSON `{ groupId }`, mapped as in Done when.
+- [x] **Preview page.** In `BookSection`, below the heading, a small `ApproveBook` component (same file; it's used once) with its own state (`idle | approving | queued | refused(message)`). The button's accessible name is "Approve", described by the book's heading (`aria-describedby={headingId}`) so screen readers hear which book. The "Queued for processing." message is a `<p role="status" tabIndex={-1}>` focused with a ref after success. Books with problems render the "Fix the problems…" note instead. Plain `<button>` styled like the page's other controls; no new UI components.
+- [x] **Tests** (below). Run all four checks.
 - Data: none.
 - Auth: none (single user, no login).
 - Accessibility: native `<button>` (keyboard by default), accessible name plus `aria-describedby` to the book heading, disabled while approving, focus moved to the "Queued" status after success (the button disappears), refusals announced with `role="alert"`. Contrast uses the existing `text-muted`/`text-destructive` tokens.
