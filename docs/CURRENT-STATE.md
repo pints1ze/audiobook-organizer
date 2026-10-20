@@ -24,7 +24,7 @@ Phase 8, Processing, is in progress (slice 54 done). Phase 7 was merged in PR #7
 
 ## Last slice / next slice
 - Last: 54 approve-book-queue, Implemented
-- Next: 55, a background runner that copies queued jobs' files to their destinations (not written)
+- Next: 55 copy-runner (written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
