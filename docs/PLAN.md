@@ -45,7 +45,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 7. Naming & preview (in progress)
 **Goal:** see exactly where every file will go before anything moves.
 **Done when:** the template engine handles tokens, padding and optional sections with sanitized, traversal-safe output; a book's authors, narrators and genres link to canonical entries (exact alias matches resolve automatically, anything else is suggested) and linked values show the `normalized` origin; the preview screen shows source → destination per file and flags missing values, duplicate targets and existing-file conflicts.
-**Slices:** 44 (implemented), 45 (implemented), 46 (implemented). Template engine with sanitizing and `ResolveUnder` (44), templates in settings (45), book people links API (46). Next: people links on the book page, a genres field on books and its links, book-to-token mapping using canonical names, then the preview endpoint and screen. Linking was added 2026-10-19 with the developer's OK.
+**Slices:** 44 (implemented), 45 (implemented), 46 (implemented), 47 (implemented). Template engine with sanitizing and `ResolveUnder` (44), templates in settings (45), book people links API (46) and the book page People section (47). Next: a genres field on books and its links, book-to-token mapping using canonical names, then the preview endpoint and screen. Linking was added 2026-10-19 with the developer's OK.
 
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
