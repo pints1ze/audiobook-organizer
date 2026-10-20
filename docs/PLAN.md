@@ -50,7 +50,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 8. Processing (in progress)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** 54 (implemented), 55 (implemented). Approval into the queue with snapshotted destinations (54); the background worker copying queued books without overwriting, cleaning up failed jobs (55). Carried in: each file's track tag is written as its position in book order (one-file books get 1; developer, 2026-10-19); the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04); never processing excluded files (from slice 20).
+**Slices:** 54 (implemented), 55 (implemented), 56 (written). Approval into the queue with snapshotted destinations (54); the background worker copying queued books without overwriting, cleaning up failed jobs (55). Carried in: each file's track tag is written as its position in book order (one-file books get 1; developer, 2026-10-19); the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04); never processing excluded files (from slice 20).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.

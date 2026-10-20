@@ -24,7 +24,7 @@ Phase 8, Processing, is in progress (slices 54–55 done). Phase 7 was merged in
 
 ## Last slice / next slice
 - Last: 55 copy-runner, Implemented
-- Next: 56, write tags and the cover into each copy (not written)
+- Next: 56 tag-copies (written)
 
 ## Open questions
 - Exact ID3 frames / MP4 atoms Audiobookshelf reads for narrator, series, series part and ASIN. ffmpeg cannot write freeform M4B atoms alongside a cover, so the narrator is currently written as `composer` (phase 8, raised again in slice 04)
