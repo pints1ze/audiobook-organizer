@@ -52,3 +52,32 @@
 - Retry is approving again (slice 58 decision): destinations are re-snapshotted from the current preview, so fixes to metadata or templates take effect; the failed job stays as history. "Newest job per book" uses the list order (the API returns newest first).
 - Retry button text is "Retry" so it reads like an action on that job; its description is the job's heading.
 - Conflict check: consistent with AGENTS.md (one page per route with its test beside it; state in React built-ins plus `services/api.ts`; plain HTML; no new packages; WCAG 2.1 AA), slice 55's cleanup rules (a failed job removes its copies) and slice 54's approval refusals. No backend production change.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 369 passed, 0 failed | Was 367. TRX `slice59-tests.trx` |
+| Frontend tests | 271 passed, 0 failed | Was 260 |
+| New tests | 5 of 5 present, passing | `JobsPage.test.tsx` (8): job details, links and empty state; polling every 2 s that stops when nothing is active; Retry only on a book's newest failed job, the focused "queued again" line, refusal alert. `api.test.ts` `getJobs` (200, throws on 500). `JobsControllerTests`: a retried book ends with one copy per file, no `.partial`, the first job still `Failed`; re-approving a succeeded book is a 400 with no second job. Plus `AppLayout.test.tsx` nav order and `/jobs` current page |
+| Manual: approve, then watch `/jobs` go to Succeeded without a reload, focus kept | Not run | API and client not running. Start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+| Manual: failed job shows its errors; Retry after removing the blocker succeeds with one copy per file | Not run | Same |
+
+Data checks: none (no schema change).
+
+## Outcome (2026-10-19, commit aa9ee56)
+
+**Status:** Implemented
+**Summary:** A Jobs page (`/jobs`, in the nav after Preview) lists every job with status, times, its error and each file's destination, status and error, polling every 2 s while any job is queued or running. A book's newest failed job has a Retry button that approves the book again and announces "<title> is queued again." in a focused status. Backend tests prove a retry leaves one copy per file and that a succeeded book can't be approved twice.
+**Changed:** 9 files: new `pages/JobsPage.tsx` and `JobsPage.test.tsx`; `services/api.ts`, `api.test.ts`, `App.tsx`, `components/layout/AppLayout.tsx`, `AppLayout.test.tsx`, `Tests/Controllers/JobsControllerTests.cs`; the slice file. No production backend change.
+**Deviations:**
+- No red runs: the backend retry tests confirm existing behaviour (as the slice predicted), and the Jobs page was written before its test was first run: *fine* (process note).
+- After a successful Retry the button stays disabled until the reload removes it; a failed poll replaces the list with the alert; the empty-state link reads "Approve books on the Preview page": *fine*.
+- Retrying two books with the same title in a row won't re-focus the status line (same text): *debt*, minor; phase 9 polish.
+**Follow-ups:**
+- Phase 8's only remaining done-when item is the Audiobookshelf-compatible custom fields (narrator, series, series part, ASIN). It needs the developer's answer to the open tag-frame question first (gate 1).
+- Phase 9 polish: re-focus the Jobs status line on a repeat announcement.
