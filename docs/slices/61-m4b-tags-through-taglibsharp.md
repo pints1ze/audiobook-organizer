@@ -46,3 +46,32 @@
 - The AGENTS.md change is part of the developer's choice of B (gate 4 resolved by that decision); it's recorded in CURRENT-STATE Decisions at review.
 - TagLibSharp keeps chunk offsets valid on this save: the remux puts `moov` after `mdat`, and slice 60 showed the audio hash and chapter track survive a TagLibSharp save.
 - Conflict check: consistent with AGENTS.md as amended (ffmpeg only through `FfmpegRunner` with an argument list, `-c copy`, never re-encode; sources never written; never overwrite). No new packages.
+
+## Test results (2026-10-20)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 374 passed, 0 failed | Was 373. TRX `slice61-tests.trx` |
+| Frontend tests | 271 passed, 0 failed | Unchanged |
+| New tests | 4 of 4 present, passing | `TagWriterTests`: M4B with full tags and a chosen cover has no `chpl`, the source's 3 chapters, audio hash, every tag, one cover, source unchanged; kept-cover and no-cover cases also assert no `chpl`; new: a chosen cover replaces the source's; existing-temp case unchanged. `JobsControllerTests` pass unchanged |
+| Manual: `disable_chpl` remux in image ffmpeg 6.1 | Passed | Run while writing the slice (2026-10-20): 3 chapters, no `chpl` |
+| Manual: processed M4B in the developer's usual player | Not run | Needs the API and a real book |
+
+Data checks: none.
+
+## Outcome (2026-10-20, commit 1089e18)
+
+**Status:** Implemented
+**Summary:** M4B copies are now remuxed by ffmpeg with `-movflags disable_chpl` (chapters only in the QuickTime chapter track, no `-metadata` or cover input) and then tagged by TagLibSharp through an `ApplyTags` shared with MP3 (M4B joins lists with ", "). Tags, cover, chapters and audio come out as in slice 56, and the copies have no `chpl` for TagLibSharp to damage.
+**Changed:** 6 files: `Services/TagWriter.cs`, `Tests/Services/TagWriterTests.cs`, `Tests/Services/M4bFreeformSpikeTests.cs` (helpers `internal`; `Remux()` runs slice 56's ffmpeg arguments itself), `AGENTS.md`, `docs/fixtures/audio/README.md`, the slice file. The review also fixed two AGENTS.md lines left stale by the change (ffmpeg's role, TagLibSharp's) in the docs commit.
+**Deviations:**
+- The spike's `Remux()` no longer calls production `TagWriter` (which stopped writing `chpl`), so the spike still measures a slice 56 file: *fine*, no assertion weakened.
+- The chosen-cover test uses PNG-signature bytes that aren't a real image, since only TagLibSharp handles chosen covers now: *fine*.
+- Two AGENTS.md lines next to the approved sentence were stale; fixed at review to match the developer's choice of B: *fine*, flagged to the developer.
+**Follow-ups:**
+- Next (62): the Mp3tag script's extra fields on both formats (narrator as composer, series, series part, movement name/number, content group, album sort, subtitle, language, publisher, format, ISBN, ASIN, release time, media type, gapless, Audible URL), checked by the read-back.
+- Later, if wanted: description, copyright, explicit and rating need more Audible response groups and new stored fields.
