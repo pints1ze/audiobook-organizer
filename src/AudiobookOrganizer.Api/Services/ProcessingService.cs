@@ -147,23 +147,39 @@ public class ProcessingService(
     }
 
     /// <summary>
-    /// Each file's tags from the book's current metadata, in the job's file order; null when the book is gone. Authors
-    /// and genres are written by their canonical names where linked; the track is the file's position of the count.
+    /// Each file's tags from the book's current metadata, in the job's file order; null when the book is gone. Authors,
+    /// narrators and genres are written by their canonical names where linked; the track is the file's position of the
+    /// count.
     /// </summary>
     private List<BookTags>? Tags(ProcessingJob job, IReadOnlyList<ProcessingJobFile> files)
     {
         if (job.GroupId is not { } groupId || audiobooks.GetMetadata(groupId) is not { } metadata) return null;
-        var artists = audiobooks.GetPeople(metadata).Authors.Select(a => a.Entry?.Name ?? a.Name).ToList();
+        var people = audiobooks.GetPeople(metadata);
+        var artists = people.Authors.Select(a => a.Entry?.Name ?? a.Name).ToList();
+        var narrators = people.Narrators.Select(n => n.Entry?.Name ?? n.Name).ToList();
+        var fields = metadata.Fields;
         var genres = audiobooks.GetGenres(groupId)?.Genres.Select(g => g.Entry?.Name ?? g.Name).ToList() ?? [];
-        var year = BookTokens.For(metadata.Fields, null, null, 1, null)["year"] is { } text
+        var year = BookTokens.For(fields, null, null, 1, null)["year"] is { } text
             ? int.Parse(text, System.Globalization.CultureInfo.InvariantCulture)
             : (int?)null;
         var cover = audiobookData.GetCoverImage(groupId) is { } chosen ? new TagCover(chosen.Image, chosen.MimeType) : null;
         var discs = groups.GetGroupFiles(groupId).ToDictionary(f => f.FileId, f => f.Disc);
 
         return files.Select((file, index) => new BookTags(
-            metadata.Fields.Title.Value, artists, genres, year, index + 1, files.Count,
-            discs.GetValueOrDefault(file.AudioFileId), cover)).ToList();
+            fields.Title.Value, artists, genres, year, index + 1, files.Count,
+            discs.GetValueOrDefault(file.AudioFileId), cover)
+        {
+            Narrators = narrators,
+            Subtitle = fields.Subtitle.Value,
+            Series = fields.Series.Value,
+            SeriesPart = fields.SeriesPart.Value,
+            Publisher = fields.Publisher.Value,
+            ReleaseDate = fields.ReleaseDate.Value,
+            Language = fields.Language.Value,
+            Format = fields.Format.Value,
+            Isbn = fields.Isbn.Value,
+            Asin = fields.Asin.Value,
+        }).ToList();
     }
 
     /// <summary>

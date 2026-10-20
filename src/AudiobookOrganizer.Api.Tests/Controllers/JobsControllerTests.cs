@@ -364,6 +364,33 @@ public class JobsControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_processed_books_copies_get_its_narrator_series_and_asin()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
+        var ids = await ScanTwoBooks(client);
+        var saved = await client.PutAsJsonAsync($"/api/groups/{ids[0]}/metadata", new
+        {
+            fields = new { narrators = new[] { "Nora Narrator" }, series = "The Saga", seriesPart = "3", asin = "B0TESTASIN" },
+        });
+        Assert.Equal(HttpStatusCode.OK, saved.StatusCode);
+
+        var created = await ApproveJob(client, ids[0]);
+        var job = await WaitForJob(client, created.GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", job.GetProperty("status").GetString());
+        foreach (var destination in Destinations(job))
+        {
+            using var tagged = TagLib.File.Create(destination);
+            var id3 = (TagLib.Id3v2.Tag)tagged.GetTag(TagLib.TagTypes.Id3v2, false);
+            Assert.Equal(["Nora Narrator"], tagged.Tag.Composers);
+            Assert.Equal("The Saga", TagLib.Id3v2.UserTextInformationFrame.Get(id3, "SERIES", false)?.Text.Single());
+            Assert.Equal("B0TESTASIN", TagLib.Id3v2.UserTextInformationFrame.Get(id3, "ASIN", false)?.Text.Single());
+            Assert.Equal("The Saga, Book #3", tagged.Tag.Grouping);
+        }
+    }
+
+    [Fact]
     public async Task A_job_whose_book_was_merged_away_after_approval_fails_and_writes_nothing()
     {
         using var host = QueueOnly();

@@ -6,6 +6,7 @@ public record TagCover(byte[] Image, string MimeType);
 /// <summary>
 /// The standard tags written into each copy of a book's file. Title is also the album, and Artists also the album
 /// artists. A null or empty value leaves the source's tag as it was; a null cover leaves its pictures as they were.
+/// The init properties are the book fields of the developer's Mp3tag Audible script (<c>mp3tagscipt.src</c>).
 /// </summary>
 public record BookTags(
     string? Title,
@@ -15,7 +16,45 @@ public record BookTags(
     int Track,
     int TrackCount,
     int? Disc,
-    TagCover? Cover);
+    TagCover? Cover)
+{
+    public IReadOnlyList<string> Narrators { get; init; } = [];
+    public string? Subtitle { get; init; }
+    public string? Series { get; init; }
+    /// <summary>The series part as stored: "2", "1.5" or "2-3".</summary>
+    public string? SeriesPart { get; init; }
+    public string? Publisher { get; init; }
+    public string? ReleaseDate { get; init; }
+    public string? Language { get; init; }
+    public string? Format { get; init; }
+    public string? Isbn { get; init; }
+    public string? Asin { get; init; }
+
+    /// <summary>"Series, Book #Part", just "Series" without a part, or null without a series (CONTENTGROUP).</summary>
+    public string? ContentGroup => Text(Series) is not { } series ? null
+        : Text(SeriesPart) is { } part ? $"{series}, Book #{part}" : series;
+
+    /// <summary>
+    /// "Series Part - Title" with a series ("Series - Title" without a part), else "Title - Subtitle" with a subtitle,
+    /// else the title; null without a title (ALBUMSORT).
+    /// </summary>
+    public string? AlbumSort
+    {
+        get
+        {
+            if (Text(Title) is not { } title) return null;
+            if (Text(Series) is { } series)
+                return Text(SeriesPart) is { } part ? $"{series} {part} - {title}" : $"{series} - {title}";
+            return Text(Subtitle) is { } subtitle ? $"{title} - {subtitle}" : title;
+        }
+    }
+
+    /// <summary>The book's audible.com page, or null without an ASIN (WWWAUDIOFILE).</summary>
+    public string? AudibleUrl => Text(Asin) is { } asin ? $"https://www.audible.com/pd/{Uri.EscapeDataString(asin)}" : null;
+
+    /// <summary>Trimmed, or null when blank.</summary>
+    internal static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
 
 /// <summary>Thrown before anything is created when the target path already exists, so it was never the writer's.</summary>
 public class TagTargetExistsException(string path, Exception? inner = null) : IOException($"A file is already at {path}.", inner);
@@ -54,6 +93,7 @@ public class TagWriter(FfmpegRunner ffmpeg)
         // The .partial name has no audio extension, so the type is named.
         using var file = TagLib.File.Create(tempPath, "audio/mpeg", TagLib.ReadStyle.Average);
         ApplyTags(file, tags, joinLists: false);
+        ApplyMp3BookFrames((TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2, true), tags);
         file.Save();
     }
 
@@ -74,7 +114,89 @@ public class TagWriter(FfmpegRunner ffmpeg)
 
         using var file = TagLib.File.Create(tempPath, "audio/mp4", TagLib.ReadStyle.Average);
         ApplyTags(file, tags, joinLists: true);
+        ApplyM4bBookAtoms((TagLib.Mpeg4.AppleTag)file.GetTag(TagLib.TagTypes.Apple, true), tags);
         file.Save();
+    }
+
+    /// <summary>
+    /// The script's book fields as ID3v2 frames (names as Mp3tag maps them). A field the book lacks is left as the
+    /// source had it.
+    /// </summary>
+    private static void ApplyMp3BookFrames(TagLib.Id3v2.Tag tag, BookTags tags)
+    {
+        void SetText(string id, string? value)
+        {
+            if (Text(value) is { } text) TagLib.Id3v2.TextInformationFrame.Get(tag, id, true).Text = [text];
+        }
+        void SetUser(string name, string? value)
+        {
+            if (Text(value) is { } text) TagLib.Id3v2.UserTextInformationFrame.Get(tag, name, true).Text = [text];
+        }
+
+        var narrators = tags.Narrators.Select(Text).OfType<string>().ToArray();
+        if (narrators.Length > 0) tag.Composers = narrators;
+        if (Text(tags.Subtitle) is { } subtitle) tag.Subtitle = subtitle;
+        SetUser("SERIES", tags.Series);
+        SetUser("SERIES-PART", tags.SeriesPart);
+        SetText("MVNM", tags.Series);
+        SetText("MVIN", tags.SeriesPart);
+        if (Text(tags.Series) is not null) SetUser("SHOWMOVEMENT", "1");
+        if (tags.ContentGroup is { } group) tag.Grouping = group;
+        if (tags.AlbumSort is { } sort) tag.AlbumSort = sort;
+        SetText("TLAN", tags.Language);
+        SetText("TPUB", tags.Publisher);
+        SetUser("FORMAT", tags.Format);
+        SetUser("ISBN", tags.Isbn);
+        SetUser("ASIN", tags.Asin);
+        SetText("TDRL", tags.ReleaseDate);
+        if (tags.AudibleUrl is { } url) TagLib.Id3v2.UrlLinkFrame.Get(tag, "WOAF", true).Text = [url];
+    }
+
+    private const string ITunes = "com.apple.iTunes";
+
+    // Integer data boxes carry the "signed integer" well-known type (21), which TagLibSharp names ForTempo.
+    private const uint IntegerFlags = (uint)TagLib.Mpeg4.AppleDataBox.FlagType.ForTempo;
+
+    private static readonly TagLib.ByteVector MovementName = new([0xA9, (byte)'m', (byte)'v', (byte)'n']);
+    private static readonly TagLib.ByteVector MovementNumber = new([0xA9, (byte)'m', (byte)'v', (byte)'i']);
+
+    /// <summary>
+    /// The script's book fields as MP4 atoms: standard ones through the Tag API, the rest as freeform
+    /// <c>----:com.apple.iTunes:</c> atoms, and the iTunes integer atoms (as proven in slice 60). A field the book
+    /// lacks is left as the source had it; the media type (Audiobook) and gapless flag are always written.
+    /// </summary>
+    private static void ApplyM4bBookAtoms(TagLib.Mpeg4.AppleTag tag, BookTags tags)
+    {
+        void SetDash(string name, string? value)
+        {
+            if (Text(value) is { } text) tag.SetDashBox(ITunes, name, text);
+        }
+
+        var narrators = tags.Narrators.Select(Text).OfType<string>().ToArray();
+        if (narrators.Length > 0) tag.Composers = [string.Join(", ", narrators)];
+        SetDash("SUBTITLE", tags.Subtitle);
+        SetDash("SERIES", tags.Series);
+        SetDash("SERIES-PART", tags.SeriesPart);
+        if (Text(tags.Series) is { } series)
+        {
+            tag.SetText(MovementName, series);
+            tag.SetData("shwm", new TagLib.ByteVector([1]), IntegerFlags);
+        }
+        // ©mvi is a 16-bit integer, so a part like "1.5" or "2-3" stays only in SERIES-PART.
+        if (ushort.TryParse(Text(tags.SeriesPart), System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out var movement))
+            tag.SetData(MovementNumber, new TagLib.ByteVector([(byte)(movement >> 8), (byte)movement]), IntegerFlags);
+        if (tags.ContentGroup is { } group) tag.Grouping = group;
+        if (tags.AlbumSort is { } sort) tag.AlbumSort = sort;
+        SetDash("LANGUAGE", tags.Language);
+        SetDash("PUBLISHER", tags.Publisher);
+        SetDash("FORMAT", tags.Format);
+        SetDash("ISBN", tags.Isbn);
+        SetDash("ASIN", tags.Asin);
+        SetDash("RELEASETIME", tags.ReleaseDate);
+        SetDash("WWWAUDIOFILE", tags.AudibleUrl);
+        tag.SetData("stik", new TagLib.ByteVector([2]), IntegerFlags); // 2 = Audiobook
+        tag.SetData("pgap", new TagLib.ByteVector([1]), IntegerFlags);
     }
 
     /// <summary>
@@ -122,5 +244,5 @@ public class TagWriter(FfmpegRunner ffmpeg)
         }
     }
 
-    private static string? Text(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? Text(string? value) => BookTags.Text(value);
 }
