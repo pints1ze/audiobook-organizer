@@ -12,6 +12,7 @@ import {
   getGroup,
   getGroups,
   getHealth,
+  getJobs,
   getLatestScan,
   getMatch,
   getMetadata,
@@ -773,5 +774,37 @@ describe('approveBook', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(approveBook(1)).rejects.toThrow()
+  })
+})
+
+describe('getJobs', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns the jobs on a 200', async () => {
+    const jobs = [
+      {
+        id: 4,
+        groupId: null,
+        title: 'Gone Book',
+        status: 'Failed',
+        createdAtUtc: '2026-10-19T10:00:00+00:00',
+        startedAtUtc: '2026-10-19T10:00:01+00:00',
+        finishedAtUtc: '2026-10-19T10:00:02+00:00',
+        error: 'Disk full.',
+        files: [],
+      },
+    ]
+    const fetchMock = mockFetch(200, jobs)
+
+    await expect(getJobs()).resolves.toEqual(jobs)
+    expect(fetchMock).toHaveBeenCalledWith('/api/jobs')
+  })
+
+  it('throws on a 500', async () => {
+    mockFetch(500, { title: 'error' })
+
+    await expect(getJobs()).rejects.toThrow()
   })
 })

@@ -91,6 +91,15 @@ export async function getPreview(): Promise<LibraryPreview> {
   return (await response.json()) as LibraryPreview
 }
 
+/** Every processing job, newest first. */
+export async function getJobs(): Promise<ProcessingJob[]> {
+  const response = await fetch('/api/jobs')
+  if (response.status !== 200) {
+    throw new Error(`Loading the jobs failed with status ${response.status}`)
+  }
+  return (await response.json()) as ProcessingJob[]
+}
+
 /** Queues a book whose preview is clean for processing; a refusal carries the API's reason. */
 export async function approveBook(groupId: number): Promise<ApproveBookResult> {
   const response = await fetch('/api/jobs', {

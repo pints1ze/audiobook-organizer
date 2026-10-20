@@ -561,6 +561,56 @@ public class JobsControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_failed_book_retried_by_approving_again_ends_with_one_copy_of_each_file_and_keeps_the_failed_job()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var first = await ApproveJob(setup, ids[0]);
+        var destinations = Destinations(first);
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[1])!);
+        File.WriteAllText(destinations[1], "someone else's file");
+        var client = _factory.CreateClient();
+        var failed = await WaitForJob(client, first.GetProperty("id").GetInt64());
+        Assert.Equal("Failed", failed.GetProperty("status").GetString());
+        File.Delete(destinations[1]);
+
+        var retried = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", retried.GetProperty("status").GetString());
+        Assert.Equal(destinations, Destinations(retried));
+        Assert.Equal(destinations.Order(), Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+        Assert.Empty(PartialFiles());
+        var jobs = await Jobs(client);
+        Assert.Equal(2, jobs.Count);
+        var history = jobs[1];
+        Assert.Equal(first.GetProperty("id").GetInt64(), history.GetProperty("id").GetInt64());
+        Assert.Equal(("Failed", $"A file is already at {destinations[1]}."),
+            (history.GetProperty("status").GetString(), history.GetProperty("error").GetString()));
+    }
+
+    [Fact]
+    public async Task Approving_a_book_whose_job_succeeded_is_refused_so_it_is_never_copied_twice()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
+        var ids = await ScanTwoBooks(client);
+        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        var libraryBefore = Snapshot(_folders.Library);
+
+        var again = await Approve(client, ids[0]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal($"A file is already at {firstFile}.",
+            (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
+        Assert.Single(await Jobs(client));
+        Assert.Equal(libraryBefore, Snapshot(_folders.Library));
+    }
+
+    [Fact]
     public async Task A_failed_job_does_not_stop_the_next_queued_job()
     {
         using var host = QueueOnly();

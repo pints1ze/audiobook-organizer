@@ -45,6 +45,11 @@ export default function AppLayout() {
                 </NavLink>
               </li>
               <li>
+                <NavLink to="/jobs" className={navLinkClass}>
+                  Jobs
+                </NavLink>
+              </li>
+              <li>
                 <NavLink to="/settings" className={navLinkClass}>
                   Settings
                 </NavLink>
