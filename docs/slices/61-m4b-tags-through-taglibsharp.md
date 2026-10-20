@@ -4,11 +4,11 @@
 **Goal:** M4B copies are remuxed by ffmpeg without the Nero `chpl` atom (chapters kept in the QuickTime chapter track) and then tagged by the same TagLibSharp code as MP3, so later slices can write freeform atoms; every tag, the cover, chapters and audio come out as in slice 56.
 
 ## Done when
-- [ ] `TagWriter` writes an M4B copy in two steps: one ffmpeg `-c copy` remux into the `.partial` with `-movflags disable_chpl` (audio, chapters as the chapter track, the source's tags and cover), then a TagLibSharp save of the same fields slice 56 writes (title/album, artists/album artists, genres, year, track N/M, disc, chosen cover)
-- [ ] a written M4B copy has no `moov/udta/chpl` box; `ChapterReader` (ffprobe) returns the source's 3 chapters with the same titles and start times; the audio streamhash is unchanged; the slice 56 tags and cover read back; the source is byte-for-byte unchanged
-- [ ] an M4B source that has no cover keeps none, a source cover is kept when no cover is chosen, and a chosen cover replaces it (as slice 56)
-- [ ] AGENTS.md's M4B rule says how M4B is written now (see Tasks); the fixtures README notes that copies carry chapters only in the chapter track
-- [ ] all four checks pass
+- [x] `TagWriter` writes an M4B copy in two steps: one ffmpeg `-c copy` remux into the `.partial` with `-movflags disable_chpl` (audio, chapters as the chapter track, the source's tags and cover), then a TagLibSharp save of the same fields slice 56 writes (title/album, artists/album artists, genres, year, track N/M, disc, chosen cover)
+- [x] a written M4B copy has no `moov/udta/chpl` box; `ChapterReader` (ffprobe) returns the source's 3 chapters with the same titles and start times; the audio streamhash is unchanged; the slice 56 tags and cover read back; the source is byte-for-byte unchanged
+- [x] an M4B source that has no cover keeps none, a source cover is kept when no cover is chosen, and a chosen cover replaces it (as slice 56)
+- [x] AGENTS.md's M4B rule says how M4B is written now (see Tasks); the fixtures README notes that copies carry chapters only in the chapter track
+- [x] all four checks pass
 
 ## Read first
 - `docs/slices/60-m4b-freeform-atoms-spike.md` (Test results and Outcome: candidate B), and `docs/fixtures/audio/README.md` ("TagLibSharp and chpl")
@@ -17,10 +17,10 @@
 - `src/AudiobookOrganizer.Api.Tests/Services/TagRoundTripTests.cs` (`Mp4AudioHash`, the known-bug test, which stays)
 
 ## Tasks
-- [ ] **One tagging path.** In `TagWriter`, move the TagLibSharp field writes out of `WriteMp3` into a private `ApplyTags(TagLib.File file, BookTags tags, bool joinLists)` used by both formats. MP3 keeps lists; M4B joins artists and genres with ", " into one value (as slice 56 did through ffmpeg). Same empty-value rules: a null or empty value leaves the tag alone; a chosen cover replaces the pictures, no cover leaves them.
-- [ ] **M4B remux without chpl.** `WriteM4b` keeps the `CreateNew` placeholder and `-y` rule, and runs `-y -v error -i <source> -map 0:a -map 0:v? -c copy -map_chapters 0 -map_metadata 0 -disposition:v:0 attached_pic -movflags disable_chpl -f ipod <temp>`: no `-metadata` values and no cover input any more (the cover temp file goes away). Then `TagLib.File.Create(temp, <the MP4 MIME type TagLibSharp registers, e.g. "audio/mp4">, ReadStyle.Average)`, `ApplyTags(..., joinLists: true)`, `Save()`. Checked on 2026-10-20: `-movflags disable_chpl` with `-map_chapters 0` gives 3 chapters and no `chpl` on dev ffmpeg 9 and image ffmpeg 6.1.
-- [ ] **AGENTS.md.** Replace "Don't save M4B files with TagLibSharp: it corrupts the Nero `chpl` chapter atom (slice 04)." with: "M4B copies are remuxed by ffmpeg with `-movflags disable_chpl` (chapters live only in the QuickTime chapter track), then tagged by TagLibSharp. Never save an M4B that still has a `chpl` atom with TagLibSharp: it corrupts it (slices 04, 60)." Add a line to `docs/fixtures/audio/README.md`.
-- [ ] **Tests** (below). Share the spike's box helpers (`FindPath`) as `internal static` instead of copying them. Run all four checks with full backend output (TRX).
+- [x] **One tagging path.** In `TagWriter`, move the TagLibSharp field writes out of `WriteMp3` into a private `ApplyTags(TagLib.File file, BookTags tags, bool joinLists)` used by both formats. MP3 keeps lists; M4B joins artists and genres with ", " into one value (as slice 56 did through ffmpeg). Same empty-value rules: a null or empty value leaves the tag alone; a chosen cover replaces the pictures, no cover leaves them.
+- [x] **M4B remux without chpl.** `WriteM4b` keeps the `CreateNew` placeholder and `-y` rule, and runs `-y -v error -i <source> -map 0:a -map 0:v? -c copy -map_chapters 0 -map_metadata 0 -disposition:v:0 attached_pic -movflags disable_chpl -f ipod <temp>`: no `-metadata` values and no cover input any more (the cover temp file goes away). Then `TagLib.File.Create(temp, <the MP4 MIME type TagLibSharp registers, e.g. "audio/mp4">, ReadStyle.Average)`, `ApplyTags(..., joinLists: true)`, `Save()`. Checked on 2026-10-20: `-movflags disable_chpl` with `-map_chapters 0` gives 3 chapters and no `chpl` on dev ffmpeg 9 and image ffmpeg 6.1.
+- [x] **AGENTS.md.** Replace "Don't save M4B files with TagLibSharp: it corrupts the Nero `chpl` chapter atom (slice 04)." with: "M4B copies are remuxed by ffmpeg with `-movflags disable_chpl` (chapters live only in the QuickTime chapter track), then tagged by TagLibSharp. Never save an M4B that still has a `chpl` atom with TagLibSharp: it corrupts it (slices 04, 60)." Add a line to `docs/fixtures/audio/README.md`.
+- [x] **Tests** (below). Share the spike's box helpers (`FindPath`) as `internal static` instead of copying them. Run all four checks with full backend output (TRX).
 - Data: none.
 - Auth: none (single user, no login).
 - Accessibility: none (API only).

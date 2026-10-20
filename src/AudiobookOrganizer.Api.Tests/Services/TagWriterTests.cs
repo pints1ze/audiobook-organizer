@@ -49,6 +49,21 @@ public class TagWriterTests : IDisposable
         return path;
     }
 
+    /// <summary>As <see cref="M4bSource"/>, with the fixture JPEG embedded as an attached picture.</summary>
+    private string M4bSourceWithCover()
+    {
+        var plain = M4bSource();
+        var cover = Path.Combine(_dir, "cover.jpg");
+        File.WriteAllBytes(cover, TagRoundTripTests.CoverJpeg);
+        var source = Path.Combine(_dir, "with-cover.m4b");
+        FfmpegRunnerTests.Runner().Ffmpeg(
+        [
+            "-v", "error", "-i", plain, "-i", cover, "-map", "0:a", "-map", "1", "-c", "copy", "-map_chapters", "0",
+            "-disposition:v:0", "attached_pic", source,
+        ]);
+        return source;
+    }
+
     private string Temp(string name = "out.mp3.partial") => Path.Combine(_dir, name);
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
@@ -88,15 +103,18 @@ public class TagWriterTests : IDisposable
     }
 
     [Fact]
-    public void An_m4b_copy_gets_every_tag_and_the_cover_and_keeps_chapters_audio_and_other_tags()
+    public void An_m4b_copy_has_no_chpl_and_gets_every_tag_and_the_cover_and_keeps_chapters_audio_and_other_tags()
     {
         var source = M4bSource();
+        Assert.NotNull(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(source), "moov", "udta", "chpl"));
         var sourceHash = Hash(source);
         var before = TagRoundTripTests.Snapshot(source, TagRoundTripTests.Mp4AudioHash);
         var temp = Temp("out.m4b");
 
         _writer.Write(source, temp, Full);
 
+        // Chapters now come only from the QuickTime chapter track: same titles and starts through ChapterReader.
+        Assert.Null(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(temp), "moov", "udta", "chpl"));
         Assert.Equal(before, TagRoundTripTests.Snapshot(temp, TagRoundTripTests.Mp4AudioHash));
         Assert.Empty(Directory.GetFiles(_dir, "*.cover.*"));
         using var file = TagLib.File.Create(temp, "audio/mp4", TagLib.ReadStyle.Average);
@@ -117,22 +135,29 @@ public class TagWriterTests : IDisposable
     [Fact]
     public void An_m4b_without_a_chosen_cover_keeps_the_sources_embedded_cover()
     {
-        var plain = M4bSource();
-        var cover = Path.Combine(_dir, "cover.jpg");
-        File.WriteAllBytes(cover, TagRoundTripTests.CoverJpeg);
-        var source = Path.Combine(_dir, "with-cover.m4b");
-        FfmpegRunnerTests.Runner().Ffmpeg(
-        [
-            "-v", "error", "-i", plain, "-i", cover, "-map", "0:a", "-map", "1", "-c", "copy", "-map_chapters", "0",
-            "-disposition:v:0", "attached_pic", source,
-        ]);
+        var source = M4bSourceWithCover();
         var temp = Temp("out.m4b.partial");
 
         _writer.Write(source, temp, Full with { Cover = null });
 
+        Assert.Null(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(temp), "moov", "udta", "chpl"));
         using var file = TagLib.File.Create(temp, "audio/mp4", TagLib.ReadStyle.Average);
         Assert.Equal(TagRoundTripTests.CoverJpeg, Assert.Single(file.Tag.Pictures).Data.Data);
         Assert.Equal("The Book", file.Tag.Title);
+    }
+
+    [Fact]
+    public void An_m4b_chosen_cover_replaces_the_sources_embedded_cover()
+    {
+        var chosen = new TagCover([0x89, (byte)'P', (byte)'N', (byte)'G', 1, 2, 3], "image/png");
+        var temp = Temp("out.m4b.partial");
+
+        _writer.Write(M4bSourceWithCover(), temp, Full with { Cover = chosen });
+
+        using var file = TagLib.File.Create(temp, "audio/mp4", TagLib.ReadStyle.Average);
+        var picture = Assert.Single(file.Tag.Pictures);
+        Assert.Equal(chosen.Image, picture.Data.Data);
+        Assert.Equal("image/png", picture.MimeType);
     }
 
     [Fact]
@@ -142,8 +167,10 @@ public class TagWriterTests : IDisposable
 
         _writer.Write(M4bSource(), temp, Full with { Cover = null });
 
+        Assert.Null(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(temp), "moov", "udta", "chpl"));
         using var file = TagLib.File.Create(temp, "audio/mp4", TagLib.ReadStyle.Average);
         Assert.Empty(file.Tag.Pictures);
+        Assert.Equal("The Book", file.Tag.Title);
     }
 
     [Theory]

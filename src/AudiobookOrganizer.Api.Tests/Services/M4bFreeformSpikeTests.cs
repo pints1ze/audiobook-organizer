@@ -7,7 +7,7 @@ namespace AudiobookOrganizer.Api.Tests.Services;
 /// <summary>
 /// Spike (slice 60): can the developer's Mp3tag fields that M4B keeps in freeform <c>----:com.apple.iTunes:</c> atoms
 /// (and the iTunes atoms ffmpeg can't write) be added after the slice 56 ffmpeg remux without breaking chapters,
-/// audio, cover or the standard tags? Each test starts from a temp copy of the fixture, remuxed by <see cref="TagWriter"/>.
+/// audio, cover or the standard tags? Each test starts from a temp copy of the fixture, remuxed as slice 56 did.
 /// Findings are recorded in docs/fixtures/audio/README.md and slice 60's Test results.
 /// </summary>
 public class M4bFreeformSpikeTests : IDisposable
@@ -158,15 +158,23 @@ public class M4bFreeformSpikeTests : IDisposable
         Assert.Equal(TagRoundTripTests.Mp4AudioHash(remuxed), TagRoundTripTests.Mp4AudioHash(path));
     }
 
-    /// <summary>The slice 56 remux of the fixture: standard tags and the cover, through the production writer.</summary>
+    /// <summary>
+    /// The slice 56 remux of the fixture (standard tags and the cover, chpl kept). Since slice 61 the production writer
+    /// drops chpl, so the spike runs slice 56's ffmpeg arguments itself to keep measuring the same file.
+    /// </summary>
     private string Remux()
     {
-        var source = Path.Combine(_dir, "source.m4b");
-        File.Copy(ChapterReaderTests.Fixture("chapters.m4b"), source);
+        var cover = Path.Combine(_dir, "cover.jpg");
+        File.WriteAllBytes(cover, TagRoundTripTests.CoverJpeg);
         var remuxed = Path.Combine(_dir, "remuxed.m4b");
-        new TagWriter(_ffmpeg).Write(source, remuxed, new BookTags(
-            "Test Title", ["Test Author"], ["Fantasy"], 2020, 1, 1, null,
-            new TagCover(TagRoundTripTests.CoverJpeg, "image/jpeg")));
+        _ffmpeg.Ffmpeg(
+        [
+            "-v", "error", "-i", ChapterReaderTests.Fixture("chapters.m4b"), "-i", cover, "-map", "0:a", "-map", "1",
+            "-c", "copy", "-map_chapters", "0", "-map_metadata", "0", "-disposition:v:0", "attached_pic",
+            "-metadata", "title=Test Title", "-metadata", "album=Test Title", "-metadata", "artist=Test Author",
+            "-metadata", "album_artist=Test Author", "-metadata", "genre=Fantasy", "-metadata", "date=2020",
+            "-metadata", "track=1/1", "-f", "ipod", remuxed,
+        ]);
         return remuxed;
     }
 
@@ -256,7 +264,7 @@ public class M4bFreeformSpikeTests : IDisposable
     }
 
     // A minimal ISO BMFF box reader: enough to find moov/udta/chpl and moov/udta/meta/ilst. 32-bit sizes only.
-    private record Box(string Type, int Start, int Size);
+    internal record Box(string Type, int Start, int Size);
 
     private static List<Box> Chpl(byte[] bytes) =>
         FindPath(bytes, "moov", "udta", "chpl") ?? throw new InvalidOperationException("No moov/udta/chpl box.");
@@ -268,7 +276,7 @@ public class M4bFreeformSpikeTests : IDisposable
     private static Box Top(byte[] bytes, string type) => Children(bytes, null).First(b => b.Type == type);
 
     /// <summary>The chain of boxes from the top level down to the last type in the path, or null.</summary>
-    private static List<Box>? FindPath(byte[] bytes, params string[] path)
+    internal static List<Box>? FindPath(byte[] bytes, params string[] path)
     {
         List<Box> chain = [];
         Box? parent = null;
