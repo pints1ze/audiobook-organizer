@@ -52,3 +52,37 @@
 - Artist is checked by containment because the reader joins multiple values and M4B stores the joined string; the full list check waits for the custom-fields slice.
 - Tests only ever delete sources in their own temp incoming folders, never `docs/fixtures/`: the implementer checks how `JobsControllerTests` sets incoming before relying on deletion.
 - Conflict check: consistent with AGENTS.md file safety (a source is deleted only after its destination copy is written, tagged and read back; never overwrite), the 2026-10-18 decision (copy, tag, verify, delete; keep-source defaults to off) and slice 55's cleanup rules. No new packages, no schema change.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 367 passed, 0 failed | Was 363. Full output kept (TRX `slice57-tests.trx`) |
+| Frontend tests | 249 passed, 0 failed | Unchanged (API-only slice) |
+| New tests | 5 of 5 present, passing | `JobsControllerTests`: keep-source off deletes sources (`SourceDeleted`); keep-source on keeps them byte-for-byte (folded into the cover success test); a failed second file deletes no source (`A_failed_job_does_not_stop_the_next_queued_job`, `A_failed_tag_write…`); a failed read-back names the chapter check and leaves no copy; a changed source is kept with the error. Plus an extra: a source that can't be deleted is kept (Windows-only lock; returns early elsewhere) |
+| Manual: M4B book with keep-source off plays with chapters and cover; incoming file gone | Not run | API not running. Start with `scripts/start-api.ps1` |
+| Manual: keep-source on, multi-file MP3 book; incoming files unchanged | Not run | Same |
+
+Data checks: none (no schema change; `SourceDeleted` is a new text value in `ProcessingJobFile.Status`).
+
+## Outcome (2026-10-19, commit 3b35d73)
+
+**Status:** Implemented
+**Summary:** `ProcessingService` reads each source (tags, chapters, duration, size, last-write time) before writing its copy, then reads the copy back in place and checks title, first artist, track, cover, chapter count and duration (±1 s); a mismatch deletes that copy and fails the job through slice 55's cleanup. When every file verified and "keep source files" is off, each unchanged source is deleted (`SourceDeleted`); a changed or undeletable source is kept with an `Error` while the job still succeeds.
+**Changed:** 5 files: `Services/ProcessingService.cs`, `Models/Local/ProcessingJob.cs` (`SourceDeleted`), `Tests/Controllers/JobsControllerTests.cs` (4 new, 3 tightened), new `Tests/Services/AdjustingAudioFileReader.cs`, the slice file.
+**Deviations:**
+- An extra test for a source that can't be deleted (held open; Windows-only, returns early elsewhere): *improvement*.
+- A new `AdjustingAudioFileReader` fake rather than extending `GatedAudioFileReader`: *fine* (the Notes allowed it).
+- The keep-source-on test is folded into the existing cover success test: *fine*.
+- Read-back messages other than the chapter example are the implementer's wording; the duration message uses the current culture's number format: *fine*.
+- No job test runs an M4B through the read-back (MP3 only); `TagWriterTests` covers M4B tags and chapters: *debt*, cover with the custom-fields slice or the phase 9 end-to-end tests.
+- A source that vanishes between its copy and the deletion step gets the "couldn't be deleted: Could not find file…" error rather than a clearer one: *debt*, harmless (both cases keep the copy).
+**Follow-ups:**
+- Next: retry a failed job without duplicates (phase 8 done-when).
+- Then the jobs UI: Approve on the book/preview page and a jobs list showing each failure's details (phase 8 "failures are visible with details").
+- Before the custom-fields slice: the developer answers the Audiobookshelf frames question for narrator, series, series part and ASIN (gate 1 until then).
+- Phase 9: what a rescan does with the groups and `AudioFile` rows of deleted sources; empty incoming folders left after deletion.
