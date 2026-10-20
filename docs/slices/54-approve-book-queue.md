@@ -50,3 +50,32 @@
 - Destinations are snapshotted at approval so the job does exactly what the user approved; the worker will still refuse to overwrite anything that appears there later (PRD rule).
 - Conflict check: consistent with PRD rules (approval per book, conflicts block), PLAN phase 8, and the excluded-files decision: excluded files are never in a group, so they're never in a job. The tag-frame open question isn't touched here. No new packages.
 - Split off for later slices: a background `ProcessingRunner` (one job at a time, copy to a temp name then move into place, never overwrite); tag and cover writing on the copy with the track as book position; read-back verify and source delete unless keep-source; failure details and retry without duplicates; the jobs UI and an Approve button.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 347 passed, 0 failed | Was 337. Full output kept (TRX) |
+| Frontend tests | 249 passed, 0 failed | Unchanged (API-only slice) |
+| New tests | 5 of 5 present, passing | `JobsControllerTests` (10): clean approve with destinations and nothing created; list newest first and unknown job 404; duplicate, existing, missing values, file error and no-files refusals with no job recorded; unknown group 404 and bad `groupId` 400; second approve 409; rescan keeps the approved group |
+| Manual: POST a clean book gives 201, library untouched, second POST 409 | Not run | API not running. Start with `scripts/start-api.ps1` |
+| Manual: POST a flagged book gives a readable 400 | Not run | Same |
+
+Data checks (for the developer): `SELECT * FROM ProcessingJob ORDER BY Id DESC;` and `SELECT * FROM ProcessingJobFile WHERE JobId = <id> ORDER BY Position;`
+
+## Outcome (2026-10-19, commit cc56b30)
+
+**Status:** Implemented
+**Summary:** `POST /api/jobs` with `{ groupId }` approves a book whose preview is clean: it records a `Queued` `ProcessingJob` with each file's source and destination snapshotted as `Pending` `ProcessingJobFile` rows, and marks the group `UserCorrected`. Errors, missing values, duplicate targets, existing destinations and empty books are 400s with a reason; an unknown group is 404 and an already queued or running book is 409. `GET /api/jobs` and `GET /api/jobs/{id}` read them back. Nothing is copied.
+**Changed:** 8 files: new `Models/Local/ProcessingJob.cs`, `Data/ProcessingRepository.cs`, `Services/ProcessingService.cs`, `Models/Api/ProcessingDtos.cs`, `Controllers/JobsController.cs`, `Tests/Controllers/JobsControllerTests.cs` (10); `DatabaseInitializer.cs` (two tables), `Program.cs`.
+**Deviations:**
+- The job DTO also carries `startedAtUtc`, `finishedAtUtc` and `error` (and `error` per file), null for now: *fine*, the worker fills them.
+- `Approve` holds a lock around the active-job check and the insert, so a double click can't queue a book twice: *improvement*.
+- A missing or non-positive `groupId` is a validation problem on `groupId` ("Choose a book to approve."): *fine*.
+**Follow-ups:**
+- Next: a background `ProcessingRunner` that takes queued jobs one at a time and copies each file to its snapshotted destination (temp name, then move into place, never overwriting), recording file and job status and errors.
+- Then tags and cover on the copy (track = book position), read-back verify, source delete unless keep-source, retry without duplicates, and the jobs UI with an Approve button.
