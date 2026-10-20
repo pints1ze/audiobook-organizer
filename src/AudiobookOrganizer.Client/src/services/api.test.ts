@@ -7,6 +7,7 @@ import {
   getCovers,
   excludeFiles,
   getDashboard,
+  getPreview,
   getGroup,
   getGroups,
   getHealth,
@@ -693,5 +694,28 @@ describe('covers', () => {
 
     mockFetch(413, { title: 'Payload Too Large' })
     await expect(uploadCover(4, file)).rejects.toThrow()
+  })
+})
+
+describe('getPreview', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns the parsed body on a 200', async () => {
+    const preview = {
+      libraryPath: '/lib',
+      books: [],
+      counts: { files: 0, missing: 0, errors: 0, duplicates: 0, existing: 0 },
+    }
+    const fetchMock = mockFetch(200, preview)
+
+    await expect(getPreview()).resolves.toEqual(preview)
+    expect(fetchMock).toHaveBeenCalledWith('/api/preview')
+  })
+
+  it('throws on any other status', async () => {
+    mockFetch(500, { title: 'Server error' })
+    await expect(getPreview()).rejects.toThrow()
   })
 })

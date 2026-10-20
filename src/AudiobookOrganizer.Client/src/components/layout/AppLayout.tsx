@@ -40,6 +40,11 @@ export default function AppLayout() {
                 </NavLink>
               </li>
               <li>
+                <NavLink to="/preview" className={navLinkClass}>
+                  Preview
+                </NavLink>
+              </li>
+              <li>
                 <NavLink to="/settings" className={navLinkClass}>
                   Settings
                 </NavLink>

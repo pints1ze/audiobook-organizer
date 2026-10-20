@@ -36,6 +36,7 @@ import type {
   NameKind,
   SaveEntryResult,
 } from '../types/names'
+import type { LibraryPreview } from '../types/preview'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -79,6 +80,14 @@ export async function getDashboard(): Promise<Dashboard> {
     throw new Error(`Loading the dashboard failed with status ${response.status}`)
   }
   return (await response.json()) as Dashboard
+}
+
+export async function getPreview(): Promise<LibraryPreview> {
+  const response = await fetch('/api/preview')
+  if (response.status !== 200) {
+    throw new Error(`Loading the preview failed with status ${response.status}`)
+  }
+  return (await response.json()) as LibraryPreview
 }
 
 export async function getLatestScan(): Promise<ScanRun | null> {
