@@ -12,7 +12,8 @@ public record ApproveResult(ApproveOutcome Outcome, ProcessingJobDto? Job = null
 
 /// <summary>
 /// Approves books into the processing queue and runs queued jobs. Approval only records the job; <see cref="Run"/>
-/// writes a tagged copy of each file. Sources are only ever read.
+/// writes a tagged copy of each file, reads it back, and deletes the sources once the whole job verified (unless
+/// "keep source files" is on).
 /// </summary>
 public class ProcessingService(
     NamingPreviewService previews,
@@ -21,10 +22,17 @@ public class ProcessingService(
     AudiobookRepository audiobookData,
     GroupRepository groups,
     TagWriter tagWriter,
+    AudioFileReader reader,
+    SettingsService settings,
     ILogger<ProcessingService> logger)
 {
     public const string Interrupted = "Interrupted by an application restart.";
     public const string BookGone = "The book is no longer in the library.";
+    public const string SourceChanged = "The source changed after it was copied, so it was kept.";
+    public const string SourceNotDeleted = "The copy is in place, but the source couldn't be deleted: ";
+
+    /// <summary>What a source was just before its copy was written: its tags, size and last write time.</summary>
+    private record SourceFacts(AudioFileMetadata Read, long Size, DateTime LastWriteUtc);
 
     // Keeps two approvals of the same book from both passing the active-job check.
     private readonly Lock _lock = new();
@@ -77,9 +85,10 @@ public class ProcessingService(
 
     /// <summary>
     /// Runs a Queued job: writes a tagged copy of each file, in position order, to its snapshotted destination through
-    /// a <c>.partial</c> file in the destination folder, never overwriting anything. The tags come from the book's
-    /// current metadata; a book that's gone fails the job before any file is touched. The first problem fails that
-    /// file and the job, and removes the copies this job made. Does nothing when the job isn't Queued.
+    /// a <c>.partial</c> file in the destination folder, never overwriting anything, and reads each copy back. The tags
+    /// come from the book's current metadata; a book that's gone fails the job before any file is touched. The first
+    /// problem fails that file and the job, and removes the copies this job made. Once every file verified, the
+    /// sources are deleted unless "keep source files" is on. Does nothing when the job isn't Queued.
     /// </summary>
     public void Run(long jobId, CancellationToken cancellationToken)
     {
@@ -101,6 +110,7 @@ public class ProcessingService(
 
         string? partial = null;
         string? error = null;
+        var sources = new List<SourceFacts>();
         for (var i = 0; i < files.Count; i++)
         {
             var file = files[i];
@@ -111,7 +121,7 @@ public class ProcessingService(
             }
             try
             {
-                error = Copy(file, tags[i], ref partial);
+                error = Copy(file, tags[i], sources, ref partial);
             }
             catch (Exception ex)
             {
@@ -129,6 +139,7 @@ public class ProcessingService(
         }
 
         if (error is not null) RemoveCopies(job, files, partial);
+        else if (!settings.Get().KeepSourceFiles) DeleteSources(job, files, sources);
         job.Status = error is null ? ProcessingJob.Succeeded : ProcessingJob.Failed;
         job.Error = error;
         job.FinishedAtUtc = DateTime.UtcNow.ToString("O");
@@ -156,16 +167,22 @@ public class ProcessingService(
     }
 
     /// <summary>
-    /// Writes one file's tagged copy into place, or returns why it can't. <paramref name="partial"/> is set to the
-    /// temporary file once this job has created it, and cleared once it's moved into place.
+    /// Writes one file's tagged copy into place and reads it back, or returns why it can't; a copy that fails the
+    /// read-back is deleted. The source's facts are added to <paramref name="sources"/> before the write.
+    /// <paramref name="partial"/> is set to the temporary file once this job has created it, and cleared once it's
+    /// moved into place.
     /// </summary>
-    private string? Copy(ProcessingJobFile file, BookTags tags, ref string? partial)
+    private string? Copy(ProcessingJobFile file, BookTags tags, List<SourceFacts> sources, ref string? partial)
     {
         var destination = file.DestinationPath;
         if (!File.Exists(file.SourcePath)) return $"The source file is gone: {file.SourcePath}.";
         if (File.Exists(destination) || Directory.Exists(destination)) return $"A file is already at {destination}.";
         var temp = destination + ".partial";
         if (File.Exists(temp) || Directory.Exists(temp)) return $"A file is already at {temp}.";
+
+        var info = new FileInfo(file.SourcePath);
+        var source = new SourceFacts(reader.Read(file.SourcePath), info.Length, info.LastWriteTimeUtc);
+        sources.Add(source);
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         // The writer creates the temp file with CreateNew and throws TagTargetExistsException, having created
@@ -188,7 +205,82 @@ public class ProcessingService(
         // Same folder, so this is a rename; overwrite: false refuses a destination that appeared meanwhile.
         File.Move(temp, destination, overwrite: false);
         partial = null;
+
+        // The copy has to be read at its audio name, so it's checked in place. It's this job's (the move refuses to
+        // overwrite), so a copy that fails is deleted here; the failure path removes the earlier ones.
+        if (Verify(destination, tags, source.Read) is not { } mismatch) return null;
+        try
+        {
+            File.Delete(destination);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Couldn't remove {Path} after it failed its read-back", destination);
+        }
+        return mismatch;
+    }
+
+    /// <summary>Why the copy at <paramref name="destination"/> doesn't match its tags and source, or null when it does.</summary>
+    private string? Verify(string destination, BookTags tags, AudioFileMetadata source)
+    {
+        var name = Path.GetFileName(destination);
+        AudioFileMetadata copy;
+        try
+        {
+            copy = reader.Read(destination);
+        }
+        catch (Exception ex)
+        {
+            return $"The copy of {name} couldn't be read back: {ex.Message}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(tags.Title) && copy.Title != tags.Title.Trim())
+            return $"The copy of {name} has the title \"{copy.Title}\"; it should be \"{tags.Title.Trim()}\".";
+        if (tags.Artists.Count > 0 && !string.IsNullOrWhiteSpace(tags.Artists[0])
+            && copy.Artist?.Contains(tags.Artists[0].Trim(), StringComparison.Ordinal) != true)
+            return $"The copy of {name} has the artist \"{copy.Artist}\"; it should include \"{tags.Artists[0].Trim()}\".";
+        if (copy.Track != tags.Track)
+            return $"The copy of {name} has track {copy.Track?.ToString() ?? "none"}; it should be {tags.Track}.";
+        if ((tags.Cover is not null || source.HasCover) && !copy.HasCover) return $"The copy of {name} has no cover.";
+        if (copy.ChapterCount != source.ChapterCount)
+            return $"The copy of {name} has {Chapters(copy.ChapterCount)}; the source has {source.ChapterCount}.";
+        if (Math.Abs(copy.DurationMs - source.DurationMs) > 1000)
+            return $"The copy of {name} runs {copy.DurationMs / 1000.0:0.0} s; the source runs {source.DurationMs / 1000.0:0.0} s.";
         return null;
+    }
+
+    private static string Chapters(int count) => count == 1 ? "1 chapter" : $"{count} chapters";
+
+    /// <summary>
+    /// Deletes each verified file's source and marks it SourceDeleted. A source whose size or last write time changed
+    /// since its copy was made, or that can't be deleted, is kept: the file stays Copied with the reason as its error.
+    /// </summary>
+    private void DeleteSources(ProcessingJob job, IReadOnlyList<ProcessingJobFile> files, IReadOnlyList<SourceFacts> sources)
+    {
+        for (var i = 0; i < files.Count; i++)
+        {
+            var file = files[i];
+            try
+            {
+                var info = new FileInfo(file.SourcePath);
+                if (info.Length != sources[i].Size || info.LastWriteTimeUtc != sources[i].LastWriteUtc)
+                {
+                    logger.LogWarning("Kept {Path} for job {JobId}: it changed after it was copied", file.SourcePath, job.Id);
+                    file.Error = SourceChanged;
+                }
+                else
+                {
+                    File.Delete(file.SourcePath);
+                    file.Status = ProcessingJobFile.SourceDeleted;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Couldn't delete {Path} for job {JobId}", file.SourcePath, job.Id);
+                file.Error = SourceNotDeleted + ex.Message;
+            }
+            jobs.UpdateFile(file);
+        }
     }
 
     /// <summary>

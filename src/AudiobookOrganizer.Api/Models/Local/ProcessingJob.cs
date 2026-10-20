@@ -26,6 +26,8 @@ public class ProcessingJobFile
 {
     public const string Pending = "Pending";
     public const string Copied = "Copied";
+    /// <summary>Copied and verified, and the source was deleted (keep source files off).</summary>
+    public const string SourceDeleted = "SourceDeleted";
     public const string Failed = "Failed";
 
     public long JobId { get; set; }
