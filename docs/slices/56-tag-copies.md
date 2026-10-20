@@ -50,3 +50,35 @@
 - Tags come from the book's current metadata at run time (not the approval snapshot); only the destinations are snapshotted. The job runs seconds after approval, so the two rarely differ.
 - `-map_metadata 0` keeps the source's other tags; the explicit `-metadata` values override them. `-f ipod` is the muxer ffmpeg picks for `.m4b`, named because the `.partial` name has no extension.
 - Conflict check: consistent with AGENTS.md (M4B via ffmpeg `-c copy`, never TagLibSharp saves; ffmpeg only through `FfmpegRunner` with an argument list; sources never tagged in place), the cover decision (chosen cover embedded in every file) and the developer's track-number decision. The narrator-as-composer question stays open. No new packages.
+
+## Test results (2026-10-19)
+
+**Regressions:** two intermittent failures outside this slice in the implementer's first full run: `HealthControllerTests.Get_returns_503_degraded_when_database_cannot_be_opened` (the database file couldn't be replaced) and `ScanServiceTests.App_registers_the_scan_service_and_creates_its_tables` ("database is locked"). Cause: slice 55's hosted worker reading the queue as each test host starts. With the developer's OK, fixed in `382e3fb`: test hosts run the worker only when `RunProcessingWorker` is set (`JobsControllerTests` sets it). Afterwards: 10 of 10 runs passed before this slice's code was restored, and 6 of 6 with it.
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 363 passed, 0 failed | Was 353. 6 runs in a row, full output kept (TRX `slice56-run-1..6`) |
+| Frontend tests | 249 passed, 0 failed | Unchanged (API-only slice) |
+| New tests | 5 of 5 present, passing | `TagWriterTests` (8 cases): MP3 and M4B get every tag and the cover, keep chapters, audio hash and other tags; M4B keeps the source's cover with none chosen and gets none when neither has one; empty genres and null year leave the source's values (both formats); an existing temp path throws and is left alone. `JobsControllerTests`: tagged two-file book with an uploaded cover (title, author, track 1/2 and 2/2, cover); merged-away group fails with "The book is no longer in the library."; plus a failed tag write cleaning up |
+| Manual: M4B book with a chosen cover reads correctly in a player or Audiobookshelf; incoming unchanged | Not run | API not running. Start with `scripts/start-api.ps1` |
+| Manual: multi-file MP3 book tracks read 1/N…N/N | Not run | Same |
+
+Data checks: none (no schema change).
+
+## Outcome (2026-10-19, commit 4a5e6b6)
+
+**Status:** Implemented
+**Summary:** `TagWriter` writes each copy as a tagged file: MP3 is stream-copied and tagged with TagLibSharp; M4B is remuxed by one ffmpeg `-c copy` call that keeps the chapters, audio and other tags. Title and album are the book title, artists and album artists the authors (canonical names when linked), plus genres, year, track N of M and disc; the chosen cover replaces the pictures, or the source's stay. `ProcessingService` loads the book and cover per job and fails it when the group is gone. Sources are only read.
+**Changed:** 7 files: new `Services/TagWriter.cs`, `Tests/Services/TagWriterTests.cs` (8); `ProcessingService.cs`, `Program.cs`, `TagRoundTripTests.cs` (helpers shared), `JobsControllerTests.cs`. Plus `382e3fb`, the test-host worker fix (`AudiobookOrganizerWebApplicationFactory.cs`, `JobsControllerTests.cs`).
+**Deviations:**
+- For M4B the writer creates the `.partial` placeholder with `CreateNew`, then runs ffmpeg with `-y` on it, instead of `-n`: ffmpeg 9 exits 0 when `-n` refuses, so a clash would look like success: *improvement*.
+- `TagTargetExistsException` and a `TagCover` record in `TagWriter.cs`; `BookTags.Year` is an `int?`: *fine*.
+- M4B list values (artists, genres) are joined with ", " because the atoms hold one string; MP3 keeps them as lists: *fine*, revisit with the Audiobookshelf tag question.
+- The MP3 size check moved into `TagWriter`; slice 55's byte-equality copy test became the tagged-copy test (audio hash + tags): *fine*.
+- No test links a person or genre to a canonical entry before processing, and none fakes an ffmpeg failure in a job (a non-audio MP3 source covers the failure path): *debt*, cover when the custom-fields slice touches these paths.
+**Follow-ups:**
+- Next: read each copy back after writing (tags, track, cover, chapter count, duration) before it moves into place, then delete the sources unless "keep source files" is on.
+- Before the custom-fields slice: the developer answers the open question on Audiobookshelf frames for narrator, series, series part and ASIN (gate 1 until then).
+- Then retry without duplicates and the jobs UI with an Approve button.
