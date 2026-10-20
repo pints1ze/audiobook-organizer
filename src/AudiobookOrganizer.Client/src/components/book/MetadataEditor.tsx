@@ -101,9 +101,9 @@ type LoadState = { kind: 'loading' } | { kind: 'loaded'; metadata: BookMetadata 
 /** Why a save failed, beyond field errors: the book is gone, or a message to show. */
 type SaveError = { kind: 'notFound' } | { kind: 'message'; text: string }
 
-type Props = { groupId: number; match: MetadataCandidate | null; reloadKey: number }
+type Props = { groupId: number; match: MetadataCandidate | null; reloadKey: number; onSaved?: () => void }
 
-export default function MetadataEditor({ groupId, match, reloadKey }: Props) {
+export default function MetadataEditor({ groupId, match, reloadKey, onSaved }: Props) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -191,6 +191,7 @@ export default function MetadataEditor({ groupId, match, reloadKey }: Props) {
       setDraft(null)
       setSavedMessage('Metadata saved.')
       heading.current?.focus()
+      onSaved?.()
       return
     }
     const firstInvalid = fieldDefs.find((def) => errors[def.key]?.length)

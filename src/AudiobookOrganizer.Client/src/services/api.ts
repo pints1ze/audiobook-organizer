@@ -27,6 +27,7 @@ import type {
   UpdateBookMetadataFields,
 } from '../types/metadata'
 import type {
+  BookPeople,
   CanonicalEntry,
   EntryFieldErrors,
   EntryRequest,
@@ -343,6 +344,15 @@ export async function getEntries(kind: NameKind): Promise<CanonicalEntry[]> {
     throw new Error(`Loading ${kind} failed with status ${response.status}`)
   }
   return (await response.json()) as CanonicalEntry[]
+}
+
+/** A book's authors and narrators, each resolved to a canonical person or with suggested people. */
+export async function getBookPeople(groupId: number): Promise<BookPeople> {
+  const response = await fetch(`/api/groups/${groupId}/people`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the book's people failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookPeople
 }
 
 /** Maps a create (201) or update (200) response, its 400 and its 404; throws for any other status. */
