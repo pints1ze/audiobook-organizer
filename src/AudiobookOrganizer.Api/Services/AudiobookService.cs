@@ -17,7 +17,7 @@ public record GetMatchResult(bool GroupFound, BookMatchDto? Match);
 public record UpdateMetadataResult(BookMetadataDto? Metadata, IReadOnlyDictionary<string, string[]> Errors);
 
 /// <summary>Stores the catalog candidate the user picks for a book, and the book's metadata values with their origins.</summary>
-public class AudiobookService(GroupRepository groups, AudiobookRepository audiobooks)
+public class AudiobookService(GroupRepository groups, AudiobookRepository audiobooks, CanonicalNameService names)
 {
     public const int MaxPeople = 50;
 
@@ -78,6 +78,28 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
             Text(Fields.Format),
             Text(Fields.Asin),
             Text(Fields.Isbn)));
+    }
+
+    /// <summary>
+    /// The book's authors and narrators (as <see cref="GetMetadata"/> reads them, file fallback included), each with
+    /// the person it resolves to through the alias catalog or, if none, likely people. Null when the group id is
+    /// unknown. Computed on each read: nothing is linked or created.
+    /// </summary>
+    public BookPeopleDto? GetPeople(long groupId)
+    {
+        if (GetMetadata(groupId) is not { } metadata) return null;
+        IReadOnlyList<CanonicalEntryDto>? people = null;
+
+        NameLinkDto Link(string name)
+        {
+            if (names.Resolve(CanonicalKind.Person, name) is { } entry) return new NameLinkDto(name, entry, []);
+            people ??= names.List(CanonicalKind.Person);
+            return new NameLinkDto(name, null, CanonicalSuggestions.ForName(CanonicalKind.Person, name, people));
+        }
+
+        return new BookPeopleDto(groupId,
+            metadata.Fields.Authors.Value.Select(Link).ToList(),
+            metadata.Fields.Narrators.Value.Select(Link).ToList());
     }
 
     /// <summary>

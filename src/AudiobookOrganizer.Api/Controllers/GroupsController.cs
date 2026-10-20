@@ -81,6 +81,10 @@ public class GroupsController(GroupingService grouping, AudiobookService audiobo
     public ActionResult<BookMetadataDto> GetMetadata(long id) =>
         audiobooks.GetMetadata(id) is { } metadata ? metadata : NotFound();
 
+    [HttpGet("{id:long}/people")]
+    public ActionResult<BookPeopleDto> GetPeople(long id) =>
+        audiobooks.GetPeople(id) is { } people ? people : NotFound();
+
     [HttpPut("{id:long}/metadata")]
     public ActionResult<BookMetadataDto> PutMetadata(long id, UpdateBookMetadataDto request)
     {
