@@ -46,3 +46,31 @@
 - Retry plan for slice 59 (assumption, reversible): retrying a failed book is approving it again, which re-snapshots destinations from the current preview, so a fix to metadata or templates takes effect. The failed job stays as history. No duplicates follow from the existing rules: a failed job removes its copies, approval refuses existing destinations, and copies never overwrite. Slice 59 proves this with tests and gives failed jobs a Retry button; no new endpoint.
 - `getJobs` waits for slice 59, where it's first used (YAGNI).
 - Conflict check: consistent with AGENTS.md (state in React built-ins plus `services/api.ts`; plain HTML buttons; no new packages; WCAG 2.1 AA), slice 54's approval rules and the 409/400/404 contract. No backend change.
+
+## Test results (2026-10-19)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--no-incremental`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 367 passed, 0 failed | Unchanged (client-only slice). TRX `slice58-tests.trx` |
+| Frontend tests | 260 passed, 0 failed | Was 249 |
+| New tests | 4 of 4 present, passing | `PreviewPage.test.tsx`: Approve vs the fix note; Approving… then focused "Queued for processing."; refusal alert keeps the button; thrown error shows the generic alert. `api.test.ts` `approveBook`: 201, 400 detail, 409 title fallback, 404, throws on 500 |
+| Manual: keyboard Approve on a clean book, job ends `Succeeded` | Not run | API and client not running. Start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+| Manual: Approve again after a reload shows the reason | Not run | Same |
+
+Data checks: none (no schema change).
+
+## Outcome (2026-10-19, commit 622b0a0)
+
+**Status:** Implemented
+**Summary:** `approveBook` in `services/api.ts` (with `types/jobs.ts`) posts to `/api/jobs` and maps 201, 400/409 and 404 to a result union. Each clean book on `/preview` has an Approve button described by its heading; it shows "Approving…", then a focused "Queued for processing." status, or the API's reason in an alert. Books with problems show a fix note instead.
+**Changed:** 6 files: new `types/jobs.ts`; `services/api.ts`, `services/api.test.ts`, `pages/PreviewPage.tsx`, `pages/PreviewPage.test.tsx`; the slice file.
+**Deviations:**
+- A 400/409 with neither detail nor title falls back to "The book can't be approved yet.": *fine*.
+- The Approve button reuses the Settings page's primary button style: *fine*.
+**Follow-ups:**
+- Next (59): a Jobs page listing jobs with their files and failure details, a Retry button on failed jobs (approves the book again), `getJobs`, and backend tests proving retry creates no duplicates.
+- Before the custom-fields slice: the developer answers the Audiobookshelf frames question (gate 1 until then).
