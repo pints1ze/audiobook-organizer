@@ -44,3 +44,8 @@ export interface BookPeople {
   authors: NameLink[]
   narrators: NameLink[]
 }
+
+export interface BookGenres {
+  groupId: number
+  genres: NameLink[]
+}

@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../App'
 import {
+  getBookGenres,
   getBookPeople,
   getCovers,
   getGroup,
@@ -18,6 +19,7 @@ import { formatDateTime } from '../utils/formatDateTime'
 
 vi.mock('../services/api', () => ({
   createEntry: vi.fn(),
+  getBookGenres: vi.fn(),
   getBookPeople: vi.fn(),
   getCovers: vi.fn(),
   getGroup: vi.fn(),
@@ -37,6 +39,7 @@ const getMetadataMock = vi.mocked(getMetadata)
 const saveMetadataMock = vi.mocked(saveMetadata)
 const getCoversMock = vi.mocked(getCovers)
 const getBookPeopleMock = vi.mocked(getBookPeople)
+const getBookGenresMock = vi.mocked(getBookGenres)
 
 function metadataWith(title: string, origin: 'file' | 'provider', narrators: string[]): BookMetadata {
   const empty = { value: null, origin: null, provider: null }
@@ -158,14 +161,17 @@ describe('BookPage', () => {
     getCoversMock.mockResolvedValue({ groupId: 4, chosen: null, embedded: [], provider: null })
     getBookPeopleMock.mockReset()
     getBookPeopleMock.mockResolvedValue({ groupId: 4, authors: [], narrators: [] })
+    getBookGenresMock.mockReset()
+    getBookGenresMock.mockResolvedValue({ groupId: 4, genres: [] })
   })
 
-  it('shows the Cover, Metadata and People sections between Chosen match and Catalog search', async () => {
+  it('shows the Cover, Metadata, People and Genres sections between Chosen match and Catalog search', async () => {
     await loadedPage()
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
-    expect(headings).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Catalog search'])
+    expect(headings).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Genres', 'Catalog search'])
     expect(getBookPeopleMock).toHaveBeenCalledWith(4)
+    expect(getBookGenresMock).toHaveBeenCalledWith(4)
     expect(getCoversMock).toHaveBeenCalledWith(4)
     const cover = screen.getByRole('heading', { level: 2, name: 'Cover' }).closest('section')!
     expect(await within(cover).findByText('No cover chosen yet.')).toBeInTheDocument()
@@ -221,6 +227,21 @@ describe('BookPage', () => {
 
     expect(await within(people).findByText('Not linked')).toBeInTheDocument()
     expect(getBookPeopleMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads the genres section after the metadata editor saves', async () => {
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata: metadataWith('Project Hail Mary', 'file', []) })
+    await loadedPage()
+    const genres = screen.getByRole('heading', { level: 2, name: 'Genres' }).closest('section')!
+    await within(genres).findByText('No genres yet.')
+
+    fireEvent.click(await within(metadataSection()).findByRole('button', { name: 'Edit metadata' }))
+    fireEvent.change(within(metadataSection()).getByLabelText('Genres'), { target: { value: 'Horror' } })
+    getBookGenresMock.mockResolvedValue({ groupId: 4, genres: [{ name: 'Horror', entry: null, suggestions: [] }] })
+    fireEvent.click(within(metadataSection()).getByRole('button', { name: 'Save' }))
+
+    expect(await within(genres).findByText('Not linked')).toBeInTheDocument()
+    expect(getBookGenresMock).toHaveBeenCalledTimes(2)
   })
 
   it('reloads the covers after "Use this match" succeeds, so the match cover follows it', async () => {
@@ -355,7 +376,7 @@ describe('BookPage', () => {
     await loadedPage()
 
     expect(getMatchMock).toHaveBeenCalledWith(4)
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Catalog search'])
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Genres', 'Catalog search'])
     const section = chosenSection()
     expect(await within(section).findByRole('heading', { level: 3, name: 'Project Hail Mary' })).toBeInTheDocument()
     expect(within(section).getByText('Open Library')).toBeInTheDocument()

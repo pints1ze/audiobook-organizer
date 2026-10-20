@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import CoverPicker from '../components/book/CoverPicker'
 import MetadataEditor, { providerNames } from '../components/book/MetadataEditor'
-import PeopleLinks from '../components/book/PeopleLinks'
+import NameLinks from '../components/book/NameLinks'
 import { getGroup, getMatch, pickMatch, searchMetadata } from '../services/api'
 import type { GroupDetail } from '../types/groups'
 import type { BookMatch, MetadataCandidate, MetadataSearchResult } from '../types/metadata'
@@ -62,7 +62,7 @@ function BookContent({ group }: { group: GroupDetail }) {
   const [matchState, setMatchState] = useState<MatchState>({ kind: 'loading' })
   const [savedMessage, setSavedMessage] = useState('')
   const [metadataReloadKey, setMetadataReloadKey] = useState(0)
-  const [peopleReloadKey, setPeopleReloadKey] = useState(0)
+  const [namesReloadKey, setNamesReloadKey] = useState(0)
   const chosenHeading = useRef<HTMLHeadingElement>(null)
 
   useEffect(() => {
@@ -83,7 +83,7 @@ function BookContent({ group }: { group: GroupDetail }) {
     setMatchState({ kind: 'loaded', match })
     setSavedMessage(`Match saved: ${match.match.title ?? 'Untitled'}`)
     setMetadataReloadKey((key) => key + 1)
-    setPeopleReloadKey((key) => key + 1)
+    setNamesReloadKey((key) => key + 1)
     chosenHeading.current?.focus()
   }
 
@@ -132,9 +132,10 @@ function BookContent({ group }: { group: GroupDetail }) {
         groupId={group.id}
         match={currentMatch}
         reloadKey={metadataReloadKey}
-        onSaved={() => setPeopleReloadKey((key) => key + 1)}
+        onSaved={() => setNamesReloadKey((key) => key + 1)}
       />
-      <PeopleLinks groupId={group.id} reloadKey={peopleReloadKey} />
+      <NameLinks kind="people" groupId={group.id} reloadKey={namesReloadKey} />
+      <NameLinks kind="genres" groupId={group.id} reloadKey={namesReloadKey} />
       <CatalogSearch
         initialKeywords={[group.title, group.author].filter((part) => part?.trim()).join(' ')}
         groupId={group.id}

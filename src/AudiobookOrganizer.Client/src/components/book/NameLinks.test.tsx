@@ -1,16 +1,18 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEntry, getBookPeople, updateEntry } from '../../services/api'
-import type { BookPeople, CanonicalEntry } from '../../types/names'
-import PeopleLinks from './PeopleLinks'
+import { createEntry, getBookGenres, getBookPeople, updateEntry } from '../../services/api'
+import type { BookGenres, BookPeople, CanonicalEntry } from '../../types/names'
+import NameLinks from './NameLinks'
 
 vi.mock('../../services/api', () => ({
   createEntry: vi.fn(),
+  getBookGenres: vi.fn(),
   getBookPeople: vi.fn(),
   updateEntry: vi.fn(),
 }))
 
 const getBookPeopleMock = vi.mocked(getBookPeople)
+const getBookGenresMock = vi.mocked(getBookGenres)
 const updateEntryMock = vi.mocked(updateEntry)
 const createEntryMock = vi.mocked(createEntry)
 
@@ -35,16 +37,17 @@ const linked: BookPeople = {
 }
 
 function renderLinks() {
-  return render(<PeopleLinks groupId={4} reloadKey={0} />)
+  return render(<NameLinks kind="people" groupId={4} reloadKey={0} />)
 }
 
 function row(name: string) {
   return screen.getByText(name).closest('li')!
 }
 
-describe('PeopleLinks', () => {
+describe('NameLinks (people)', () => {
   beforeEach(() => {
     getBookPeopleMock.mockReset()
+    getBookGenresMock.mockReset()
     updateEntryMock.mockReset()
     createEntryMock.mockReset()
   })
@@ -152,5 +155,104 @@ describe('PeopleLinks', () => {
 
     expect(screen.getByRole('button', { name: 'Link Nia Narrator to N. Narrator' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Add Nia Narrator as a new person' })).toBeDisabled()
+  })
+})
+
+const scienceFiction: CanonicalEntry = { id: 5, name: 'Science Fiction', aliases: ['SF'] }
+
+const genresUnlinked: BookGenres = {
+  groupId: 4,
+  genres: [
+    { name: 'Sciencefiction', entry: null, suggestions: [{ entry: scienceFiction, reason: 'Same letters' }] },
+    { name: 'Horror', entry: null, suggestions: [] },
+  ],
+}
+
+function renderGenres() {
+  return render(<NameLinks kind="genres" groupId={4} reloadKey={0} />)
+}
+
+describe('NameLinks (genres)', () => {
+  beforeEach(() => {
+    getBookPeopleMock.mockReset()
+    getBookGenresMock.mockReset()
+    updateEntryMock.mockReset()
+    createEntryMock.mockReset()
+  })
+
+  it('shows a resolved genre as normalized and an unresolved one with its suggestion and reason, in one list', async () => {
+    getBookGenresMock.mockResolvedValue({
+      groupId: 4,
+      genres: [{ name: 'Sci Fi', entry: scienceFiction, suggestions: [] }, ...genresUnlinked.genres],
+    })
+    renderGenres()
+
+    const section = (await screen.findByRole('heading', { level: 2, name: 'Genres' })).closest('section')!
+    expect(section).toHaveAttribute('aria-labelledby', 'genres-heading')
+    expect(await screen.findByText('Normalized: Science Fiction')).toBeInTheDocument()
+    expect(within(section).queryByRole('heading', { level: 3 })).not.toBeInTheDocument()
+    const sciRow = row('Sciencefiction')
+    expect(within(sciRow).getByText('Not linked')).toBeInTheDocument()
+    expect(within(sciRow).getByText('Science Fiction (Same letters)')).toBeInTheDocument()
+    expect(within(sciRow).getByRole('button', { name: 'Link Sciencefiction to Science Fiction' })).toBeInTheDocument()
+    expect(within(row('Horror')).getByRole('button', { name: 'Add Horror as a new genre' })).toHaveTextContent('Add as new genre')
+    expect(getBookGenresMock).toHaveBeenCalledWith(4)
+    expect(getBookPeopleMock).not.toHaveBeenCalled()
+  })
+
+  it('says when the book has no genres', async () => {
+    getBookGenresMock.mockResolvedValue({ groupId: 4, genres: [] })
+    renderGenres()
+    expect(await screen.findByText('No genres yet.')).toBeInTheDocument()
+  })
+
+  it('links a genre to a suggested genre as an alias, reloads and announces it', async () => {
+    const linkedEntry: CanonicalEntry = { ...scienceFiction, aliases: ['SF', 'Sciencefiction'] }
+    getBookGenresMock.mockResolvedValueOnce(genresUnlinked).mockResolvedValueOnce({
+      groupId: 4,
+      genres: [{ name: 'Sciencefiction', entry: linkedEntry, suggestions: [] }, genresUnlinked.genres[1]],
+    })
+    updateEntryMock.mockResolvedValue({ ok: true, entry: linkedEntry })
+    renderGenres()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Link Sciencefiction to Science Fiction' }))
+
+    expect(await screen.findByText('Normalized: Science Fiction')).toBeInTheDocument()
+    expect(updateEntryMock).toHaveBeenCalledWith('genres', 5, { name: 'Science Fiction', aliases: ['SF', 'Sciencefiction'] })
+    expect(getBookGenresMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('status')).toHaveTextContent('Sciencefiction linked to Science Fiction.')
+    await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Genres' })).toHaveFocus())
+  })
+
+  it('adds a genre as a new genre', async () => {
+    const created: CanonicalEntry = { id: 9, name: 'Horror', aliases: [] }
+    getBookGenresMock.mockResolvedValueOnce(genresUnlinked).mockResolvedValueOnce({
+      groupId: 4,
+      genres: [genresUnlinked.genres[0], { name: 'Horror', entry: created, suggestions: [] }],
+    })
+    createEntryMock.mockResolvedValue({ ok: true, entry: created })
+    renderGenres()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Horror as a new genre' }))
+
+    expect(await screen.findByText('Normalized: Horror')).toBeInTheDocument()
+    expect(createEntryMock).toHaveBeenCalledWith('genres', { name: 'Horror', aliases: [] })
+    expect(screen.getByRole('status')).toHaveTextContent('Horror linked to Horror.')
+  })
+
+  it('says the genre no longer exists on a 404', async () => {
+    getBookGenresMock.mockResolvedValue(genresUnlinked)
+    updateEntryMock.mockResolvedValue({ ok: false, notFound: true })
+    renderGenres()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Link Sciencefiction to Science Fiction' }))
+
+    expect(await within(row('Sciencefiction')).findByRole('alert')).toHaveTextContent('That genre no longer exists.')
+  })
+
+  it('says when the genre links fail to load', async () => {
+    getBookGenresMock.mockRejectedValue(new Error('boom'))
+    renderGenres()
+    expect(await screen.findByText("Genre links couldn't be loaded.")).toBeInTheDocument()
   })
 })

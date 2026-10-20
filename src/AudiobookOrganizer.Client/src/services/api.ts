@@ -27,6 +27,7 @@ import type {
   UpdateBookMetadataFields,
 } from '../types/metadata'
 import type {
+  BookGenres,
   BookPeople,
   CanonicalEntry,
   EntryFieldErrors,
@@ -353,6 +354,14 @@ export async function getBookPeople(groupId: number): Promise<BookPeople> {
     throw new Error(`Loading the book's people failed with status ${response.status}`)
   }
   return (await response.json()) as BookPeople
+}
+
+export async function getBookGenres(groupId: number): Promise<BookGenres> {
+  const response = await fetch(`/api/groups/${groupId}/genres`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the book's genres failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookGenres
 }
 
 /** Maps a create (201) or update (200) response, its 400 and its 404; throws for any other status. */
