@@ -8,8 +8,11 @@ namespace AudiobookOrganizer.Api.Controllers;
 [ApiController]
 [Route("api/groups")]
 public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers,
-    ILogger<GroupsController> logger) : ControllerBase
+    NamingPreviewService previews, ILogger<GroupsController> logger) : ControllerBase
 {
+    [HttpGet("{id:long}/preview")]
+    public ActionResult<BookPreviewDto> GetPreview(long id) => previews.Preview(id) is { } preview ? preview : NotFound();
+
     [HttpGet("{id:long}/cover")]
     public ActionResult<BookCoverDto> GetCover(long id) => covers.GetCovers(id) is { } cover ? cover : NotFound();
 
