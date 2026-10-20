@@ -342,7 +342,15 @@ public class GroupMetadataControllerTests : IDisposable
         var many = await client.PutAsJsonAsync($"/api/groups/{id}/metadata", new { fields = new { genres = tooMany } });
         Assert.Equal(HttpStatusCode.BadRequest, many.StatusCode);
         var problem = await ScansControllerTests.ReadJson(many);
-        Assert.Equal("There can be at most 50 names.", problem.GetProperty("errors").GetProperty("genres")[0].GetString());
+        Assert.Equal("There can be at most 50 entries.", problem.GetProperty("errors").GetProperty("genres")[0].GetString());
+        Assert.Equal(0, Count("AudiobookField"));
+
+        var tooLong = await client.PutAsJsonAsync($"/api/groups/{id}/metadata",
+            new { fields = new { genres = new[] { new string('a', 501) } } });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        problem = await ScansControllerTests.ReadJson(tooLong);
+        Assert.Equal("Each entry can be at most 500 characters.",
+            problem.GetProperty("errors").GetProperty("genres")[0].GetString());
         Assert.Equal(0, Count("AudiobookField"));
 
         var put = await client.PutAsJsonAsync($"/api/groups/{id}/metadata",

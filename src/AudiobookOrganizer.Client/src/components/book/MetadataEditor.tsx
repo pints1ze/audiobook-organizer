@@ -12,12 +12,13 @@ import type {
 
 type FieldKey = keyof BookMetadataFields
 
-/** The 12 fields in display order; authors and narrators are lists. */
-const fieldDefs: { key: FieldKey; label: string; list?: true }[] = [
+/** The 13 fields in display order; authors, narrators and genres are lists, edited one per line as the hint says. */
+const fieldDefs: { key: FieldKey; label: string; list?: true; hint?: string }[] = [
   { key: 'title', label: 'Title' },
   { key: 'subtitle', label: 'Subtitle' },
-  { key: 'authors', label: 'Authors', list: true },
-  { key: 'narrators', label: 'Narrators', list: true },
+  { key: 'authors', label: 'Authors', list: true, hint: 'One name per line' },
+  { key: 'narrators', label: 'Narrators', list: true, hint: 'One name per line' },
+  { key: 'genres', label: 'Genres', list: true, hint: 'One genre per line' },
   { key: 'series', label: 'Series' },
   { key: 'seriesPart', label: 'Series part' },
   { key: 'publisher', label: 'Publisher' },
@@ -32,13 +33,14 @@ export const providerNames: Record<string, string> = { audible: 'Audible', openl
 
 type Value = string | null | string[]
 
-/** The candidate's value for each metadata field. */
+/** The candidate's value for each metadata field. Genres are hand-entered, so a match never proposes any. */
 function candidateValues(candidate: MetadataCandidate): Record<FieldKey, Value> {
   return {
     title: candidate.title,
     subtitle: candidate.subtitle,
     authors: candidate.authors,
     narrators: candidate.narrators,
+    genres: [],
     series: candidate.series?.name ?? null,
     seriesPart: candidate.series?.part ?? null,
     publisher: candidate.publisher,
@@ -217,7 +219,7 @@ export default function MetadataEditor({ groupId, match, reloadKey, onSaved }: P
       )}
       {state.kind === 'loaded' && draft && (
         <form onSubmit={(event) => handleSave(event, state.metadata, draft)} noValidate className="mt-2 space-y-4">
-          {fieldDefs.map(({ key, label, list }) => {
+          {fieldDefs.map(({ key, label, list, hint }) => {
             const id = `metadata-${key}`
             const errors = fieldErrors[key] ?? []
             const hasErrors = errors.length > 0
@@ -237,7 +239,7 @@ export default function MetadataEditor({ groupId, match, reloadKey, onSaved }: P
                 {list ? (
                   <>
                     <p id={`${id}-hint`} className="text-sm text-muted">
-                      One name per line
+                      {hint}
                     </p>
                     <textarea
                       {...common}

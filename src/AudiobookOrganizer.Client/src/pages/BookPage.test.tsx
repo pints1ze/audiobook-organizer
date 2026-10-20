@@ -48,6 +48,7 @@ function metadataWith(title: string, origin: 'file' | 'provider', narrators: str
       subtitle: empty,
       authors: { value: ['Andy Weir'], origin, provider },
       narrators: narrators.length ? { value: narrators, origin, provider } : { value: [], origin: null, provider: null },
+      genres: { value: [], origin: null, provider: null },
       series: empty,
       seriesPart: empty,
       publisher: empty,

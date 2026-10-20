@@ -57,6 +57,7 @@ export interface BookMetadataFields {
   subtitle: MetadataField<string | null>
   authors: MetadataField<string[]>
   narrators: MetadataField<string[]>
+  genres: MetadataField<string[]>
   series: MetadataField<string | null>
   seriesPart: MetadataField<string | null>
   publisher: MetadataField<string | null>
@@ -79,6 +80,7 @@ export interface UpdateBookMetadataFields {
   subtitle?: string
   authors?: string[]
   narrators?: string[]
+  genres?: string[]
   series?: string
   seriesPart?: string
   publisher?: string

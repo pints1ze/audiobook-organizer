@@ -134,9 +134,9 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
             if (value is not null) rows.Add(UserRow(field, JsonSerializer.Serialize(CleanText(errors, field, value))));
         }
 
-        void SetPeople(string field, IReadOnlyList<string>? names)
+        void SetPeople(string field, IReadOnlyList<string>? names, bool entries = false)
         {
-            if (names is not null) rows.Add(UserRow(field, JsonSerializer.Serialize(CleanPeople(errors, field, names))));
+            if (names is not null) rows.Add(UserRow(field, JsonSerializer.Serialize(CleanPeople(errors, field, names, entries))));
         }
 
         SetText(Fields.Title, sent.Title);
@@ -144,7 +144,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
         SetText(Fields.Subtitle, sent.Subtitle);
         SetPeople(Fields.Authors, sent.Authors);
         SetPeople(Fields.Narrators, sent.Narrators);
-        SetPeople(Fields.Genres, sent.Genres);
+        SetPeople(Fields.Genres, sent.Genres, entries: true);
         SetText(Fields.Series, sent.Series);
         SetText(Fields.SeriesPart, sent.SeriesPart);
         SetText(Fields.Publisher, sent.Publisher);
@@ -223,13 +223,18 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
         return trimmed;
     }
 
-    /// <summary>The names trimmed with blanks dropped; an error under <paramref name="field"/> for too many or too long.</summary>
-    private static List<string> CleanPeople(Dictionary<string, string[]> errors, string field, IReadOnlyList<string>? names)
+    /// <summary>
+    /// The names trimmed with blanks dropped; an error under <paramref name="field"/> for too many or too long. Errors
+    /// call each item a "name", or an "entry" when <paramref name="entries"/> is set (genres).
+    /// </summary>
+    private static List<string> CleanPeople(
+        Dictionary<string, string[]> errors, string field, IReadOnlyList<string>? names, bool entries = false)
     {
         var cleaned = (names ?? []).Select(Trim).OfType<string>().ToList();
-        if (cleaned.Count > MaxPeople) errors[field] = [$"There can be at most {MaxPeople} names."];
+        var (one, many) = entries ? ("entry", "entries") : ("name", "names");
+        if (cleaned.Count > MaxPeople) errors[field] = [$"There can be at most {MaxPeople} {many}."];
         else if (cleaned.Any(n => n.Length > GroupingService.MaxTextLength))
-            errors[field] = [$"Each name can be at most {GroupingService.MaxTextLength} characters."];
+            errors[field] = [$"Each {one} can be at most {GroupingService.MaxTextLength} characters."];
         return cleaned;
     }
 

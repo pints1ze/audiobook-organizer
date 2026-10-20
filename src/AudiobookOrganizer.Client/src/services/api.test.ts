@@ -553,6 +553,7 @@ describe('metadata', () => {
       subtitle: field(null),
       authors: field(['Andy Weir'], 'file'),
       narrators: field(['A', 'B'], 'user'),
+      genres: field([]),
       series: field(null),
       seriesPart: field(null),
       publisher: field('', 'user'),
