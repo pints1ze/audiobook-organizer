@@ -45,12 +45,12 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 7. Naming & preview (in progress)
 **Goal:** see exactly where every file will go before anything moves.
 **Done when:** the template engine handles tokens, padding and optional sections with sanitized, traversal-safe output; a book's authors, narrators and genres link to canonical entries (exact alias matches resolve automatically, anything else is suggested) and linked values show the `normalized` origin; the preview screen shows source → destination per file and flags missing values, duplicate targets and existing-file conflicts.
-**Slices:** 44 (implemented), 45 (implemented), 46 (implemented), 47 (implemented), 48 (implemented), 49 (implemented), 50 (implemented). Template engine with sanitizing and `ResolveUnder` (44), templates in settings (45), book people links API (46), the book page People section (47), the book genres field and links API (48), genres in the metadata editor (49) and the Genres links section (50); linking is done. Next: book-to-token mapping using canonical names, then the preview endpoint and screen. Linking was added 2026-10-19 with the developer's OK.
+**Slices:** 44 (implemented), 45 (implemented), 46 (implemented), 47 (implemented), 48 (implemented), 49 (implemented), 50 (implemented), 51 (implemented). Template engine with sanitizing and `ResolveUnder` (44), templates in settings (45), book people links API (46), the book page People section (47), the book genres field and links API (48), genres in the metadata editor (49) and the Genres links section (50); linking is done. Book-to-token mapping and the per-book preview API (51). Next: the library-wide preview with duplicate targets and existing-file conflicts, then the preview screen. Linking was added 2026-10-19 with the developer's OK.
 
 ### 8. Processing (not started)
 **Goal:** approved books are copied, tagged, verified and filed safely in the background.
 **Done when:** an approved book is copied, tagged (Audiobookshelf-compatible custom fields, chosen cover embedded), read back and the source removed unless "keep source files" is on; failures leave sources intact and are visible with details; retry creates no duplicates; one failed book doesn't block others.
-**Slices:** none yet. Carried in: the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04); never processing excluded files (from slice 20).
+**Slices:** none yet. Carried in: each file's track tag is written as its position in book order (one-file books get 1; developer, 2026-10-19); the container user or PUID/PGID for files written to the mounts (from slice 03); M4B custom fields under ffmpeg's limits (from slice 04); never processing excluded files (from slice 20).
 
 ### 9. Hardening & release (not started)
 **Goal:** trustworthy on a real collection.
