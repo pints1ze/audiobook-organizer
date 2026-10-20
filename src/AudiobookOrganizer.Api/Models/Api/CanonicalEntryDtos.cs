@@ -20,3 +20,6 @@ public record NameLinkDto(string Name, CanonicalEntryDto? Entry, IReadOnlyList<N
 
 /// <summary>A book's authors and narrators, each with its canonical person or suggestions.</summary>
 public record BookPeopleDto(long GroupId, IReadOnlyList<NameLinkDto> Authors, IReadOnlyList<NameLinkDto> Narrators);
+
+/// <summary>A book's genres in stored order, each with its canonical genre or suggestions.</summary>
+public record BookGenresDto(long GroupId, IReadOnlyList<NameLinkDto> Genres);

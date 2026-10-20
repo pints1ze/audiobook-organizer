@@ -70,6 +70,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
             Text(Fields.Subtitle),
             People(Fields.Authors, Trim(group.Author)),
             People(Fields.Narrators),
+            People(Fields.Genres),
             Text(Fields.Series),
             Text(Fields.SeriesPart),
             Text(Fields.Publisher),
@@ -88,18 +89,32 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
     public BookPeopleDto? GetPeople(long groupId)
     {
         if (GetMetadata(groupId) is not { } metadata) return null;
-        IReadOnlyList<CanonicalEntryDto>? people = null;
-
-        NameLinkDto Link(string name)
-        {
-            if (names.Resolve(CanonicalKind.Person, name) is { } entry) return new NameLinkDto(name, entry, []);
-            people ??= names.List(CanonicalKind.Person);
-            return new NameLinkDto(name, null, CanonicalSuggestions.ForName(CanonicalKind.Person, name, people));
-        }
-
+        var link = Linker(CanonicalKind.Person);
         return new BookPeopleDto(groupId,
-            metadata.Fields.Authors.Value.Select(Link).ToList(),
-            metadata.Fields.Narrators.Value.Select(Link).ToList());
+            metadata.Fields.Authors.Value.Select(link).ToList(),
+            metadata.Fields.Narrators.Value.Select(link).ToList());
+    }
+
+    /// <summary>
+    /// The book's stored genres in order, each with the genre it resolves to through the alias catalog or, if none,
+    /// likely genres. Null when the group id is unknown. Computed on each read: nothing is linked or created.
+    /// </summary>
+    public BookGenresDto? GetGenres(long groupId)
+    {
+        if (GetMetadata(groupId) is not { } metadata) return null;
+        return new BookGenresDto(groupId, metadata.Fields.Genres.Value.Select(Linker(CanonicalKind.Genre)).ToList());
+    }
+
+    /// <summary>Resolves a name of <paramref name="kind"/>, or suggests entries; the catalog is loaded once, on first need.</summary>
+    private Func<string, NameLinkDto> Linker(CanonicalKind kind)
+    {
+        IReadOnlyList<CanonicalEntryDto>? catalog = null;
+        return name =>
+        {
+            if (names.Resolve(kind, name) is { } entry) return new NameLinkDto(name, entry, []);
+            catalog ??= names.List(kind);
+            return new NameLinkDto(name, null, CanonicalSuggestions.ForName(kind, name, catalog));
+        };
     }
 
     /// <summary>
@@ -129,6 +144,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
         SetText(Fields.Subtitle, sent.Subtitle);
         SetPeople(Fields.Authors, sent.Authors);
         SetPeople(Fields.Narrators, sent.Narrators);
+        SetPeople(Fields.Genres, sent.Genres);
         SetText(Fields.Series, sent.Series);
         SetText(Fields.SeriesPart, sent.SeriesPart);
         SetText(Fields.Publisher, sent.Publisher);
@@ -187,7 +203,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
     private static class Fields
     {
         public const string Title = "title", Subtitle = "subtitle", Authors = "authors", Narrators = "narrators",
-            Series = "series", SeriesPart = "seriesPart", Publisher = "publisher", ReleaseDate = "releaseDate",
+            Genres = "genres", Series = "series", SeriesPart = "seriesPart", Publisher = "publisher", ReleaseDate = "releaseDate",
             Language = "language", Format = "format", Asin = "asin", Isbn = "isbn";
     }
 
