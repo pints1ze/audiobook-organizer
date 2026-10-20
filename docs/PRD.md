@@ -22,7 +22,7 @@ Full background: `overview.md` (v0.1 draft). This PRD supersedes it where they d
 - **AudioFile:** source path, size, duration, mtime, extracted tags, track/disc, cover present, chapter count, sequence. It belongs to at most one FileGroup.
 - **FileGroup:** proposed or confirmed set of files, confidence, evidence, unresolved/excluded flags, user-corrected flag.
 - **Audiobook:** the canonical metadata record (fields in `overview.md` FR-05), status, chosen cover, ASIN/ISBN. It has one FileGroup.
-- **Person / PersonAlias, Genre / GenreAlias:** canonical names and their variants. AudiobookContributor (role: author, narrator, composer) and AudiobookGenre link them to books.
+- **Person / PersonAlias, Genre / GenreAlias:** canonical names and their variants. A book's stored author, narrator and genre names link to them by resolving through the aliases on each read (no link tables; developer, 2026-10-19).
 - **BookSeries:** a normalized series name. Audiobook stores the series part, which can be a decimal.
 - **MetadataMatch / MetadataSourceRecord:** a provider candidate, its score and the raw values retrieved.
 - **ScanRun, ProcessingJob:** scan results, file operations, source/destination paths, timestamps, errors.
