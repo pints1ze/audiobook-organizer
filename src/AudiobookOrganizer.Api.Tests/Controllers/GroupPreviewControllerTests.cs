@@ -97,6 +97,8 @@ public class GroupPreviewControllerTests : IDisposable
         {
             Assert.Empty(f.GetProperty("missing").EnumerateArray());
             Assert.Equal(JsonValueKind.Null, f.GetProperty("error").ValueKind);
+            Assert.False(f.GetProperty("duplicate").GetBoolean());
+            Assert.False(f.GetProperty("exists").GetBoolean());
         });
         Assert.Equal(libraryBefore, Directory.GetFileSystemEntries(_folders.Library));
     }
@@ -142,6 +144,31 @@ public class GroupPreviewControllerTests : IDisposable
             Assert.Equal(JsonValueKind.Null, f.GetProperty("relativePath").ValueKind);
             Assert.Equal(JsonValueKind.Null, f.GetProperty("destinationPath").ValueKind);
         });
+    }
+
+    [Fact]
+    public async Task A_file_that_collides_with_another_book_is_flagged_duplicate()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", "[%track:2% - ]%title%");
+        var other = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "other")).FullName;
+        File.Copy(ChapterReaderTests.Fixture("chapters.mp3"), Path.Combine(other, "only.mp3"));
+        var (id, fileIds) = await ScanTwoFileBook(client);
+        var otherSource = Path.Combine(other, "only.mp3");
+        var otherId = (await ScansControllerTests.ReadJson(await client.GetAsync("/api/preview")))
+            .GetProperty("books").EnumerateArray()
+            .Single(b => b.GetProperty("files").EnumerateArray().Any(f => f.GetProperty("sourcePath").GetString() == otherSource))
+            .GetProperty("groupId").GetInt64();
+        var renamed = await client.PutAsJsonAsync($"/api/groups/{otherId}", new { title = Title, author = "Author, Ann" });
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+
+        var files = Files(await Preview(client, id));
+
+        Assert.Equal(fileIds, files.Select(f => f.GetProperty("fileId").GetInt64()));
+        Assert.Equal([true, false], files.Select(f => f.GetProperty("duplicate").GetBoolean()));
+        var otherFile = Assert.Single(Files(await Preview(client, otherId)));
+        Assert.True(otherFile.GetProperty("duplicate").GetBoolean());
+        Assert.Equal(files[0].GetProperty("destinationPath").GetString(), otherFile.GetProperty("destinationPath").GetString());
     }
 
     public void Dispose()

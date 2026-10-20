@@ -86,9 +86,12 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
     /// the person it resolves to through the alias catalog or, if none, likely people. Null when the group id is
     /// unknown. Computed on each read: nothing is linked or created.
     /// </summary>
-    public BookPeopleDto? GetPeople(long groupId)
+    public BookPeopleDto? GetPeople(long groupId) => GetMetadata(groupId) is { } metadata ? GetPeople(metadata) : null;
+
+    /// <summary>As <see cref="GetPeople(long)"/>, from metadata already read with <see cref="GetMetadata"/>.</summary>
+    public BookPeopleDto GetPeople(BookMetadataDto metadata)
     {
-        if (GetMetadata(groupId) is not { } metadata) return null;
+        var groupId = metadata.GroupId;
         var link = Linker(CanonicalKind.Person);
         return new BookPeopleDto(groupId,
             metadata.Fields.Authors.Value.Select(link).ToList(),
