@@ -6,7 +6,7 @@ namespace AudiobookOrganizer.Api.Controllers;
 
 [ApiController]
 [Route("api/jobs")]
-public class JobsController(ProcessingService processing) : ControllerBase
+public class JobsController(ProcessingService processing, ProcessingWorker worker) : ControllerBase
 {
     [HttpPost]
     public ActionResult<ProcessingJobDto> Approve(ApproveRequest request)
@@ -18,6 +18,7 @@ public class JobsController(ProcessingService processing) : ControllerBase
         }
 
         var result = processing.Approve(request.GroupId.Value);
+        if (result.Outcome == ApproveOutcome.Approved) worker.Wake();
         return result.Outcome switch
         {
             ApproveOutcome.Approved => CreatedAtAction(nameof(GetById), new { id = result.Job!.Id }, result.Job),

@@ -25,6 +25,8 @@ public class ProcessingJob
 public class ProcessingJobFile
 {
     public const string Pending = "Pending";
+    public const string Copied = "Copied";
+    public const string Failed = "Failed";
 
     public long JobId { get; set; }
     public long AudioFileId { get; set; }

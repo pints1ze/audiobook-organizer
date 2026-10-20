@@ -64,4 +64,39 @@ public class ProcessingRepository(SqliteConnectionFactory connections)
             $"SELECT {FileColumns} FROM ProcessingJobFile WHERE JobId = @id ORDER BY Position", new { id }).ToList();
         return (job, files);
     }
+
+    /// <summary>The oldest Queued job with its files in position order, or null when nothing is queued.</summary>
+    public (ProcessingJob Job, IReadOnlyList<ProcessingJobFile> Files)? NextQueued()
+    {
+        using var connection = connections.Open();
+        var id = connection.ExecuteScalar<long?>(
+            "SELECT Id FROM ProcessingJob WHERE Status = @queued ORDER BY Id LIMIT 1", new { queued = ProcessingJob.Queued });
+        return id is { } found ? GetJob(found) : null;
+    }
+
+    /// <summary>Saves the job's status, timestamps and error.</summary>
+    public void UpdateJob(ProcessingJob job)
+    {
+        using var connection = connections.Open();
+        connection.Execute(
+            "UPDATE ProcessingJob SET Status = @Status, StartedAtUtc = @StartedAtUtc, FinishedAtUtc = @FinishedAtUtc, Error = @Error WHERE Id = @Id",
+            job);
+    }
+
+    /// <summary>Saves the file's status and error.</summary>
+    public void UpdateFile(ProcessingJobFile file)
+    {
+        using var connection = connections.Open();
+        connection.Execute(
+            "UPDATE ProcessingJobFile SET Status = @Status, Error = @Error WHERE JobId = @JobId AND Position = @Position", file);
+    }
+
+    /// <summary>Fails every Running job: at startup nothing can still be processing, so it was cut off by a restart.</summary>
+    public void FailInterruptedJobs(string message, string finishedAt)
+    {
+        using var connection = connections.Open();
+        connection.Execute(
+            "UPDATE ProcessingJob SET Status = @failed, Error = @message, FinishedAtUtc = @finishedAt WHERE Status = @running",
+            new { failed = ProcessingJob.Failed, running = ProcessingJob.Running, message, finishedAt });
+    }
 }
