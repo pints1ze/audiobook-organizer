@@ -4,13 +4,11 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Local;
-using AudiobookOrganizer.Api.Services;
 using AudiobookOrganizer.Api.Tests.Services;
 using Dapper;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace AudiobookOrganizer.Api.Tests.Controllers;
 
@@ -18,7 +16,7 @@ public class JobsControllerTests : IDisposable
 {
     private const string CleanFileTemplate = "[%track:2% - ]%album%";
 
-    private readonly AudiobookOrganizerWebApplicationFactory _factory = new();
+    private readonly AudiobookOrganizerWebApplicationFactory _factory = new() { RunProcessingWorker = true };
     private readonly ScanTestFolders _folders = new();
 
     private async Task SaveTemplates(HttpClient client, string directoryTemplate, string fileTemplate)
@@ -101,8 +99,7 @@ public class JobsControllerTests : IDisposable
     /// <see cref="_factory"/> afterwards is the "restart": its worker drains the queue when it starts.
     /// </summary>
     private WebApplicationFactory<Program> QueueOnly() => _factory.WithWebHostBuilder(builder =>
-        builder.ConfigureTestServices(services => services.Remove(services.Single(d =>
-            d.ServiceType == typeof(IHostedService) && d.ImplementationFactory?.Method.ReturnType == typeof(ProcessingWorker)))));
+        builder.ConfigureTestServices(AudiobookOrganizerWebApplicationFactory.RemoveProcessingWorker));
 
     /// <summary>Polls GET /api/jobs/{id} until the job is Succeeded or Failed, failing after 10 seconds.</summary>
     private static async Task<JsonElement> WaitForJob(HttpClient client, long jobId)
