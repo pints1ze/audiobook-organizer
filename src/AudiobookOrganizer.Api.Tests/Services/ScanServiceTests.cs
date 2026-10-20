@@ -44,7 +44,8 @@ public class ScanServiceTests : IDisposable
     }
 
     private void ConfigureIncoming() =>
-        Assert.Empty(_settings.Save(new SettingsDto(_incoming, _library, false)).Errors);
+        Assert.Empty(_settings.Save(new SettingsDto(_incoming, _library,
+            SettingsService.DefaultDirectoryTemplate, SettingsService.DefaultFileTemplate, false)).Errors);
 
     private Dictionary<string, AudioFile> Rows() =>
         _repository.GetFilesUnder(_incoming).ToDictionary(f => f.FileName);

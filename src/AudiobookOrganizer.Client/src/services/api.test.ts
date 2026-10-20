@@ -70,7 +70,13 @@ describe('settings', () => {
     vi.unstubAllGlobals()
   })
 
-  const settings = { incomingPath: '/incoming', libraryPath: '/library', keepSourceFiles: false }
+  const settings = {
+    incomingPath: '/incoming',
+    libraryPath: '/library',
+    directoryTemplate: '%artist%/%album%',
+    fileTemplate: '%title%',
+    keepSourceFiles: false,
+  }
 
   it('getSettings returns the parsed body', async () => {
     const fetchMock = mockFetch(200, settings)

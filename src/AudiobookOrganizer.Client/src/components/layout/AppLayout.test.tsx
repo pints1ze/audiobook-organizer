@@ -30,7 +30,13 @@ function renderAt(path: string) {
 describe('AppLayout', () => {
   beforeEach(() => {
     vi.mocked(getHealth).mockResolvedValue({ status: 'ok', database: 'ok' })
-    vi.mocked(getSettings).mockResolvedValue({ incomingPath: null, libraryPath: null, keepSourceFiles: false })
+    vi.mocked(getSettings).mockResolvedValue({
+      incomingPath: null,
+      libraryPath: null,
+      directoryTemplate: '%album%',
+      fileTemplate: '%title%',
+      keepSourceFiles: false,
+    })
     vi.mocked(getDashboard).mockResolvedValue({
       incomingPath: null,
       libraryPath: null,

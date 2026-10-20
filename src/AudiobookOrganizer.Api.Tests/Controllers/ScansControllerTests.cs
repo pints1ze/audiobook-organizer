@@ -125,7 +125,11 @@ internal sealed class ScanTestFolders : IDisposable
     public async Task SaveSettings(HttpClient client)
     {
         var response = await client.PutAsJsonAsync("/api/settings",
-            new { incomingPath = Incoming, libraryPath = Library, keepSourceFiles = false });
+            new
+            {
+                incomingPath = Incoming, libraryPath = Library, keepSourceFiles = false,
+                directoryTemplate = "%artist%/%album%", fileTemplate = "%title%",
+            });
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
