@@ -4,11 +4,11 @@
 **Goal:** `POST /api/jobs` approves one book: if its preview is clean it records a `Queued` processing job with each file's source and destination snapshotted, and `GET /api/jobs` lists the jobs. Nothing is copied yet.
 
 ## Done when
-- [ ] `POST /api/jobs` with `{ groupId }` returns 201 and the job (`id`, `groupId`, `title`, `status: "Queued"`, `createdAtUtc`, `files` in book order with `fileId`, `sourcePath`, `destinationPath`, `status: "Pending"`) when every file of the book's preview has a destination and no missing values, duplicate or existing flag
-- [ ] it refuses with a 400 problem whose detail names the reason for: a book with no files, any file with an error, missing values, a duplicate target or an existing destination; 404 for an unknown group; 409 when the book already has a `Queued` or `Running` job
-- [ ] approving marks the group `UserCorrected`, so a rescan keeps the book and its files
-- [ ] `GET /api/jobs` lists jobs newest first with their files; `GET /api/jobs/{id}` returns one or 404
-- [ ] the incoming and library folders are untouched by approval (no file or folder is created); all four checks pass
+- [x] `POST /api/jobs` with `{ groupId }` returns 201 and the job (`id`, `groupId`, `title`, `status: "Queued"`, `createdAtUtc`, `files` in book order with `fileId`, `sourcePath`, `destinationPath`, `status: "Pending"`) when every file of the book's preview has a destination and no missing values, duplicate or existing flag
+- [x] it refuses with a 400 problem whose detail names the reason for: a book with no files, any file with an error, missing values, a duplicate target or an existing destination; 404 for an unknown group; 409 when the book already has a `Queued` or `Running` job
+- [x] approving marks the group `UserCorrected`, so a rescan keeps the book and its files
+- [x] `GET /api/jobs` lists jobs newest first with their files; `GET /api/jobs/{id}` returns one or 404
+- [x] the incoming and library folders are untouched by approval (no file or folder is created); all four checks pass
 
 ## Read first
 - `docs/slices/52-library-preview-api.md` and its Outcome (preview flags)
@@ -18,11 +18,11 @@
 - `src/AudiobookOrganizer.Api.Tests/Controllers/PreviewControllerTests.cs` (`ScanTwoBooks`, `SaveTemplates`, temp folders)
 
 ## Tasks
-- [ ] **Schema and entity.** `DatabaseInitializer`: `ProcessingJob` (`Id INTEGER PRIMARY KEY AUTOINCREMENT`, `GroupId INTEGER REFERENCES FileGroup (Id) ON DELETE SET NULL` so history outlives the group, `Title TEXT`, `Status TEXT NOT NULL`, `CreatedAtUtc`, `StartedAtUtc`, `FinishedAtUtc`, `Error`) and `ProcessingJobFile` (`JobId ... ON DELETE CASCADE`, `AudioFileId INTEGER NOT NULL`, `Position`, `SourcePath`, `DestinationPath`, `Status TEXT NOT NULL`, `Error`, `PRIMARY KEY (JobId, Position)`), plus an index on `ProcessingJob (GroupId)`. New `Models/Local/ProcessingJob.cs` with `ProcessingJob`, `ProcessingJobFile` and status constants (`Queued`, `Running`, `Succeeded`, `Failed`; files `Pending`).
-- [ ] **Repository.** New `Data/ProcessingRepository.cs`: `HasActiveJob(groupId)`, `CreateJob(job, files)` in one transaction that also sets the group's `UserCorrected = 1`, `GetJobs()` (newest first, files ordered by `Position`) and `GetJob(id)`.
-- [ ] **Service.** New `Services/ProcessingService.cs`: `Approve(groupId)` returns a result (`NotFound`, `Conflict`, `Invalid` with a message, or the job). It takes `NamingPreviewService.Preview(groupId)` and refuses in this order: no files ("The book has no files."), an error (the first file's error), missing values ("Fill in the missing values: series, year." from the union), a duplicate ("Two files would go to the same place: <relative path>."), an existing file ("A file is already at <relative path>."). `Title` is the group title. Register in `Program.cs`.
-- [ ] **Controller and DTOs.** New `Models/Api/ProcessingDtos.cs` (`ProcessingJobDto`, `ProcessingJobFileDto`, `ApproveRequest`) and `Controllers/JobsController.cs`: `POST /api/jobs` (201 with `Location`, 400/404/409 problems), `GET /api/jobs`, `GET /api/jobs/{id}`. A missing or non-positive `groupId` is a 400.
-- [ ] **Tests.** New `Controllers/JobsControllerTests.cs` (below). Run all four checks with full backend output (TRX).
+- [x] **Schema and entity.** `DatabaseInitializer`: `ProcessingJob` (`Id INTEGER PRIMARY KEY AUTOINCREMENT`, `GroupId INTEGER REFERENCES FileGroup (Id) ON DELETE SET NULL` so history outlives the group, `Title TEXT`, `Status TEXT NOT NULL`, `CreatedAtUtc`, `StartedAtUtc`, `FinishedAtUtc`, `Error`) and `ProcessingJobFile` (`JobId ... ON DELETE CASCADE`, `AudioFileId INTEGER NOT NULL`, `Position`, `SourcePath`, `DestinationPath`, `Status TEXT NOT NULL`, `Error`, `PRIMARY KEY (JobId, Position)`), plus an index on `ProcessingJob (GroupId)`. New `Models/Local/ProcessingJob.cs` with `ProcessingJob`, `ProcessingJobFile` and status constants (`Queued`, `Running`, `Succeeded`, `Failed`; files `Pending`).
+- [x] **Repository.** New `Data/ProcessingRepository.cs`: `HasActiveJob(groupId)`, `CreateJob(job, files)` in one transaction that also sets the group's `UserCorrected = 1`, `GetJobs()` (newest first, files ordered by `Position`) and `GetJob(id)`.
+- [x] **Service.** New `Services/ProcessingService.cs`: `Approve(groupId)` returns a result (`NotFound`, `Conflict`, `Invalid` with a message, or the job). It takes `NamingPreviewService.Preview(groupId)` and refuses in this order: no files ("The book has no files."), an error (the first file's error), missing values ("Fill in the missing values: series, year." from the union), a duplicate ("Two files would go to the same place: <relative path>."), an existing file ("A file is already at <relative path>."). `Title` is the group title. Register in `Program.cs`.
+- [x] **Controller and DTOs.** New `Models/Api/ProcessingDtos.cs` (`ProcessingJobDto`, `ProcessingJobFileDto`, `ApproveRequest`) and `Controllers/JobsController.cs`: `POST /api/jobs` (201 with `Location`, 400/404/409 problems), `GET /api/jobs`, `GET /api/jobs/{id}`. A missing or non-positive `groupId` is a 400.
+- [x] **Tests.** New `Controllers/JobsControllerTests.cs` (below). Run all four checks with full backend output (TRX).
 - Data: two new tables, created with `CREATE TABLE IF NOT EXISTS` at startup; no change to existing tables.
 - Auth: none (single user, no login).
 - Accessibility: none (API only).
