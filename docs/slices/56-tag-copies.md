@@ -4,11 +4,11 @@
 **Goal:** while a job copies a file, the copy gets the book's standard tags (title, album, artists, album artists, genres, year, track N of M, disc) and the chosen cover before it moves into place; chapters and audio survive, and the source is never written.
 
 ## Done when
-- [ ] a processed MP3 reads back (TagLibSharp) with title and album = the book title, performers and album artists = the authors (canonical names where linked), genres (canonical where linked), year from the release date, track = its position with the file count as total, its scanned disc, and the chosen cover as the only front cover
-- [ ] a processed M4B reads back with the same values, keeps its chapters (`ChapterReader`) and audio packets (ffmpeg streamhash) unchanged, and keeps its embedded cover when the book has no chosen cover
-- [ ] values the book doesn't have are left as the source had them (e.g. no genres → the source's genre stays); unrelated tags in the source survive
-- [ ] a job whose group no longer exists fails with "The book is no longer in the library."; a tag write that fails (e.g. ffmpeg error) fails the file and job with the message and removes the job's copies as in slice 55
-- [ ] sources are byte-for-byte unchanged; all four checks pass
+- [x] a processed MP3 reads back (TagLibSharp) with title and album = the book title, performers and album artists = the authors (canonical names where linked), genres (canonical where linked), year from the release date, track = its position with the file count as total, its scanned disc, and the chosen cover as the only front cover
+- [x] a processed M4B reads back with the same values, keeps its chapters (`ChapterReader`) and audio packets (ffmpeg streamhash) unchanged, and keeps its embedded cover when the book has no chosen cover
+- [x] values the book doesn't have are left as the source had them (e.g. no genres → the source's genre stays); unrelated tags in the source survive
+- [x] a job whose group no longer exists fails with "The book is no longer in the library."; a tag write that fails (e.g. ffmpeg error) fails the file and job with the message and removes the job's copies as in slice 55
+- [x] sources are byte-for-byte unchanged; all four checks pass
 
 ## Read first
 - `docs/slices/55-copy-runner.md` and its Outcome
@@ -18,11 +18,11 @@
 - `src/AudiobookOrganizer.Api/Services/AudiobookService.cs` (`GetMetadata`, `GetPeople`; the genres equivalent) and `Data/AudiobookRepository.cs` (`GetCoverImage`)
 
 ## Tasks
-- [ ] **Tag writer.** New `Services/TagWriter.cs` with a `BookTags` record (`Title`, `Artists`, `Genres`, `Year`, `Track`, `TrackCount`, `Disc`, `Cover` as bytes + MIME type or null) and `Write(string sourcePath, string tempPath, BookTags tags)`, which creates `tempPath` (failing if it exists) as a tagged copy:
+- [x] **Tag writer.** New `Services/TagWriter.cs` with a `BookTags` record (`Title`, `Artists`, `Genres`, `Year`, `Track`, `TrackCount`, `Disc`, `Cover` as bytes + MIME type or null) and `Write(string sourcePath, string tempPath, BookTags tags)`, which creates `tempPath` (failing if it exists) as a tagged copy:
   - **MP3:** stream-copy the source into `tempPath` with `FileMode.CreateNew` (as slice 55 does), check the size, then open it with `TagLib.File.Create(tempPath, "audio/mpeg", ReadStyle.Average)` (the `.partial` name has no extension) and set the fields. A null or empty value leaves that tag alone. With a cover, `Pictures` becomes just that front cover; without one, pictures are untouched. `Save()`.
   - **M4B:** one ffmpeg call through `FfmpegRunner`, never TagLibSharp saves (AGENTS.md): `-n -v error -i <source> [-i <cover file>] -map 0:a [-map 1 | -map 0:v?] -c copy -map_chapters 0 -map_metadata 0 -disposition:v:0 attached_pic -metadata title=… album=… artist=… album_artist=… genre=… date=… track=N/M disc=… -f ipod <tempPath>`. The cover goes to a temp file next to `tempPath` (`.cover.jpg`/`.png`), deleted afterwards. `-n` and the earlier existence check mean nothing is ever overwritten.
-- [ ] **Use it in the job.** `ProcessingService.Run`: before the files, load the book through `AudiobookService` by `job.GroupId` (null or gone → fail the job with the message above, no files touched) and the chosen cover through `AudiobookRepository.GetCoverImage`. Build each file's `BookTags`: artists = every author resolved to its canonical name when linked, genres likewise, year as in `BookTokens`, track = position, total = file count, disc = the scanned disc. `Copy` calls `TagWriter.Write` instead of its own stream copy; the `.partial` ownership, move into place and cleanup stay as they are. Register `TagWriter` in `Program.cs`.
-- [ ] **Tests** (below). Run all four checks with full backend output (TRX).
+- [x] **Use it in the job.** `ProcessingService.Run`: before the files, load the book through `AudiobookService` by `job.GroupId` (null or gone → fail the job with the message above, no files touched) and the chosen cover through `AudiobookRepository.GetCoverImage`. Build each file's `BookTags`: artists = every author resolved to its canonical name when linked, genres likewise, year as in `BookTokens`, track = position, total = file count, disc = the scanned disc. `Copy` calls `TagWriter.Write` instead of its own stream copy; the `.partial` ownership, move into place and cleanup stay as they are. Register `TagWriter` in `Program.cs`.
+- [x] **Tests** (below). Run all four checks with full backend output (TRX).
 - Data: none.
 - Auth: none (single user, no login).
 - Accessibility: none (API only).

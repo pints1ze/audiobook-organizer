@@ -297,11 +297,16 @@ public class JobsControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task An_approved_book_is_copied_to_its_destinations_and_the_job_succeeds()
+    public async Task An_approved_book_is_copied_and_tagged_with_the_chosen_cover_and_the_job_succeeds()
     {
         var client = _factory.CreateClient();
         await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
         var ids = await ScanTwoBooks(client);
+        var form = new MultipartFormDataContent();
+        var image = new ByteArrayContent(TagRoundTripTests.CoverJpeg);
+        image.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+        form.Add(image, "file", "cover.jpg");
+        Assert.Equal(HttpStatusCode.OK, (await client.PutAsync($"/api/groups/{ids[0]}/cover/upload", form)).StatusCode);
         var incomingBefore = Snapshot(_folders.Incoming);
 
         var created = await ApproveJob(client, ids[0]);
@@ -313,14 +318,66 @@ public class JobsControllerTests : IDisposable
         Assert.True(DateTime.TryParse(job.GetProperty("finishedAtUtc").GetString(), out _));
         var files = job.GetProperty("files").EnumerateArray().ToList();
         Assert.Equal(2, files.Count);
-        foreach (var file in files)
+        for (var i = 0; i < files.Count; i++)
         {
-            Assert.Equal("Copied", file.GetProperty("status").GetString());
-            Assert.Equal(File.ReadAllBytes(file.GetProperty("sourcePath").GetString()!),
-                File.ReadAllBytes(file.GetProperty("destinationPath").GetString()!));
+            Assert.Equal("Copied", files[i].GetProperty("status").GetString());
+            var source = files[i].GetProperty("sourcePath").GetString()!;
+            var destination = files[i].GetProperty("destinationPath").GetString()!;
+            Assert.Equal(TagRoundTripTests.Mp3PayloadHash(source), TagRoundTripTests.Mp3PayloadHash(destination));
+            using var tagged = TagLib.File.Create(destination);
+            Assert.Equal(("First Book", "First Book"), (tagged.Tag.Title, tagged.Tag.Album));
+            Assert.Equal(["Ann Author"], tagged.Tag.Performers);
+            Assert.Equal(["Ann Author"], tagged.Tag.AlbumArtists);
+            Assert.Equal(((uint)i + 1, 2u), (tagged.Tag.Track, tagged.Tag.TrackCount));
+            Assert.Equal(TagRoundTripTests.CoverJpeg, Assert.Single(tagged.Tag.Pictures).Data.Data);
         }
         Assert.Empty(PartialFiles());
         Assert.Equal(incomingBefore, Snapshot(_folders.Incoming));
+    }
+
+    [Fact]
+    public async Task A_job_whose_book_was_merged_away_after_approval_fails_and_writes_nothing()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var fileIds = created.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("fileId").GetInt64()).ToList();
+        Assert.Equal(HttpStatusCode.OK, (await setup.PostAsJsonAsync($"/api/groups/{ids[1]}/files", new { fileIds })).StatusCode);
+        Assert.DoesNotContain(ids[0], await GroupIds(setup));
+        var incomingBefore = Snapshot(_folders.Incoming);
+
+        var job = await WaitForJob(_factory.CreateClient(), created.GetProperty("id").GetInt64());
+
+        Assert.Equal(("Failed", "The book is no longer in the library."),
+            (job.GetProperty("status").GetString(), job.GetProperty("error").GetString()));
+        Assert.All(job.GetProperty("files").EnumerateArray(), f => Assert.Equal("Pending", f.GetProperty("status").GetString()));
+        Assert.Empty(Entries(_folders.Library));
+        Assert.Equal(incomingBefore, Snapshot(_folders.Incoming));
+    }
+
+    [Fact]
+    public async Task A_failed_tag_write_fails_the_file_and_job_and_removes_the_jobs_copies()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        // Not audio any more, so the tag write on the second file fails after the first copy is in place.
+        File.WriteAllBytes(created.GetProperty("files")[1].GetProperty("sourcePath").GetString()!, new byte[4096]);
+
+        var job = await WaitForJob(_factory.CreateClient(), created.GetProperty("id").GetInt64());
+
+        Assert.Equal("Failed", job.GetProperty("status").GetString());
+        var failed = job.GetProperty("files")[1];
+        Assert.Equal("Failed", failed.GetProperty("status").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(job.GetProperty("error").GetString()));
+        Assert.Equal(job.GetProperty("error").GetString(), failed.GetProperty("error").GetString());
+        Assert.Equal("Pending", job.GetProperty("files")[0].GetProperty("status").GetString());
+        Assert.All(Destinations(created), d => Assert.False(File.Exists(d)));
+        Assert.Empty(PartialFiles());
     }
 
     [Fact]

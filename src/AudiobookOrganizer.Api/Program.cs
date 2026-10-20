@@ -35,6 +35,7 @@ builder.Services.AddSingleton<AudiobookRepository>();
 builder.Services.AddSingleton<AudiobookService>();
 builder.Services.AddSingleton<NamingPreviewService>();
 builder.Services.AddSingleton<ProcessingRepository>();
+builder.Services.AddSingleton<TagWriter>();
 builder.Services.AddSingleton<ProcessingService>();
 // One instance: JobsController wakes the same worker the host runs.
 builder.Services.AddSingleton<ProcessingWorker>();

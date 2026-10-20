@@ -1,6 +1,7 @@
 using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Api;
 using AudiobookOrganizer.Api.Models.Local;
+using AudiobookOrganizer.Api.Services.Naming;
 
 namespace AudiobookOrganizer.Api.Services;
 
@@ -11,11 +12,19 @@ public record ApproveResult(ApproveOutcome Outcome, ProcessingJobDto? Job = null
 
 /// <summary>
 /// Approves books into the processing queue and runs queued jobs. Approval only records the job; <see cref="Run"/>
-/// copies its files. Sources are only ever read.
+/// writes a tagged copy of each file. Sources are only ever read.
 /// </summary>
-public class ProcessingService(NamingPreviewService previews, ProcessingRepository jobs, ILogger<ProcessingService> logger)
+public class ProcessingService(
+    NamingPreviewService previews,
+    ProcessingRepository jobs,
+    AudiobookService audiobooks,
+    AudiobookRepository audiobookData,
+    GroupRepository groups,
+    TagWriter tagWriter,
+    ILogger<ProcessingService> logger)
 {
     public const string Interrupted = "Interrupted by an application restart.";
+    public const string BookGone = "The book is no longer in the library.";
 
     // Keeps two approvals of the same book from both passing the active-job check.
     private readonly Lock _lock = new();
@@ -67,9 +76,10 @@ public class ProcessingService(NamingPreviewService previews, ProcessingReposito
     }
 
     /// <summary>
-    /// Runs a Queued job: copies each file, in position order, to its snapshotted destination through a
-    /// <c>.partial</c> file in the destination folder, never overwriting anything. The first problem fails that file
-    /// and the job, and removes the copies this job made. Does nothing when the job isn't Queued.
+    /// Runs a Queued job: writes a tagged copy of each file, in position order, to its snapshotted destination through
+    /// a <c>.partial</c> file in the destination folder, never overwriting anything. The tags come from the book's
+    /// current metadata; a book that's gone fails the job before any file is touched. The first problem fails that
+    /// file and the job, and removes the copies this job made. Does nothing when the job isn't Queued.
     /// </summary>
     public void Run(long jobId, CancellationToken cancellationToken)
     {
@@ -80,10 +90,20 @@ public class ProcessingService(NamingPreviewService previews, ProcessingReposito
         job.StartedAtUtc = DateTime.UtcNow.ToString("O");
         jobs.UpdateJob(job);
 
+        if (Tags(job, files) is not { } tags)
+        {
+            job.Status = ProcessingJob.Failed;
+            job.Error = BookGone;
+            job.FinishedAtUtc = DateTime.UtcNow.ToString("O");
+            jobs.UpdateJob(job);
+            return;
+        }
+
         string? partial = null;
         string? error = null;
-        foreach (var file in files)
+        for (var i = 0; i < files.Count; i++)
         {
+            var file = files[i];
             if (cancellationToken.IsCancellationRequested)
             {
                 error = Interrupted;
@@ -91,7 +111,7 @@ public class ProcessingService(NamingPreviewService previews, ProcessingReposito
             }
             try
             {
-                error = Copy(file, ref partial);
+                error = Copy(file, tags[i], ref partial);
             }
             catch (Exception ex)
             {
@@ -116,10 +136,30 @@ public class ProcessingService(NamingPreviewService previews, ProcessingReposito
     }
 
     /// <summary>
-    /// Copies one file into place, or returns why it can't. <paramref name="partial"/> is set to the temporary file
-    /// once this job has created it, and cleared once it's moved into place.
+    /// Each file's tags from the book's current metadata, in the job's file order; null when the book is gone. Authors
+    /// and genres are written by their canonical names where linked; the track is the file's position of the count.
     /// </summary>
-    private static string? Copy(ProcessingJobFile file, ref string? partial)
+    private List<BookTags>? Tags(ProcessingJob job, IReadOnlyList<ProcessingJobFile> files)
+    {
+        if (job.GroupId is not { } groupId || audiobooks.GetMetadata(groupId) is not { } metadata) return null;
+        var artists = audiobooks.GetPeople(metadata).Authors.Select(a => a.Entry?.Name ?? a.Name).ToList();
+        var genres = audiobooks.GetGenres(groupId)?.Genres.Select(g => g.Entry?.Name ?? g.Name).ToList() ?? [];
+        var year = BookTokens.For(metadata.Fields, null, null, 1, null)["year"] is { } text
+            ? int.Parse(text, System.Globalization.CultureInfo.InvariantCulture)
+            : (int?)null;
+        var cover = audiobookData.GetCoverImage(groupId) is { } chosen ? new TagCover(chosen.Image, chosen.MimeType) : null;
+        var discs = groups.GetGroupFiles(groupId).ToDictionary(f => f.FileId, f => f.Disc);
+
+        return files.Select((file, index) => new BookTags(
+            metadata.Fields.Title.Value, artists, genres, year, index + 1, files.Count,
+            discs.GetValueOrDefault(file.AudioFileId), cover)).ToList();
+    }
+
+    /// <summary>
+    /// Writes one file's tagged copy into place, or returns why it can't. <paramref name="partial"/> is set to the
+    /// temporary file once this job has created it, and cleared once it's moved into place.
+    /// </summary>
+    private string? Copy(ProcessingJobFile file, BookTags tags, ref string? partial)
     {
         var destination = file.DestinationPath;
         if (!File.Exists(file.SourcePath)) return $"The source file is gone: {file.SourcePath}.";
@@ -128,16 +168,23 @@ public class ProcessingService(NamingPreviewService previews, ProcessingReposito
         if (File.Exists(temp) || Directory.Exists(temp)) return $"A file is already at {temp}.";
 
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-        using (var source = new FileStream(file.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-        // CreateNew throws if the temp file appeared since the check, so someone else's file is never replaced; once
-        // it succeeds the file is this job's, and is removed if the copy fails part-way.
-        using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+        // The writer creates the temp file with CreateNew and throws TagTargetExistsException, having created
+        // nothing, if it appeared since the check; so someone else's file is never replaced. Past that, the temp file
+        // is this job's, and is removed if the write fails part-way.
+        try
+        {
+            tagWriter.Write(file.SourcePath, temp, tags);
+        }
+        catch (TagTargetExistsException ex)
+        {
+            return ex.Message;
+        }
+        catch
         {
             partial = temp;
-            source.CopyTo(output);
+            throw;
         }
-        if (new FileInfo(temp).Length != new FileInfo(file.SourcePath).Length)
-            return $"The copy of {file.SourcePath} isn't the same size as the source.";
+        partial = temp;
         // Same folder, so this is a rename; overwrite: false refuses a destination that appeared meanwhile.
         File.Move(temp, destination, overwrite: false);
         partial = null;
