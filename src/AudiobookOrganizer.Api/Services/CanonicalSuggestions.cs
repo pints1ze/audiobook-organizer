@@ -22,8 +22,7 @@ public static partial class CanonicalSuggestions
             {
                 var (keep, merge) = KeepFirst(entries[i], entries[j]);
                 // First rule found per pair wins; same letters is checked first.
-                var reason = SameLetters(keep, merge)
-                             ?? (kind == CanonicalKind.Person ? Initials(keep, merge) : null);
+                var reason = Reason(kind, Texts(keep), Texts(merge));
                 if (reason is not null) suggestions.Add(new MergeSuggestionDto(keep, merge, reason));
             }
 
@@ -35,6 +34,28 @@ public static partial class CanonicalSuggestions
             .ToList();
     }
 
+    /// <summary>
+    /// Every entry the same rules as <see cref="Suggest"/> pair with <paramref name="name"/>, matched against the
+    /// entry's name and aliases, ordered by entry name then id. Never links anything.
+    /// </summary>
+    public static IReadOnlyList<NameSuggestionDto> ForName(CanonicalKind kind, string name,
+        IReadOnlyList<CanonicalEntryDto> entries)
+    {
+        // shortcut: checks the whole catalog for each name on each request — revisit when a catalog has more than a few thousand entries.
+        var suggestions = new List<NameSuggestionDto>();
+        foreach (var entry in entries)
+            if (Reason(kind, [name], Texts(entry)) is { } reason) suggestions.Add(new NameSuggestionDto(entry, reason));
+
+        return suggestions
+            .OrderBy(s => s.Entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(s => s.Entry.Id)
+            .ToList();
+    }
+
+    /// <summary>The first rule that pairs the two sets of texts: same letters, then (people only) initials.</summary>
+    private static string? Reason(CanonicalKind kind, IReadOnlyList<string> first, IReadOnlyList<string> second) =>
+        SameLetters(first, second) ?? (kind == CanonicalKind.Person ? Initials(first, second) : null);
+
     /// <summary>Keep the entry with more aliases, then the lower id.</summary>
     private static (CanonicalEntryDto Keep, CanonicalEntryDto Merge) KeepFirst(CanonicalEntryDto a, CanonicalEntryDto b)
     {
@@ -42,28 +63,28 @@ public static partial class CanonicalSuggestions
         return aFirst ? (a, b) : (b, a);
     }
 
-    private static IEnumerable<string> Texts(CanonicalEntryDto entry) => [entry.Name, .. entry.Aliases];
+    private static IReadOnlyList<string> Texts(CanonicalEntryDto entry) => [entry.Name, .. entry.Aliases];
 
     private static string LettersKey(string text) =>
         new string(text.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
 
-    private static string? SameLetters(CanonicalEntryDto keep, CanonicalEntryDto merge)
+    private static string? SameLetters(IReadOnlyList<string> keep, IReadOnlyList<string> merge)
     {
-        foreach (var k in Texts(keep))
+        foreach (var k in keep)
         {
             var key = LettersKey(k);
             if (key.Length == 0) continue;
-            foreach (var m in Texts(merge))
+            foreach (var m in merge)
                 if (LettersKey(m) == key)
                     return $"\"{k}\" and \"{m}\" differ only in spacing or punctuation.";
         }
         return null;
     }
 
-    private static string? Initials(CanonicalEntryDto keep, CanonicalEntryDto merge)
+    private static string? Initials(IReadOnlyList<string> keep, IReadOnlyList<string> merge)
     {
-        foreach (var k in Texts(keep))
-            foreach (var m in Texts(merge))
+        foreach (var k in keep)
+            foreach (var m in merge)
             {
                 var initialsFirst = InitialsMatch(k, m);
                 if (initialsFirst is null) continue;

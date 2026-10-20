@@ -33,7 +33,8 @@ public class GroupingServiceTests : IDisposable
         _connections = new SqliteConnectionFactory(Path.Combine(_root, "grouping.db"));
         new DatabaseInitializer(_connections).Initialize();
         _settings = new SettingsService(new SettingsRepository(_connections));
-        Assert.Empty(_settings.Save(new SettingsDto(_incoming, library, false)).Errors);
+        Assert.Empty(_settings.Save(new SettingsDto(_incoming, library,
+            SettingsService.DefaultDirectoryTemplate, SettingsService.DefaultFileTemplate, false)).Errors);
         _scans = new ScanRepository(_connections);
         _groups = new GroupRepository(_connections);
         _grouping = new GroupingService(_settings, _scans, _groups);

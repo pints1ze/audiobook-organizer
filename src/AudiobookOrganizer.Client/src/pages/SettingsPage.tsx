@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
 import { CircleAlert } from 'lucide-react'
 import { getSettings, saveSettings } from '../services/api'
-import type { SettingsFieldErrors } from '../types/settings'
+import type { Settings, SettingsFieldErrors } from '../types/settings'
 
 type LoadState = 'loading' | 'loaded' | 'error'
+
+const tokenHint =
+  'Tokens: %artist% %album% %series% %series-part% %track% %disc% %title% %year% %narrator%. Pad with %track:3%; wrap optional parts in [ ].'
 
 const inputClass =
   'mt-1 block w-full rounded border border-muted px-3 py-2 aria-[invalid=true]:border-destructive aria-[invalid=true]:border-2'
@@ -12,21 +15,31 @@ export default function SettingsPage() {
   const [loadState, setLoadState] = useState<LoadState>('loading')
   const [incomingPath, setIncomingPath] = useState('')
   const [libraryPath, setLibraryPath] = useState('')
+  const [directoryTemplate, setDirectoryTemplate] = useState('')
+  const [fileTemplate, setFileTemplate] = useState('')
   const [keepSourceFiles, setKeepSourceFiles] = useState(false)
   const [errors, setErrors] = useState<SettingsFieldErrors>({})
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<'saved' | 'failed' | null>(null)
   const incomingRef = useRef<HTMLInputElement>(null)
   const libraryRef = useRef<HTMLInputElement>(null)
+  const directoryTemplateRef = useRef<HTMLInputElement>(null)
+  const fileTemplateRef = useRef<HTMLInputElement>(null)
+
+  function show(settings: Settings) {
+    setIncomingPath(settings.incomingPath ?? '')
+    setLibraryPath(settings.libraryPath ?? '')
+    setDirectoryTemplate(settings.directoryTemplate ?? '')
+    setFileTemplate(settings.fileTemplate ?? '')
+    setKeepSourceFiles(settings.keepSourceFiles)
+  }
 
   useEffect(() => {
     let cancelled = false
     getSettings()
       .then((settings) => {
         if (cancelled) return
-        setIncomingPath(settings.incomingPath ?? '')
-        setLibraryPath(settings.libraryPath ?? '')
-        setKeepSourceFiles(settings.keepSourceFiles)
+        show(settings)
         setLoadState('loaded')
       })
       .catch(() => {
@@ -42,21 +55,23 @@ export default function SettingsPage() {
     setSaving(true)
     setMessage(null)
     try {
-      const result = await saveSettings({ incomingPath, libraryPath, keepSourceFiles })
+      const result = await saveSettings({ incomingPath, libraryPath, directoryTemplate, fileTemplate, keepSourceFiles })
       if (result.ok) {
         setErrors({})
-        setIncomingPath(result.settings.incomingPath ?? '')
-        setLibraryPath(result.settings.libraryPath ?? '')
-        setKeepSourceFiles(result.settings.keepSourceFiles)
+        show(result.settings)
         setMessage('saved')
       } else {
         const fieldErrors: SettingsFieldErrors = {
           incomingPath: result.errors.incomingPath,
           libraryPath: result.errors.libraryPath,
+          directoryTemplate: result.errors.directoryTemplate,
+          fileTemplate: result.errors.fileTemplate,
         }
         setErrors(fieldErrors)
         if (fieldErrors.incomingPath?.length) incomingRef.current?.focus()
         else if (fieldErrors.libraryPath?.length) libraryRef.current?.focus()
+        else if (fieldErrors.directoryTemplate?.length) directoryTemplateRef.current?.focus()
+        else if (fieldErrors.fileTemplate?.length) fileTemplateRef.current?.focus()
         // A 400 with no field we show (e.g. a malformed body) still needs feedback.
         else setMessage('failed')
       }
@@ -79,7 +94,7 @@ export default function SettingsPage() {
       )}
       {loadState === 'loaded' && (
         <form onSubmit={handleSubmit} noValidate className="mt-6 space-y-6">
-          <PathField
+          <TextField
             id="incomingPath"
             label="Incoming directory"
             hint="Full path to the folder you drop new audiobooks into, e.g. /incoming in Docker."
@@ -88,7 +103,7 @@ export default function SettingsPage() {
             errors={errors.incomingPath}
             inputRef={incomingRef}
           />
-          <PathField
+          <TextField
             id="libraryPath"
             label="Library directory"
             hint="Full path to the organised library, e.g. /library in Docker."
@@ -96,6 +111,24 @@ export default function SettingsPage() {
             onChange={setLibraryPath}
             errors={errors.libraryPath}
             inputRef={libraryRef}
+          />
+          <TextField
+            id="directoryTemplate"
+            label="Directory template"
+            hint={tokenHint}
+            value={directoryTemplate}
+            onChange={setDirectoryTemplate}
+            errors={errors.directoryTemplate}
+            inputRef={directoryTemplateRef}
+          />
+          <TextField
+            id="fileTemplate"
+            label="File template"
+            hint={`${tokenHint} The extension is added for you.`}
+            value={fileTemplate}
+            onChange={setFileTemplate}
+            errors={errors.fileTemplate}
+            inputRef={fileTemplateRef}
           />
           <div className="flex items-center gap-2">
             <input
@@ -129,7 +162,7 @@ export default function SettingsPage() {
   )
 }
 
-interface PathFieldProps {
+interface TextFieldProps {
   id: string
   label: string
   hint: string
@@ -139,7 +172,7 @@ interface PathFieldProps {
   inputRef: RefObject<HTMLInputElement | null>
 }
 
-function PathField({ id, label, hint, value, onChange, errors, inputRef }: PathFieldProps) {
+function TextField({ id, label, hint, value, onChange, errors, inputRef }: TextFieldProps) {
   const hasErrors = !!errors?.length
   const hintId = `${id}-hint`
   const errorId = `${id}-error`

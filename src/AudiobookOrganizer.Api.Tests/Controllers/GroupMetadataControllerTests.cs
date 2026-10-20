@@ -14,7 +14,7 @@ public class GroupMetadataControllerTests : IDisposable
 
     private static readonly string[] FieldNames =
     [
-        "title", "subtitle", "authors", "narrators", "series", "seriesPart",
+        "title", "subtitle", "authors", "narrators", "genres", "series", "seriesPart",
         "publisher", "releaseDate", "language", "format", "asin", "isbn",
     ];
 
@@ -103,7 +103,9 @@ public class GroupMetadataControllerTests : IDisposable
         }
         Assert.Empty(List(fields, "narrators"));
         Assert.Equal((null, null), Source(fields, "narrators"));
-        foreach (var name in FieldNames.Except(["title", "authors", "narrators"]))
+        Assert.Empty(List(fields, "genres"));
+        Assert.Equal((null, null), Source(fields, "genres"));
+        foreach (var name in FieldNames.Except(["title", "authors", "narrators", "genres"]))
         {
             Assert.Equal(JsonValueKind.Null, fields.GetProperty(name).GetProperty("value").ValueKind);
             Assert.Equal((null, null), Source(fields, name));
@@ -134,10 +136,12 @@ public class GroupMetadataControllerTests : IDisposable
         Assert.Equal("english", Text(fields, "language"));
         Assert.Equal("unabridged", Text(fields, "format"));
         Assert.Equal("B0TEST0001", Text(fields, "asin"));
-        foreach (var name in FieldNames.Except(["isbn"]))
+        foreach (var name in FieldNames.Except(["isbn", "genres"]))
             Assert.Equal(("provider", "audible"), Source(fields, name));
         Assert.Null(Text(fields, "isbn"));
         Assert.Equal((null, null), Source(fields, "isbn"));
+        Assert.Empty(List(fields, "genres"));
+        Assert.Equal((null, null), Source(fields, "genres"));
 
         await Pick(client, id, new
         {
@@ -306,6 +310,57 @@ public class GroupMetadataControllerTests : IDisposable
         var fields = await Fields(client, id);
         Assert.Equal("Self", Text(fields, "publisher"));
         Assert.Equal(("file", null), Source(fields, "title"));
+    }
+
+    [Fact]
+    public async Task Genres_are_stored_as_cleaned_user_values_and_a_put_without_genres_leaves_them()
+    {
+        var client = _factory.CreateClient();
+        var id = await ScanAndTakeGroup(client);
+
+        var put = await client.PutAsJsonAsync($"/api/groups/{id}/metadata",
+            new { fields = new { genres = new[] { " Fantasy ", "", "Epic Fantasy" } } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        var fields = await Fields(client, id);
+        Assert.Equal(["Fantasy", "Epic Fantasy"], List(fields, "genres"));
+        Assert.Equal(("user", null), Source(fields, "genres"));
+
+        put = await client.PutAsJsonAsync($"/api/groups/{id}/metadata", new { fields = new { publisher = "Self" } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        fields = await Fields(client, id);
+        Assert.Equal(["Fantasy", "Epic Fantasy"], List(fields, "genres"));
+        Assert.Equal(("user", null), Source(fields, "genres"));
+    }
+
+    [Fact]
+    public async Task Too_many_genres_return_400_and_picking_a_match_keeps_genres()
+    {
+        var client = _factory.CreateClient();
+        var id = await ScanAndTakeGroup(client);
+
+        var tooMany = Enumerable.Range(1, 51).Select(i => $"Genre {i}").ToArray();
+        var many = await client.PutAsJsonAsync($"/api/groups/{id}/metadata", new { fields = new { genres = tooMany } });
+        Assert.Equal(HttpStatusCode.BadRequest, many.StatusCode);
+        var problem = await ScansControllerTests.ReadJson(many);
+        Assert.Equal("There can be at most 50 entries.", problem.GetProperty("errors").GetProperty("genres")[0].GetString());
+        Assert.Equal(0, Count("AudiobookField"));
+
+        var tooLong = await client.PutAsJsonAsync($"/api/groups/{id}/metadata",
+            new { fields = new { genres = new[] { new string('a', 501) } } });
+        Assert.Equal(HttpStatusCode.BadRequest, tooLong.StatusCode);
+        problem = await ScansControllerTests.ReadJson(tooLong);
+        Assert.Equal("Each entry can be at most 500 characters.",
+            problem.GetProperty("errors").GetProperty("genres")[0].GetString());
+        Assert.Equal(0, Count("AudiobookField"));
+
+        var put = await client.PutAsJsonAsync($"/api/groups/{id}/metadata",
+            new { fields = new { genres = new[] { "Horror" } } });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        await Pick(client, id, AudibleCandidate());
+        var fields = await Fields(client, id);
+        Assert.Equal(["Horror"], List(fields, "genres"));
+        Assert.Equal(("user", null), Source(fields, "genres"));
+        Assert.Equal("The Test Book", Text(fields, "title"));
     }
 
     public void Dispose()

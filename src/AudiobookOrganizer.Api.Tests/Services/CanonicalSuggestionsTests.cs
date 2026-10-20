@@ -149,4 +149,48 @@ public class CanonicalSuggestionsTests
         Assert.Equal(forward.Select(s => (s.Keep.Id, s.Merge.Id, s.Reason)),
             backward.Select(s => (s.Keep.Id, s.Merge.Id, s.Reason)));
     }
+
+    [Fact]
+    public void ForName_suggests_a_same_letters_match_and_an_initials_match_with_reasons()
+    {
+        var tolkien = Entry(1, "JRR Tolkien");
+        var sanderson = Entry(2, "Brandon Sanderson");
+        var entries = new[] { sanderson, tolkien };
+
+        var same = Assert.Single(CanonicalSuggestions.ForName(CanonicalKind.Person, "J.R.R. Tolkien", entries));
+        var initials = Assert.Single(CanonicalSuggestions.ForName(CanonicalKind.Person, "B. Sanderson", entries));
+
+        Assert.Equal(1, same.Entry.Id);
+        Assert.Equal("\"J.R.R. Tolkien\" and \"JRR Tolkien\" differ only in spacing or punctuation.", same.Reason);
+        Assert.Equal(2, initials.Entry.Id);
+        Assert.Equal("\"B. Sanderson\" may be \"Brandon Sanderson\" with initials.", initials.Reason);
+    }
+
+    [Fact]
+    public void ForName_returns_nothing_for_an_unrelated_name()
+    {
+        Assert.Empty(CanonicalSuggestions.ForName(CanonicalKind.Person, "Neil Gaiman",
+            [Entry(1, "Stephen King"), Entry(2, "Brandon Sanderson")]));
+    }
+
+    [Fact]
+    public void ForName_matches_an_alias_and_orders_by_entry_name()
+    {
+        var entries = new[] { Entry(1, "Stephen King", "Richard Bachman"), Entry(2, "Rick Bachman") };
+
+        var suggestions = CanonicalSuggestions.ForName(CanonicalKind.Person, "R. Bachman", entries);
+
+        Assert.Equal([2, 1], suggestions.Select(s => s.Entry.Id));
+        Assert.Equal("\"R. Bachman\" may be \"Richard Bachman\" with initials.", suggestions[1].Reason);
+    }
+
+    [Fact]
+    public void ForName_gives_genres_only_the_same_letters_rule()
+    {
+        var entries = new[] { Entry(1, "S. Fiction"), Entry(2, "Sciencefiction") };
+
+        var suggestion = Assert.Single(CanonicalSuggestions.ForName(CanonicalKind.Genre, "Science Fiction", entries));
+
+        Assert.Equal(2, suggestion.Entry.Id);
+    }
 }

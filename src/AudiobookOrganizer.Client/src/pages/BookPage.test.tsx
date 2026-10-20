@@ -2,12 +2,25 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../App'
-import { getCovers, getGroup, getMatch, getMetadata, pickMatch, saveMetadata, searchMetadata } from '../services/api'
+import {
+  getBookGenres,
+  getBookPeople,
+  getCovers,
+  getGroup,
+  getMatch,
+  getMetadata,
+  pickMatch,
+  saveMetadata,
+  searchMetadata,
+} from '../services/api'
 import type { GroupDetail } from '../types/groups'
 import type { BookMatch, BookMetadata, MetadataCandidate, PickMatchResult } from '../types/metadata'
 import { formatDateTime } from '../utils/formatDateTime'
 
 vi.mock('../services/api', () => ({
+  createEntry: vi.fn(),
+  getBookGenres: vi.fn(),
+  getBookPeople: vi.fn(),
   getCovers: vi.fn(),
   getGroup: vi.fn(),
   getMatch: vi.fn(),
@@ -15,6 +28,7 @@ vi.mock('../services/api', () => ({
   pickMatch: vi.fn(),
   saveMetadata: vi.fn(),
   searchMetadata: vi.fn(),
+  updateEntry: vi.fn(),
 }))
 
 const getGroupMock = vi.mocked(getGroup)
@@ -24,6 +38,8 @@ const pickMock = vi.mocked(pickMatch)
 const getMetadataMock = vi.mocked(getMetadata)
 const saveMetadataMock = vi.mocked(saveMetadata)
 const getCoversMock = vi.mocked(getCovers)
+const getBookPeopleMock = vi.mocked(getBookPeople)
+const getBookGenresMock = vi.mocked(getBookGenres)
 
 function metadataWith(title: string, origin: 'file' | 'provider', narrators: string[]): BookMetadata {
   const empty = { value: null, origin: null, provider: null }
@@ -35,6 +51,7 @@ function metadataWith(title: string, origin: 'file' | 'provider', narrators: str
       subtitle: empty,
       authors: { value: ['Andy Weir'], origin, provider },
       narrators: narrators.length ? { value: narrators, origin, provider } : { value: [], origin: null, provider: null },
+      genres: { value: [], origin: null, provider: null },
       series: empty,
       seriesPart: empty,
       publisher: empty,
@@ -142,13 +159,19 @@ describe('BookPage', () => {
     saveMetadataMock.mockReset()
     getCoversMock.mockReset()
     getCoversMock.mockResolvedValue({ groupId: 4, chosen: null, embedded: [], provider: null })
+    getBookPeopleMock.mockReset()
+    getBookPeopleMock.mockResolvedValue({ groupId: 4, authors: [], narrators: [] })
+    getBookGenresMock.mockReset()
+    getBookGenresMock.mockResolvedValue({ groupId: 4, genres: [] })
   })
 
-  it('shows the Cover and Metadata sections between Chosen match and Catalog search', async () => {
+  it('shows the Cover, Metadata, People and Genres sections between Chosen match and Catalog search', async () => {
     await loadedPage()
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
-    expect(headings).toEqual(['Chosen match', 'Cover', 'Metadata', 'Catalog search'])
+    expect(headings).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Genres', 'Catalog search'])
+    expect(getBookPeopleMock).toHaveBeenCalledWith(4)
+    expect(getBookGenresMock).toHaveBeenCalledWith(4)
     expect(getCoversMock).toHaveBeenCalledWith(4)
     const cover = screen.getByRole('heading', { level: 2, name: 'Cover' }).closest('section')!
     expect(await within(cover).findByText('No cover chosen yet.')).toBeInTheDocument()
@@ -167,6 +190,58 @@ describe('BookPage', () => {
     expect(await within(metadataSection()).findByText('Ray Porter')).toBeInTheDocument()
     expect(within(metadataSection()).getAllByText('From Audible').length).toBeGreaterThan(0)
     expect(getMetadataMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads the people section after "Use this match" succeeds', async () => {
+    pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    await loadedPage()
+    const people = screen.getByRole('heading', { level: 2, name: 'People' }).closest('section')!
+    await within(people).findByText('No authors or narrators yet.')
+    await searchFor([openLibrary, audible])
+
+    getBookPeopleMock.mockResolvedValue({
+      groupId: 4,
+      authors: [],
+      narrators: [{ name: 'Ray Porter', entry: { id: 3, name: 'Ray Porter', aliases: [] }, suggestions: [] }],
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+
+    expect(await within(people).findByText('Normalized: Ray Porter')).toBeInTheDocument()
+    expect(getBookPeopleMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads the people section after the metadata editor saves', async () => {
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata: metadataWith('Project Hail Mary', 'file', ['Ray Porter']) })
+    await loadedPage()
+    const people = screen.getByRole('heading', { level: 2, name: 'People' }).closest('section')!
+    await within(people).findByText('No authors or narrators yet.')
+
+    fireEvent.click(await within(metadataSection()).findByRole('button', { name: 'Edit metadata' }))
+    fireEvent.change(within(metadataSection()).getByLabelText('Narrators'), { target: { value: 'Ray Porter' } })
+    getBookPeopleMock.mockResolvedValue({
+      groupId: 4,
+      authors: [],
+      narrators: [{ name: 'Ray Porter', entry: null, suggestions: [] }],
+    })
+    fireEvent.click(within(metadataSection()).getByRole('button', { name: 'Save' }))
+
+    expect(await within(people).findByText('Not linked')).toBeInTheDocument()
+    expect(getBookPeopleMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('reloads the genres section after the metadata editor saves', async () => {
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata: metadataWith('Project Hail Mary', 'file', []) })
+    await loadedPage()
+    const genres = screen.getByRole('heading', { level: 2, name: 'Genres' }).closest('section')!
+    await within(genres).findByText('No genres yet.')
+
+    fireEvent.click(await within(metadataSection()).findByRole('button', { name: 'Edit metadata' }))
+    fireEvent.change(within(metadataSection()).getByLabelText('Genres'), { target: { value: 'Horror' } })
+    getBookGenresMock.mockResolvedValue({ groupId: 4, genres: [{ name: 'Horror', entry: null, suggestions: [] }] })
+    fireEvent.click(within(metadataSection()).getByRole('button', { name: 'Save' }))
+
+    expect(await within(genres).findByText('Not linked')).toBeInTheDocument()
+    expect(getBookGenresMock).toHaveBeenCalledTimes(2)
   })
 
   it('reloads the covers after "Use this match" succeeds, so the match cover follows it', async () => {
@@ -301,7 +376,7 @@ describe('BookPage', () => {
     await loadedPage()
 
     expect(getMatchMock).toHaveBeenCalledWith(4)
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Cover', 'Metadata', 'Catalog search'])
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Genres', 'Catalog search'])
     const section = chosenSection()
     expect(await within(section).findByRole('heading', { level: 3, name: 'Project Hail Mary' })).toBeInTheDocument()
     expect(within(section).getByText('Open Library')).toBeInTheDocument()

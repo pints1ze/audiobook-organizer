@@ -8,8 +8,11 @@ namespace AudiobookOrganizer.Api.Controllers;
 [ApiController]
 [Route("api/groups")]
 public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers,
-    ILogger<GroupsController> logger) : ControllerBase
+    NamingPreviewService previews, ILogger<GroupsController> logger) : ControllerBase
 {
+    [HttpGet("{id:long}/preview")]
+    public ActionResult<BookPreviewDto> GetPreview(long id) => previews.Preview(id) is { } preview ? preview : NotFound();
+
     [HttpGet("{id:long}/cover")]
     public ActionResult<BookCoverDto> GetCover(long id) => covers.GetCovers(id) is { } cover ? cover : NotFound();
 
@@ -80,6 +83,14 @@ public class GroupsController(GroupingService grouping, AudiobookService audiobo
     [HttpGet("{id:long}/metadata")]
     public ActionResult<BookMetadataDto> GetMetadata(long id) =>
         audiobooks.GetMetadata(id) is { } metadata ? metadata : NotFound();
+
+    [HttpGet("{id:long}/people")]
+    public ActionResult<BookPeopleDto> GetPeople(long id) =>
+        audiobooks.GetPeople(id) is { } people ? people : NotFound();
+
+    [HttpGet("{id:long}/genres")]
+    public ActionResult<BookGenresDto> GetGenres(long id) =>
+        audiobooks.GetGenres(id) is { } genres ? genres : NotFound();
 
     [HttpPut("{id:long}/metadata")]
     public ActionResult<BookMetadataDto> PutMetadata(long id, UpdateBookMetadataDto request)

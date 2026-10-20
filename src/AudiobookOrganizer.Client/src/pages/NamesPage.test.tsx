@@ -165,7 +165,7 @@ describe('NamesPage', () => {
 
     expect(await screen.findByText('Saved Stephen Edwin King.')).toBeInTheDocument()
     expect(updateEntryMock).toHaveBeenCalledWith('people', 1, { name: 'Stephen Edwin King', aliases: ['Richard Bachman'] })
-    expect(screen.getByRole('button', { name: 'Edit Stephen Edwin King' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit Stephen Edwin King' })).toHaveFocus())
   })
 
   it('Cancel restores the row and focuses its Edit button', async () => {
@@ -250,7 +250,7 @@ describe('NamesPage', () => {
     expect(getSuggestionsMock).toHaveBeenCalledTimes(2)
     expect(screen.getByText('Also known as: John Swithen, Richard Bachman, S. King')).toBeInTheDocument()
     expect(within(duplicates()).getByText('No possible duplicates.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Edit Stephen King' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit Stephen King' })).toHaveFocus())
   })
 
   it('offers only the other entries in the row merge control, and Cancel sends nothing and refocuses Merge', async () => {
@@ -295,7 +295,7 @@ describe('NamesPage', () => {
 
     expect(await screen.findByText('Merged S. King into Stephen King.')).toBeInTheDocument()
     expect(mergeEntryMock).toHaveBeenCalledWith('people', 1, 4)
-    expect(screen.getByRole('button', { name: 'Edit Stephen King' })).toHaveFocus()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Edit Stephen King' })).toHaveFocus())
   })
 
   it('shows "That entry no longer exists." on a 404 and reloads', async () => {

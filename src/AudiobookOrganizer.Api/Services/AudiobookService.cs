@@ -17,7 +17,7 @@ public record GetMatchResult(bool GroupFound, BookMatchDto? Match);
 public record UpdateMetadataResult(BookMetadataDto? Metadata, IReadOnlyDictionary<string, string[]> Errors);
 
 /// <summary>Stores the catalog candidate the user picks for a book, and the book's metadata values with their origins.</summary>
-public class AudiobookService(GroupRepository groups, AudiobookRepository audiobooks)
+public class AudiobookService(GroupRepository groups, AudiobookRepository audiobooks, CanonicalNameService names)
 {
     public const int MaxPeople = 50;
 
@@ -70,6 +70,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
             Text(Fields.Subtitle),
             People(Fields.Authors, Trim(group.Author)),
             People(Fields.Narrators),
+            People(Fields.Genres),
             Text(Fields.Series),
             Text(Fields.SeriesPart),
             Text(Fields.Publisher),
@@ -78,6 +79,45 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
             Text(Fields.Format),
             Text(Fields.Asin),
             Text(Fields.Isbn)));
+    }
+
+    /// <summary>
+    /// The book's authors and narrators (as <see cref="GetMetadata"/> reads them, file fallback included), each with
+    /// the person it resolves to through the alias catalog or, if none, likely people. Null when the group id is
+    /// unknown. Computed on each read: nothing is linked or created.
+    /// </summary>
+    public BookPeopleDto? GetPeople(long groupId) => GetMetadata(groupId) is { } metadata ? GetPeople(metadata) : null;
+
+    /// <summary>As <see cref="GetPeople(long)"/>, from metadata already read with <see cref="GetMetadata"/>.</summary>
+    public BookPeopleDto GetPeople(BookMetadataDto metadata)
+    {
+        var groupId = metadata.GroupId;
+        var link = Linker(CanonicalKind.Person);
+        return new BookPeopleDto(groupId,
+            metadata.Fields.Authors.Value.Select(link).ToList(),
+            metadata.Fields.Narrators.Value.Select(link).ToList());
+    }
+
+    /// <summary>
+    /// The book's stored genres in order, each with the genre it resolves to through the alias catalog or, if none,
+    /// likely genres. Null when the group id is unknown. Computed on each read: nothing is linked or created.
+    /// </summary>
+    public BookGenresDto? GetGenres(long groupId)
+    {
+        if (GetMetadata(groupId) is not { } metadata) return null;
+        return new BookGenresDto(groupId, metadata.Fields.Genres.Value.Select(Linker(CanonicalKind.Genre)).ToList());
+    }
+
+    /// <summary>Resolves a name of <paramref name="kind"/>, or suggests entries; the catalog is loaded once, on first need.</summary>
+    private Func<string, NameLinkDto> Linker(CanonicalKind kind)
+    {
+        IReadOnlyList<CanonicalEntryDto>? catalog = null;
+        return name =>
+        {
+            if (names.Resolve(kind, name) is { } entry) return new NameLinkDto(name, entry, []);
+            catalog ??= names.List(kind);
+            return new NameLinkDto(name, null, CanonicalSuggestions.ForName(kind, name, catalog));
+        };
     }
 
     /// <summary>
@@ -97,9 +137,9 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
             if (value is not null) rows.Add(UserRow(field, JsonSerializer.Serialize(CleanText(errors, field, value))));
         }
 
-        void SetPeople(string field, IReadOnlyList<string>? names)
+        void SetPeople(string field, IReadOnlyList<string>? names, bool entries = false)
         {
-            if (names is not null) rows.Add(UserRow(field, JsonSerializer.Serialize(CleanPeople(errors, field, names))));
+            if (names is not null) rows.Add(UserRow(field, JsonSerializer.Serialize(CleanPeople(errors, field, names, entries))));
         }
 
         SetText(Fields.Title, sent.Title);
@@ -107,6 +147,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
         SetText(Fields.Subtitle, sent.Subtitle);
         SetPeople(Fields.Authors, sent.Authors);
         SetPeople(Fields.Narrators, sent.Narrators);
+        SetPeople(Fields.Genres, sent.Genres, entries: true);
         SetText(Fields.Series, sent.Series);
         SetText(Fields.SeriesPart, sent.SeriesPart);
         SetText(Fields.Publisher, sent.Publisher);
@@ -165,7 +206,7 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
     private static class Fields
     {
         public const string Title = "title", Subtitle = "subtitle", Authors = "authors", Narrators = "narrators",
-            Series = "series", SeriesPart = "seriesPart", Publisher = "publisher", ReleaseDate = "releaseDate",
+            Genres = "genres", Series = "series", SeriesPart = "seriesPart", Publisher = "publisher", ReleaseDate = "releaseDate",
             Language = "language", Format = "format", Asin = "asin", Isbn = "isbn";
     }
 
@@ -185,13 +226,18 @@ public class AudiobookService(GroupRepository groups, AudiobookRepository audiob
         return trimmed;
     }
 
-    /// <summary>The names trimmed with blanks dropped; an error under <paramref name="field"/> for too many or too long.</summary>
-    private static List<string> CleanPeople(Dictionary<string, string[]> errors, string field, IReadOnlyList<string>? names)
+    /// <summary>
+    /// The names trimmed with blanks dropped; an error under <paramref name="field"/> for too many or too long. Errors
+    /// call each item a "name", or an "entry" when <paramref name="entries"/> is set (genres).
+    /// </summary>
+    private static List<string> CleanPeople(
+        Dictionary<string, string[]> errors, string field, IReadOnlyList<string>? names, bool entries = false)
     {
         var cleaned = (names ?? []).Select(Trim).OfType<string>().ToList();
-        if (cleaned.Count > MaxPeople) errors[field] = [$"There can be at most {MaxPeople} names."];
+        var (one, many) = entries ? ("entry", "entries") : ("name", "names");
+        if (cleaned.Count > MaxPeople) errors[field] = [$"There can be at most {MaxPeople} {many}."];
         else if (cleaned.Any(n => n.Length > GroupingService.MaxTextLength))
-            errors[field] = [$"Each name can be at most {GroupingService.MaxTextLength} characters."];
+            errors[field] = [$"Each {one} can be at most {GroupingService.MaxTextLength} characters."];
         return cleaned;
     }
 

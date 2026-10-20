@@ -33,6 +33,7 @@ builder.Services.AddSingleton<GroupRepository>();
 builder.Services.AddSingleton<GroupingService>();
 builder.Services.AddSingleton<AudiobookRepository>();
 builder.Services.AddSingleton<AudiobookService>();
+builder.Services.AddSingleton<NamingPreviewService>();
 // Transient because it holds the typed CoverDownloadClient, as MetadataSearchService holds the providers.
 builder.Services.AddTransient<CoverService>();
 builder.Services.AddSingleton<ScanService>();

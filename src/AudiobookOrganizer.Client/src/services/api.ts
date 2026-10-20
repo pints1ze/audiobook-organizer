@@ -27,6 +27,8 @@ import type {
   UpdateBookMetadataFields,
 } from '../types/metadata'
 import type {
+  BookGenres,
+  BookPeople,
   CanonicalEntry,
   EntryFieldErrors,
   EntryRequest,
@@ -34,6 +36,7 @@ import type {
   NameKind,
   SaveEntryResult,
 } from '../types/names'
+import type { LibraryPreview } from '../types/preview'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -77,6 +80,14 @@ export async function getDashboard(): Promise<Dashboard> {
     throw new Error(`Loading the dashboard failed with status ${response.status}`)
   }
   return (await response.json()) as Dashboard
+}
+
+export async function getPreview(): Promise<LibraryPreview> {
+  const response = await fetch('/api/preview')
+  if (response.status !== 200) {
+    throw new Error(`Loading the preview failed with status ${response.status}`)
+  }
+  return (await response.json()) as LibraryPreview
 }
 
 export async function getLatestScan(): Promise<ScanRun | null> {
@@ -343,6 +354,23 @@ export async function getEntries(kind: NameKind): Promise<CanonicalEntry[]> {
     throw new Error(`Loading ${kind} failed with status ${response.status}`)
   }
   return (await response.json()) as CanonicalEntry[]
+}
+
+/** A book's authors and narrators, each resolved to a canonical person or with suggested people. */
+export async function getBookPeople(groupId: number): Promise<BookPeople> {
+  const response = await fetch(`/api/groups/${groupId}/people`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the book's people failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookPeople
+}
+
+export async function getBookGenres(groupId: number): Promise<BookGenres> {
+  const response = await fetch(`/api/groups/${groupId}/genres`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the book's genres failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookGenres
 }
 
 /** Maps a create (201) or update (200) response, its 400 and its 404; throws for any other status. */

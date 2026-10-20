@@ -7,6 +7,8 @@ public class SettingsRepository(SqliteConnectionFactory connections)
     public const string IncomingPath = "IncomingPath";
     public const string LibraryPath = "LibraryPath";
     public const string KeepSourceFiles = "KeepSourceFiles";
+    public const string DirectoryTemplate = "DirectoryTemplate";
+    public const string FileTemplate = "FileTemplate";
 
     public string? Get(string key)
     {

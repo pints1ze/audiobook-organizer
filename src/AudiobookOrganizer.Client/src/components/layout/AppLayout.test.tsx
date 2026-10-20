@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../App'
-import { getDashboard, getEntries, getGroups, getHealth, getSettings, getSuggestions } from '../../services/api'
+import { getDashboard, getEntries, getGroups, getHealth, getPreview, getSettings, getSuggestions } from '../../services/api'
 
 vi.mock('../../services/api', () => ({
   getHealth: vi.fn(),
@@ -17,6 +17,7 @@ vi.mock('../../services/api', () => ({
   updateEntry: vi.fn(),
   getSuggestions: vi.fn(),
   mergeEntry: vi.fn(),
+  getPreview: vi.fn(),
 }))
 
 function renderAt(path: string) {
@@ -30,7 +31,13 @@ function renderAt(path: string) {
 describe('AppLayout', () => {
   beforeEach(() => {
     vi.mocked(getHealth).mockResolvedValue({ status: 'ok', database: 'ok' })
-    vi.mocked(getSettings).mockResolvedValue({ incomingPath: null, libraryPath: null, keepSourceFiles: false })
+    vi.mocked(getSettings).mockResolvedValue({
+      incomingPath: null,
+      libraryPath: null,
+      directoryTemplate: '%album%',
+      fileTemplate: '%title%',
+      keepSourceFiles: false,
+    })
     vi.mocked(getDashboard).mockResolvedValue({
       incomingPath: null,
       libraryPath: null,
@@ -46,6 +53,11 @@ describe('AppLayout', () => {
     vi.mocked(getGroups).mockResolvedValue({ groups: [], unresolved: [], excluded: [] })
     vi.mocked(getEntries).mockResolvedValue([])
     vi.mocked(getSuggestions).mockResolvedValue([])
+    vi.mocked(getPreview).mockResolvedValue({
+      libraryPath: null,
+      books: [],
+      counts: { files: 0, missing: 0, errors: 0, duplicates: 0, existing: 0 },
+    })
   })
 
   it('renders the skip link first, the header and the main landmark', async () => {
@@ -77,7 +89,7 @@ describe('AppLayout', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current')
     const navLinks = screen.getAllByRole('link').filter((l) => l.closest('nav'))
-    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'People', 'Genres', 'Settings'])
+    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'People', 'Genres', 'Preview', 'Settings'])
     expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
   })
 
@@ -96,6 +108,16 @@ describe('AppLayout', () => {
     expect(screen.getByRole('link', { name: 'Genres' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('heading', { level: 1, name: 'Genres' })).toBeInTheDocument()
     expect(await screen.findByText('No genres yet.')).toBeInTheDocument()
+  })
+
+  it('marks the Preview nav link as the current page on /preview', async () => {
+    renderAt('/preview')
+
+    const link = screen.getByRole('link', { name: 'Preview' })
+    expect(link).toHaveAttribute('href', '/preview')
+    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('heading', { level: 1, name: 'Preview' })).toBeInTheDocument()
+    expect(await screen.findByText('No books to preview yet.')).toBeInTheDocument()
   })
 
   it('shows "Page not found" with a link back to the dashboard for an unknown route', () => {

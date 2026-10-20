@@ -5,6 +5,7 @@ import DashboardPage from './pages/DashboardPage'
 import IncomingPage from './pages/IncomingPage'
 import NamesPage from './pages/NamesPage'
 import NotFoundPage from './pages/NotFoundPage'
+import PreviewPage from './pages/PreviewPage'
 import SettingsPage from './pages/SettingsPage'
 
 export function AppRoutes() {
@@ -16,6 +17,7 @@ export function AppRoutes() {
         <Route path="/books/:groupId" element={<BookPage />} />
         <Route path="/people" element={<NamesPage key="people" kind="people" />} />
         <Route path="/genres" element={<NamesPage key="genres" kind="genres" />} />
+        <Route path="/preview" element={<PreviewPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

@@ -24,6 +24,7 @@ const metadata: BookMetadata = {
     subtitle: field<string | null>(null),
     authors: field(['Andy Weir'], 'file'),
     narrators: field(['Jane Doe', 'John Roe'], 'user'),
+    genres: field<string[]>([]),
     series: field<string | null>('Hail Mary', 'provider', 'openlibrary'),
     seriesPart: field<string | null>('1', 'provider', 'audible'),
     publisher: field<string | null>('Audible Studios', 'provider', 'audible'),
@@ -83,7 +84,7 @@ describe('MetadataEditor', () => {
 
     expect(getMetadataMock).toHaveBeenCalledWith(4)
     expect(screen.getByRole('heading', { level: 2, name: 'Metadata' })).toBeInTheDocument()
-    expect(screen.getAllByRole('term')).toHaveLength(12)
+    expect(screen.getAllByRole('term')).toHaveLength(13)
     expect(row('Title')).toHaveTextContent('Project Hail Mary')
     expect(row('Title')).toHaveTextContent('From Audible')
     expect(row('Authors')).toHaveTextContent('Andy Weir')
@@ -95,7 +96,23 @@ describe('MetadataEditor', () => {
     expect(row('Series part')).toHaveTextContent('1')
     expect(row('Subtitle')).toHaveTextContent('Not set')
     expect(row('Format')).toHaveTextContent(/^Not set$/)
+    expect(row('Genres')).toHaveTextContent(/^Not set$/)
     expect(screen.queryByText(/Match:/)).not.toBeInTheDocument()
+  })
+
+  it('shows user genres comma-separated after Narrators, never with a "Match:" line', async () => {
+    getMetadataMock.mockResolvedValue({
+      ...metadata,
+      fields: { ...metadata.fields, genres: field(['Fantasy', 'Epic Fantasy'], 'user') },
+    })
+    renderEditor(match)
+    await screen.findByText('Andy Weir')
+
+    const terms = screen.getAllByRole('term').map((term) => term.textContent)
+    expect(terms.indexOf('Genres')).toBe(terms.indexOf('Narrators') + 1)
+    expect(row('Genres')).toHaveTextContent('Fantasy, Epic Fantasy')
+    expect(row('Genres')).toHaveTextContent('Edited by you')
+    expect(within(row('Genres')).queryByText(/Match:/)).not.toBeInTheDocument()
   })
 
   it('shows "Match: Ray Porter" for a user narrator that differs from the match', async () => {
@@ -207,6 +224,50 @@ describe('MetadataEditor', () => {
     expect(title).toHaveAccessibleDescription('The title is required.')
     expect(title).toHaveFocus()
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
+  })
+
+  it('saves only the changed genres, one per line without blanks', async () => {
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata })
+    await loaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit metadata' }))
+    const genres = screen.getByLabelText('Genres')
+    expect(genres.tagName).toBe('TEXTAREA')
+    expect(genres).toHaveAccessibleDescription('One genre per line')
+    fireEvent.change(genres, { target: { value: 'Horror\n\n Thriller ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(saveMetadataMock).toHaveBeenCalledWith(4, { genres: ['Horror', 'Thriller'] })
+    await screen.findByText('Metadata saved.')
+  })
+
+  it('sends genres [] when the stored genres are cleared', async () => {
+    getMetadataMock.mockResolvedValue({ ...metadata, fields: { ...metadata.fields, genres: field(['Horror'], 'user') } })
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata })
+    renderEditor()
+    await screen.findByText('Andy Weir')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit metadata' }))
+    fireEvent.change(screen.getByLabelText('Genres'), { target: { value: '\n  \n' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(saveMetadataMock).toHaveBeenCalledWith(4, { genres: [] })
+    await screen.findByText('Metadata saved.')
+  })
+
+  it('shows a genres 400 under the Genres textarea and focuses it', async () => {
+    saveMetadataMock.mockResolvedValue({ ok: false, errors: { genres: ['There can be at most 50 entries.'] } })
+    await loaded()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit metadata' }))
+    const genres = screen.getByLabelText('Genres')
+    fireEvent.change(genres, { target: { value: 'Horror' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(genres).toHaveAttribute('aria-invalid', 'true'))
+    expect(genres).toHaveAccessibleDescription('One genre per line There can be at most 50 entries.')
+    expect(genres).toHaveFocus()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('shows "This book no longer exists." with a link to Incoming on a 404', async () => {
