@@ -3,6 +3,7 @@ import AppLayout from './components/layout/AppLayout'
 import BookPage from './pages/BookPage'
 import DashboardPage from './pages/DashboardPage'
 import IncomingPage from './pages/IncomingPage'
+import JobsPage from './pages/JobsPage'
 import NamesPage from './pages/NamesPage'
 import NotFoundPage from './pages/NotFoundPage'
 import PreviewPage from './pages/PreviewPage'
@@ -18,6 +19,7 @@ export function AppRoutes() {
         <Route path="/people" element={<NamesPage key="people" kind="people" />} />
         <Route path="/genres" element={<NamesPage key="genres" kind="genres" />} />
         <Route path="/preview" element={<PreviewPage />} />
+        <Route path="/jobs" element={<JobsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

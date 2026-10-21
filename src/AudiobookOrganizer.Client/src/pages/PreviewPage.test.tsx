@@ -1,15 +1,30 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getPreview } from '../services/api'
+import { approveBook, getPreview } from '../services/api'
+import type { ApproveBookResult, ProcessingJob } from '../types/jobs'
 import type { BookPreview, FilePreview, LibraryPreview } from '../types/preview'
 import PreviewPage from './PreviewPage'
 
 vi.mock('../services/api', () => ({
   getPreview: vi.fn(),
+  approveBook: vi.fn(),
 }))
 
 const getPreviewMock = vi.mocked(getPreview)
+const approveBookMock = vi.mocked(approveBook)
+
+const queuedJob: ProcessingJob = {
+  id: 3,
+  groupId: 1,
+  title: 'The Hobbit',
+  status: 'Queued',
+  createdAtUtc: '2026-10-19T10:00:00+00:00',
+  startedAtUtc: null,
+  finishedAtUtc: null,
+  error: null,
+  files: [],
+}
 
 function file(overrides: Partial<FilePreview> & { fileId: number }): FilePreview {
   return {
@@ -87,6 +102,7 @@ function bookSection(name: string) {
 describe('PreviewPage', () => {
   beforeEach(() => {
     getPreviewMock.mockReset()
+    approveBookMock.mockReset()
   })
 
   it('shows loading, then the heading, library path and counts', async () => {
@@ -178,5 +194,61 @@ describe('PreviewPage', () => {
     renderPage()
 
     expect(await screen.findByRole('alert')).toHaveTextContent("The preview couldn't be loaded.")
+  })
+
+  it('shows Approve on a clean book and the fix note instead on a book with problems', async () => {
+    getPreviewMock.mockResolvedValue(preview([cleanBook, problemBook]))
+    renderPage()
+
+    await screen.findByRole('heading', { level: 2, name: 'The Hobbit' })
+    const clean = within(bookSection('The Hobbit'))
+    const approve = clean.getByRole('button', { name: 'Approve' })
+    expect(approve).toHaveAccessibleDescription('The Hobbit')
+    expect(clean.queryByText('Fix the problems above to approve this book.')).not.toBeInTheDocument()
+
+    const problem = within(bookSection('Unknown'))
+    expect(problem.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+    expect(problem.getByText('Fix the problems above to approve this book.')).toBeInTheDocument()
+  })
+
+  it('approves the book, showing Approving… while pending, then focuses the queued message', async () => {
+    let resolve: (result: ApproveBookResult) => void = () => {}
+    approveBookMock.mockReturnValue(new Promise((r) => (resolve = r)))
+    getPreviewMock.mockResolvedValue(preview([cleanBook]))
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+
+    expect(approveBookMock).toHaveBeenCalledWith(1)
+    expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled()
+
+    await act(async () => resolve({ ok: true, job: queuedJob }))
+
+    const queued = screen.getByText('Queued for processing.')
+    expect(queued).toHaveAttribute('role', 'status')
+    expect(queued).toHaveFocus()
+    expect(screen.queryByRole('button', { name: /approv/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a refusal in an alert and keeps the button enabled', async () => {
+    approveBookMock.mockResolvedValue({ ok: false, message: 'A file is already at X.' })
+    getPreviewMock.mockResolvedValue(preview([cleanBook]))
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('A file is already at X.')
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled()
+  })
+
+  it('shows a generic alert when approving throws', async () => {
+    approveBookMock.mockRejectedValue(new Error('boom'))
+    getPreviewMock.mockResolvedValue(preview([cleanBook]))
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent("The book couldn't be approved.")
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled()
   })
 })

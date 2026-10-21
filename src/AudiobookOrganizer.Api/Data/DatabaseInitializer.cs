@@ -155,6 +155,33 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 AliasKey TEXT NOT NULL UNIQUE,
                 PRIMARY KEY (GenreId, AliasKey))
             """);
+        // Approved books and their files with the destinations snapshotted at approval. A job keeps its history when
+        // its group is deleted (GroupId becomes null); its files go with the job.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS ProcessingJob (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                GroupId INTEGER REFERENCES FileGroup (Id) ON DELETE SET NULL,
+                Title TEXT,
+                Status TEXT NOT NULL,
+                CreatedAtUtc TEXT NOT NULL,
+                StartedAtUtc TEXT,
+                FinishedAtUtc TEXT,
+                Error TEXT)
+            """);
+        connection.Execute("CREATE INDEX IF NOT EXISTS IX_ProcessingJob_GroupId ON ProcessingJob (GroupId)");
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS ProcessingJobFile (
+                JobId INTEGER NOT NULL REFERENCES ProcessingJob (Id) ON DELETE CASCADE,
+                AudioFileId INTEGER NOT NULL,
+                Position INTEGER NOT NULL,
+                SourcePath TEXT NOT NULL,
+                DestinationPath TEXT NOT NULL,
+                Status TEXT NOT NULL,
+                Error TEXT,
+                PRIMARY KEY (JobId, Position))
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404

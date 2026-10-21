@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
-import { getPreview } from '../services/api'
+import { approveBook, getPreview } from '../services/api'
 import type { BookPreview, FilePreview, LibraryPreview } from '../types/preview'
 
 type PreviewState =
@@ -137,12 +137,70 @@ function BookSection({ book }: { book: BookPreview }) {
           {book.title || 'Unknown'}
         </Link>
       </h2>
+      {hasProblems(book) ? (
+        <p className="mt-2 text-sm text-muted">Fix the problems above to approve this book.</p>
+      ) : (
+        <ApproveBook groupId={book.groupId} headingId={headingId} />
+      )}
       <ul className="mt-2 space-y-3">
         {book.files.map((file) => (
           <FileItem key={file.fileId} file={file} />
         ))}
       </ul>
     </section>
+  )
+}
+
+type ApproveState =
+  | { kind: 'idle' }
+  | { kind: 'approving' }
+  | { kind: 'queued' }
+  | { kind: 'refused'; message: string }
+
+function ApproveBook({ groupId, headingId }: { groupId: number; headingId: string }) {
+  const [state, setState] = useState<ApproveState>({ kind: 'idle' })
+  const queuedRef = useRef<HTMLParagraphElement>(null)
+
+  useEffect(() => {
+    if (state.kind === 'queued') queuedRef.current?.focus()
+  }, [state.kind])
+
+  async function approve() {
+    setState({ kind: 'approving' })
+    try {
+      const result = await approveBook(groupId)
+      setState(result.ok ? { kind: 'queued' } : { kind: 'refused', message: result.message })
+    } catch {
+      setState({ kind: 'refused', message: "The book couldn't be approved." })
+    }
+  }
+
+  if (state.kind === 'queued') {
+    return (
+      <p ref={queuedRef} role="status" tabIndex={-1} className="mt-2">
+        Queued for processing.
+      </p>
+    )
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={approve}
+        disabled={state.kind === 'approving'}
+        aria-describedby={headingId}
+        className="rounded bg-foreground px-4 py-2 font-medium text-background disabled:opacity-60"
+      >
+        {state.kind === 'approving' ? 'Approving…' : 'Approve'}
+      </button>
+      {state.kind === 'refused' && (
+        <p role="alert" className="mt-2 flex items-start gap-2 text-destructive">
+          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <span className="break-words">{state.message}</span>
+        </p>
+      )}
+    </div>
   )
 }
 

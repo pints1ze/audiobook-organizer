@@ -28,3 +28,14 @@ chapter|id=0|time_base=1/1000|start=0|start_time=0.000000|end=10000|end_time=10.
 chapter|id=1|time_base=1/1000|start=10000|start_time=10.000000|end=20000|end_time=20.000000|tag:title=Middle
 chapter|id=2|time_base=1/1000|start=20000|start_time=20.000000|end=30000|end_time=30.000000|tag:title=Ending
 ```
+
+## TagLibSharp and chpl
+
+Measured by `M4bFreeformSpikeTests` (slice 60) on the slice 56 remux of `chapters.m4b` (ffmpeg 9.0.2, `-f ipod`, moov after mdat), then one TagLibSharp 2.3.0 save that adds a single `----:com.apple.iTunes:SERIES` atom:
+
+- **Before:** `moov/udta/chpl` is 63 bytes, the last child of `udta`. Payload (55 bytes): version `01`, flags `000000`, 4 reserved zero bytes, count `03`, then 3 entries of an 8-byte start (100 ns units), a 1-byte title length and the title (`Opening` at 0, `Middle` at 10 s, `Ending` at 20 s).
+- **After:** the box is 39 bytes. Its header is rewritten with the new size, and the payload loses its first 24 bytes: version, flags, reserved bytes, count, and the first entry's start, title length and `Openin`. The remaining 31 bytes (`g` plus the Middle and Ending entries) are kept byte for byte. The box also moves: TagLibSharp rewrites `meta` with 2,048 bytes of `free` padding and puts `chpl` after it. `stco` is unaffected, because moov follows mdat.
+- **ffprobe** still reports the 3 chapters with the right times and titles, but they come from the QuickTime chapter text track: ffmpeg reads `chpl` first and the track's chapters replace them (time base `1/22050`, the track's). Read alone (the audio track's `tref/chap` renamed), the original `chpl` gives the 3 chapters in time base `1/10000000`, and the damaged one gives **none**. So players that read only `chpl` lose every chapter.
+- Restoring the remuxed copy's 63 `chpl` bytes after the save, and adding 24 to the `udta` and `moov` sizes, gives a file whose `chpl`, chapters, audio streamhash, cover, standard tags and new atoms all read back (candidate A). Every later TagLibSharp save damages `chpl` again.
+
+Since slice 61, `TagWriter` remuxes M4B copies with `-movflags disable_chpl` and then tags them with TagLibSharp, so copies carry chapters only in the QuickTime chapter track (no `chpl`). The fixtures themselves still have both forms.

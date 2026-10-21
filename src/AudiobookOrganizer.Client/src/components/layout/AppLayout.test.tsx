@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../App'
-import { getDashboard, getEntries, getGroups, getHealth, getPreview, getSettings, getSuggestions } from '../../services/api'
+import { getDashboard, getEntries, getGroups, getHealth, getJobs, getPreview, getSettings, getSuggestions } from '../../services/api'
 
 vi.mock('../../services/api', () => ({
   getHealth: vi.fn(),
@@ -18,6 +18,8 @@ vi.mock('../../services/api', () => ({
   getSuggestions: vi.fn(),
   mergeEntry: vi.fn(),
   getPreview: vi.fn(),
+  getJobs: vi.fn(),
+  approveBook: vi.fn(),
 }))
 
 function renderAt(path: string) {
@@ -58,6 +60,7 @@ describe('AppLayout', () => {
       books: [],
       counts: { files: 0, missing: 0, errors: 0, duplicates: 0, existing: 0 },
     })
+    vi.mocked(getJobs).mockResolvedValue([])
   })
 
   it('renders the skip link first, the header and the main landmark', async () => {
@@ -89,7 +92,7 @@ describe('AppLayout', () => {
     expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current')
     const navLinks = screen.getAllByRole('link').filter((l) => l.closest('nav'))
-    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'People', 'Genres', 'Preview', 'Settings'])
+    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'People', 'Genres', 'Preview', 'Jobs', 'Settings'])
     expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
   })
 
@@ -118,6 +121,17 @@ describe('AppLayout', () => {
     expect(link).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('heading', { level: 1, name: 'Preview' })).toBeInTheDocument()
     expect(await screen.findByText('No books to preview yet.')).toBeInTheDocument()
+  })
+
+  it('marks the Jobs nav link as the current page on /jobs', async () => {
+    renderAt('/jobs')
+
+    const link = screen.getByRole('link', { name: 'Jobs' })
+    expect(link).toHaveAttribute('href', '/jobs')
+    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Preview' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('heading', { level: 1, name: 'Jobs' })).toBeInTheDocument()
+    expect(await screen.findByText(/No jobs yet\./)).toBeInTheDocument()
   })
 
   it('shows "Page not found" with a link back to the dashboard for an unknown route', () => {

@@ -13,6 +13,7 @@ import type {
   UpdateGroupResult,
 } from '../types/groups'
 import type { HealthResponse } from '../types/health'
+import type { ApproveBookResult, ProcessingJob } from '../types/jobs'
 import type {
   BookCovers,
   BookMatch,
@@ -88,6 +89,35 @@ export async function getPreview(): Promise<LibraryPreview> {
     throw new Error(`Loading the preview failed with status ${response.status}`)
   }
   return (await response.json()) as LibraryPreview
+}
+
+/** Every processing job, newest first. */
+export async function getJobs(): Promise<ProcessingJob[]> {
+  const response = await fetch('/api/jobs')
+  if (response.status !== 200) {
+    throw new Error(`Loading the jobs failed with status ${response.status}`)
+  }
+  return (await response.json()) as ProcessingJob[]
+}
+
+/** Queues a book whose preview is clean for processing; a refusal carries the API's reason. */
+export async function approveBook(groupId: number): Promise<ApproveBookResult> {
+  const response = await fetch('/api/jobs', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupId }),
+  })
+  if (response.status === 201) {
+    return { ok: true, job: (await response.json()) as ProcessingJob }
+  }
+  if (response.status === 400 || response.status === 409) {
+    const problem = (await response.json()) as { title?: string; detail?: string }
+    return { ok: false, message: problem.detail || problem.title || "The book can't be approved yet." }
+  }
+  if (response.status === 404) {
+    return { ok: false, message: 'The book is no longer in the library.' }
+  }
+  throw new Error(`Approving the book failed with status ${response.status}`)
 }
 
 export async function getLatestScan(): Promise<ScanRun | null> {

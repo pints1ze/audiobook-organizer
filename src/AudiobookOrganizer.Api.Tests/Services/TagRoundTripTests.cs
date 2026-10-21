@@ -12,7 +12,7 @@ namespace AudiobookOrganizer.Api.Tests.Services;
 public class TagRoundTripTests : IDisposable
 {
     // 8x8 grey JPEG generated with ffmpeg.
-    private static readonly byte[] CoverJpeg = Convert.FromBase64String(
+    internal static readonly byte[] CoverJpeg = Convert.FromBase64String(
         "/9j/4AAQSkZJRgABAgAAAQABAAD//gAPTGF2YzYzLjEuMTAyAP/bAEMACBQUFxQXGxsbGxsbIB4gISEhICAgICEhISQkJCoqKiQkJCEhJCQoKCoqLi8uKysqKy8vMjIyPDw5OUZGSFZWZ//EAEoAAQAAAAAAAAAAAAAAAAAAAAABAQAAAAAAAAAAAAAAAAAAAAAQAQAAAAAAAAAAAAAAAAAAAAARAQAAAAAAAAAAAAAAAAAAAAD/wAARCAAIAAgDASIAAhEAAxEA/9oADAMBAAIRAxEAPwAAD//Z");
 
     private readonly FfmpegRunner _ffmpeg = FfmpegRunnerTests.Runner();
@@ -127,9 +127,9 @@ public class TagRoundTripTests : IDisposable
     }
 
     /// <summary>Duration is compared to the nearest 50 ms; chapters and the audio hash exactly.</summary>
-    private record AudioSnapshot(string Chapters, long Duration50Ms, string AudioHash);
+    internal record AudioSnapshot(string Chapters, long Duration50Ms, string AudioHash);
 
-    private AudioSnapshot Snapshot(string path, Func<string, string> audioHash)
+    internal static AudioSnapshot Snapshot(string path, Func<string, string> audioHash)
     {
         var chapters = ChapterReaderTests.NewReader().Read(path);
         Assert.Equal(3, chapters.Count);
@@ -141,8 +141,8 @@ public class TagRoundTripTests : IDisposable
     }
 
     /// <summary>SHA-256 over the audio packets, as reported by ffmpeg's streamhash muxer.</summary>
-    private string Mp4AudioHash(string path) =>
-        _ffmpeg.Ffmpeg(["-v", "error", "-i", path, "-map", "0:a", "-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"]).Trim();
+    internal static string Mp4AudioHash(string path) =>
+        FfmpegRunnerTests.Runner().Ffmpeg(["-v", "error", "-i", path, "-map", "0:a", "-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"]).Trim();
 
     /// <summary>The payload of moov/udta/chpl (the Nero chapter atom), or null if absent.</summary>
     private static byte[]? ChplPayload(byte[] bytes)
@@ -173,7 +173,7 @@ public class TagRoundTripTests : IDisposable
     }
 
     /// <summary>SHA-256 of the bytes between the ID3v2 tag and any trailing APE/ID3v1 tag.</summary>
-    private static string Mp3PayloadHash(string path)
+    internal static string Mp3PayloadHash(string path)
     {
         var bytes = File.ReadAllBytes(path);
         var start = 0;

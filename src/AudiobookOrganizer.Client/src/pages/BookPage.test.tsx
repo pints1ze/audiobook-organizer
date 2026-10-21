@@ -170,9 +170,12 @@ describe('BookPage', () => {
 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)
     expect(headings).toEqual(['Chosen match', 'Cover', 'Metadata', 'People', 'Genres', 'Catalog search'])
-    expect(getBookPeopleMock).toHaveBeenCalledWith(4)
-    expect(getBookGenresMock).toHaveBeenCalledWith(4)
-    expect(getCoversMock).toHaveBeenCalledWith(4)
+    // The sections load after the page heading renders, so their calls can land a tick later.
+    await waitFor(() => {
+      expect(getBookPeopleMock).toHaveBeenCalledWith(4)
+      expect(getBookGenresMock).toHaveBeenCalledWith(4)
+      expect(getCoversMock).toHaveBeenCalledWith(4)
+    })
     const cover = screen.getByRole('heading', { level: 2, name: 'Cover' }).closest('section')!
     expect(await within(cover).findByText('No cover chosen yet.')).toBeInTheDocument()
     expect(await within(metadataSection()).findAllByText('From files')).toHaveLength(2)

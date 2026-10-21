@@ -34,6 +34,12 @@ builder.Services.AddSingleton<GroupingService>();
 builder.Services.AddSingleton<AudiobookRepository>();
 builder.Services.AddSingleton<AudiobookService>();
 builder.Services.AddSingleton<NamingPreviewService>();
+builder.Services.AddSingleton<ProcessingRepository>();
+builder.Services.AddSingleton<TagWriter>();
+builder.Services.AddSingleton<ProcessingService>();
+// One instance: JobsController wakes the same worker the host runs.
+builder.Services.AddSingleton<ProcessingWorker>();
+builder.Services.AddHostedService(services => services.GetRequiredService<ProcessingWorker>());
 // Transient because it holds the typed CoverDownloadClient, as MetadataSearchService holds the providers.
 builder.Services.AddTransient<CoverService>();
 builder.Services.AddSingleton<ScanService>();
@@ -71,6 +77,9 @@ app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
 // Nothing can still be scanning at startup, so a Running row is left over from a stopped or crashed process.
 app.Services.GetRequiredService<ScanRepository>()
     .FailInterruptedRuns("Interrupted by an application restart.", DateTime.UtcNow.ToString("O"));
+// Likewise for processing; the worker only starts with the host, after this, and then runs the Queued jobs.
+app.Services.GetRequiredService<ProcessingRepository>()
+    .FailInterruptedJobs(ProcessingService.Interrupted, DateTime.UtcNow.ToString("O"));
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
