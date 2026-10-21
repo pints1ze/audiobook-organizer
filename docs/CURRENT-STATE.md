@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 62 review, 2026-10-20, commit a09aed7_
+_Updated: phase 9 start, 2026-10-21_
 
 ## Branch
-`phase/8-processing` (off `main` after the phase 7 merge, PR #7)
+`phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
@@ -20,11 +20,11 @@ _Updated: slice 62 review, 2026-10-20, commit a09aed7_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 8, Processing, is done (slices 54–62); its PR to `main` waits for the developer's verification and merge. Phase 7 was merged in PR #7. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is in progress (no slices yet). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
 - Last: 62 script-fields, Implemented
-- Next: phase 9's first slice, after the phase 8 merge (not written).
+- Next: 63, M4B copies without chapters (not written).
 
 ## Open questions
 - Audible catalog API rate limits and terms (phase 5)
@@ -88,6 +88,8 @@ Phase 8, Processing, is done (slices 54–62); its PR to `main` waits for the de
 - 2026-10-19 (slice 54): Approval refuses missing values as well as errors, duplicates and existing files (assumption, reversible). A job snapshots each file's destination at approval; `ProcessingJob.GroupId` is `ON DELETE SET NULL` so history outlives the group. Approving marks the group `UserCorrected`.
 - 2026-10-19 (slice 55): A failed job removes only the copies it wrote (and its own `.partial`), so a retry can start clean; folders it created may stay empty (shortcut). Worker tests that need a quiet queue use a host without the hosted worker.
 - 2026-10-20 (developer, slice 61): M4B uses candidate B: copies carry chapters only in the QuickTime chapter track (ffmpeg `disable_chpl`) and are tagged by TagLibSharp; players that read only `chpl` lose chapters. AGENTS.md updated.
+- 2026-10-21 (developer): M4B copies carry no chapters (option A): a real book's copy kept 6 of 27 chapters and failed its read-back. The M4B remux drops chapters and the read-back skips the chapter check for M4B; MP3 keeps its chapters. AGENTS.md's M4B rule changes with the slice.
+- 2026-10-21: phase 8 browser checks (slices 54–62) passed against fixture copies with Playwright; Mp3tag and player checks remain.
 - 2026-10-20 (developer, slice 62): the intermittent `JobsPage` Retry test failure (slice 59's test, 2 of ~30 runs) is accepted for now. PLAN.md's phase 8 done-when reads "the Mp3tag script's fields, on MP3 and M4B".
 - 2026-10-20 (developer): Audiobookshelf compatibility isn't the tagging goal; files carry full tags for the developer's own renaming and regrouping, modelled on their Mp3tag Audible script (`mp3tagscipt.src`). Narrator stays `composer`.
 - 2026-10-19 (slice 58): Retrying a failed book means approving it again (fresh destinations from the current preview); the failed job stays as history. Assumption, reversible.
