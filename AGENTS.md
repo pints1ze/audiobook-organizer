@@ -175,7 +175,7 @@ reference/          read-only reference material, never import from it
 ### Environment
 
 - **Shell:** Windows, Git Bash / PowerShell (not WSL). Use commands and paths that work there.
-- **Deploy target:** a Linux Docker container via Docker Compose on a home server. Single user, no authentication, trusted LAN only. Incoming and library folders are mounted volumes (`/incoming`, `/library`) and may be on different volumes. The SQLite database and logs live under `/data`. Code must handle both Windows (dev) and Linux (container) paths. Don't change the volume layout or the Dockerfile base images without asking.
+- **Deploy target:** the Linux image running in Docker Desktop (WSL2) on the developer's Windows machine, via Docker Compose (`C:\docker\audiobook-organizer\`, image built from the repo; see `docs/DEPLOY.md`). Single user, no authentication, trusted LAN only. `/data` is a named volume; `/incoming` and `/library` are CIFS volumes on an SMB share and may be on different volumes. The SQLite database and logs live under `/data`. Code must handle both Windows (dev) and Linux (container) paths. Don't change the volume layout or the Dockerfile base images without asking.
 - **File safety:** scans are read-only. Source files are never tagged in place. A source is deleted only after its destination copy is written, tagged and read back. Never overwrite an existing destination file.
 - **Secrets:** use user secrets or `.env` for local config. Encrypt stored credentials at rest. Never read from, write to or quote `secrets.local.*`.
 

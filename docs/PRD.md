@@ -49,7 +49,7 @@ Full background: `overview.md` (v0.1 draft). This PRD supersedes it where they d
 | User (single, no login) | Everything. The app runs on a trusted LAN. |
 
 ## Constraints
-- Runs in Docker (Linux container, Docker Compose). Incoming and library folders are mounted volumes and may be on different volumes.
+- Runs in Docker (Linux container, Docker Compose) in Docker Desktop (WSL2) on the developer's Windows machine. The database is on a named volume; incoming and library folders are CIFS volumes on an SMB share and may be on different volumes.
 - Stack per AGENTS.md: .NET 10 API, SQLite + Dapper, React 19 + Vite. TagLibSharp handles tag read/write.
 - **Primary provider:** Audible's catalog search, `https://api.audible.com/1.0/catalog/products?response_groups=contributors,media,product_desc,product_attrs,product_extended_attrs,series&image_sizes=...&num_results=50&products_sort_by=Relevance&keywords=...`. It is unofficial, keyless, `.com` marketplace only, and sits behind a provider adapter.
 - **Fallback provider:** the Open Library API.
