@@ -44,3 +44,30 @@
 - Mismatch to raise at review (not fixed here): AGENTS.md says logs live under `/data`, but Serilog writes only to the console.
 - Files touched: `docs/DEPLOY.md`, `.env.example`, this slice file, PLAN.md (4).
 - After this slice, phase 9's remaining done-when is the developer's home-server run (gate 5), plus the carried-in polish items in PLAN.md if the developer wants them in this phase.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 397 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | none required | docs and config only; `docker compose --env-file .env.example config` mounts `/srv/audiobooks/{data,incoming,library}` at `/data`, `/incoming`, `/library`; `git check-ignore .env.example` reports nothing |
+| Manual: follow DEPLOY.md on the home server; app on 8080, Settings accepts `/incoming` and `/library`, scan and one processed book | Not run | developer's home-server run (phase 9 done-when) |
+| Manual: note the container user from `docker compose exec audiobook-organizer id` | Not run | needs the running container |
+
+## Outcome (2026-10-22, commit 057d789)
+
+**Status:** Implemented
+**Summary:** `docs/DEPLOY.md` walks through standing the app up on the home server: prerequisites, `.env` host folders, build and start, first-run settings, health check, logs, updating, backing up, the in-image backend suite, and file safety and permissions. `.env.example` sets the three host folders, and `docker compose --env-file .env.example config` mounts them at `/data`, `/incoming` and `/library`.
+**Changed:** 3 files: `docs/DEPLOY.md` (new), `.env.example` (new), the slice file.
+**Deviations:**
+- `DEPLOY.md` adds a few steps the slice didn't name (create the host folders first, `docker compose config`/`ps`/`stop`/`start`, the `./docker/...` fallback), and `.env.example` has one header comment: *improvement*.
+- The backup copies `audiobooks.db` only; the app doesn't enable WAL, so there are no `-wal`/`-shm` files: *fine*.
+- PLAN.md wasn't touched in the feat commit; it's updated in this review: *fine*.
+**Follow-ups:**
+- Proposed AGENTS.md edit (gate 4, developer's call): Environment says "The SQLite database and logs live under `/data`", but Serilog writes only to the console. Either change the line to "The SQLite database lives under `/data`; logs go to the console (`docker compose logs`)", or add a file sink (a new package).
+- Manual (developer): follow DEPLOY.md on the home server, note the container user from `id`, and correct the permissions line if needed. This is phase 9's last done-when line.

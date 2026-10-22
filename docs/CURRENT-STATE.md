@@ -1,13 +1,13 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 69 review, 2026-10-22, commit 9b95c50_
+_Updated: slice 70 review, 2026-10-22, commit 057d789_
 
 ## Branch
 `phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 and the React client on 5173 (`scripts/start.ps1`, default `both`) with SQLite at `<repo>/data/audiobooks.db`. The client shows the API and database status.
-- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default. `docker build --target test .` runs the backend suite on Linux (Ubuntu 24.04) with the runtime's ffmpeg 6.1.1; all 384 pass (slice 64). Add `--no-cache-filter test` to force a rerun.
+- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default. `docker build --target test .` runs the backend suite on Linux (Ubuntu 24.04) with the runtime's ffmpeg 6.1.1; all 384 pass (slice 64). Add `--no-cache-filter test` to force a rerun. `docs/DEPLOY.md` and `.env.example` document the home-server setup (slice 70).
 - **Tag safety:** proven by tests. MP3 writes go through TagLibSharp; M4B writes go through an ffmpeg `-c copy` remux without `chpl`, then TagLibSharp. Chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
@@ -20,13 +20,15 @@ _Updated: slice 69 review, 2026-10-22, commit 9b95c50_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) and finishing a cut-off job's source deletions at startup (69) are done; Docker docs and the home-server run remain, plus the carried-in items (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69) and the deploy docs (70) are done. Left: the developer's home-server run (the last done-when line) and, if wanted in this phase, the carried-in polish items (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
-- Last: 69 finish-interrupted-deletions, Implemented
-- Next: 70, not written (likely Docker docs for the home server).
+- Last: 70 docker-deploy-docs, Implemented
+- Next: none planned until the developer's home-server run; then the PR, or slices for the carried-in polish items if they stay in phase 9.
 
 ## Open questions
+- AGENTS.md says logs live under `/data`, but Serilog writes only to the console. Change the AGENTS.md line, or add a file sink (new package)? (raised in slice 70)
+- Do the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover") stay in phase 9 or move to a later phase? (raised in slice 70)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
@@ -106,4 +108,4 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 - 2026-10-19 (developer, slice 49): one intermittent backend failure, test unidentified (72 reruns passed; a stalled 34 s run), is accepted as a flake. Test runs keep full output (TRX) so a repeat names the test, which then gets fixed.
 
 ## Verification
-Full suite: backend 397 passed / 0 failed, frontend 271 passed with one intermittent failure (accepted, below). Manual checks for slices 33–43, 45–53 and 54–59, the Mp3tag and player checks for 60, the player check for 61 and the Mp3tag comparison for 62 and the real-book and Mp3tag checks for 63 and the home-server Docker test run for 64 the stop-mid-job restart check for 65 and the dev-app rescan check for 66 and the dev-app hide check for 67 and the dev-app cleanup check for 68, not run yet; slice 69 has none; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. Accepted: one unidentified intermittent backend failure (slice 49) and the intermittent `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again` failure (slice 62); see Decisions. The tests run against dev ffmpeg 9.0 locally and pass against the image's 6.1.1 in the Docker `test` stage.
+Full suite: backend 397 passed / 0 failed, frontend 271 passed with one intermittent failure (accepted, below). Manual checks for slices 33–43, 45–53 and 54–59, the Mp3tag and player checks for 60, the player check for 61 and the Mp3tag comparison for 62 and the real-book and Mp3tag checks for 63 and the home-server Docker test run for 64 the stop-mid-job restart check for 65 and the dev-app rescan check for 66 and the dev-app hide check for 67 and the dev-app cleanup check for 68, not run yet; slice 69 has none and the home-server run and container-user check for 70; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. Accepted: one unidentified intermittent backend failure (slice 49) and the intermittent `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again` failure (slice 62); see Decisions. The tests run against dev ffmpeg 9.0 locally and pass against the image's 6.1.1 in the Docker `test` stage.
