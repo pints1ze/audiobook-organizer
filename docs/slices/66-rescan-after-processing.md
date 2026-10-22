@@ -42,3 +42,28 @@
 - Open question for the developer (added to CURRENT-STATE.md at review, the PLAN.md carried-in item from slice 57): after a book is processed, should it leave the Incoming and Preview lists, and should its `AudioFile` rows and empty incoming folders be removed once its sources are deleted?
 - Files touched: `JobsControllerTests.cs`, this slice file, plus any fix the tests show is needed (expected none).
 - Remaining phase 9 work: the processed-books question above, Docker docs for the home server and running there, and the carried-in items in PLAN.md.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 389 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | 2 of 2 present, passing | keep-source off and keep-source on rescan-after-processing tests in `JobsControllerTests` (rescan-filtered run: 13 passed) |
+| Manual: process a book, rescan, check Incoming and Preview | Not run | needs the dev app; start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+
+## Outcome (2026-10-22, commit f1409d1)
+
+**Status:** Implemented
+**Summary:** Two end-to-end tests run scan → approve → process → rescan on fixture books, with keep-source off and on. Both passed against unchanged production code: the rescan keeps the same groups, adds nothing unresolved, refuses a second approval of the processed book ("A file is already at …"), leaves the library unchanged, and an untouched second book still processes.
+**Changed:** 2 files: `Tests/Controllers/JobsControllerTests.cs` (2 tests, `GroupList` helper, `Scan` returns the run), the slice file.
+**Deviations:**
+- No new keep-source helper: `SaveTemplates(..., keepSourceFiles)` already sets it: *fine*.
+- `Scan` now returns the scan run so tests can read its counts; existing callers are unchanged: *fine*.
+**Follow-ups:**
+- Open question (developer): should a processed book leave the Incoming and Preview lists, and should its `AudioFile` rows and empty incoming folders go once its sources are deleted? Today it stays listed with its destinations flagged as existing.
+- Manual (developer): process a book in the dev app, rescan, check Incoming and Preview.
