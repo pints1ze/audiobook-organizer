@@ -48,3 +48,31 @@
 - Assumption: the CIFS mount uses SMB 3.0 and the `0777` modes, so the container (root) can read, write and delete; the server's share permissions still apply.
 - Risk: scans and copies go over the network; a large incoming folder scans slower than local disk. Nothing in the app depends on local-disk speed.
 - Files touched: `docker-compose.yml`, `docs/deploy/compose.yaml`, `docs/deploy/.env.example`, `docs/DEPLOY.md`, `.env.example` (deleted), `AGENTS.md`, `docs/PRD.md`, PLAN.md, this slice file (9; just over the cap, all docs/config).
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 397 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | none required | config and docs only; `docker compose -f docs/deploy/compose.yaml --env-file docs/deploy/.env.example config` gives `image: audiobook-organizer:latest`, named volumes `audiobook-data` → `/data`, `incoming` → `/incoming`, `library` → `/library`, CIFS devices `//cookserv/d/audiobooks_incoming` and `//cookserv/d/audiobooks`; `git check-ignore docs/deploy/.env.example` reports nothing |
+| Manual: build, set up `C:\docker\audiobook-organizer`, app on 8080, Settings, scan, one processed book | Not run | developer, on the Windows machine with real SMB credentials |
+| Manual: back up the data volume and check the tar | Not run | developer |
+| Manual: firewall rule and LAN access | Not run | developer, if wanted |
+
+## Outcome (2026-10-22, commit 821f836)
+
+**Status:** Implemented
+**Summary:** The deploy target is now Docker Desktop on the developer's Windows machine. The repo compose tags its build `audiobook-organizer:latest`; `docs/deploy/compose.yaml` and `docs/deploy/.env.example` (copied to `C:\docker\audiobook-organizer\`) run that image with `/data` on a named volume and `/incoming`, `/library` as CIFS volumes on `//cookserv/d`; `docs/DEPLOY.md` is rewritten in PowerShell, including volume backup and restore and the firewall rule. AGENTS.md, the PRD and PLAN.md's phase 9 done-when say so.
+**Changed:** 9 files: `docker-compose.yml`, `docs/deploy/compose.yaml` and `.env.example` (new), `docs/DEPLOY.md`, root `.env.example` (deleted), `AGENTS.md`, `docs/PRD.md`, `docs/PLAN.md`, the slice file.
+**Deviations:**
+- `name: audiobook-organizer` at the top of `docs/deploy/compose.yaml`, so volume names are fixed (`audiobook-organizer_audiobook-data` etc.) and DEPLOY.md's `docker volume rm` and backup commands can name them: *improvement*.
+- The repo compose and the deployed one share the project name, so `docker compose up` in the repo would replace the deployed container; DEPLOY.md warns against it, and `docker compose build` there is unaffected: *fine* (documented).
+- Backup and restore use a throwaway `alpine` container (pulled on first use): *fine*.
+- PLAN.md's "Finished when" line still said "home server"; reworded in this review to the Windows Docker Desktop host, following the developer's 2026-10-22 decision: *fine*.
+**Follow-ups:**
+- Manual (developer): the first real run from DEPLOY.md with SMB credentials; it's phase 9's last done-when line.
