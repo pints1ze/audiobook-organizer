@@ -47,3 +47,27 @@
 - Remaining phase 9 work for later slices: end-to-end fixture scan → process as one test, an interrupted job's partial copies after a restart (startup fails the job, but its copies and `.partial` files stay and would show as `exists` on retry), repeat scans after processing (deleted sources, empty incoming folders), Docker docs for the home server, and the carried-in items in PLAN.md.
 - Distro check (task 2): `mcr.microsoft.com/dotnet/sdk:10.0` and `aspnet:10.0` both report `Ubuntu 24.04.5 LTS` (noble), so the test stage's ffmpeg is the runtime's: `ffmpeg version 6.1.1-3ubuntu5`.
 - First Linux run: 384 passed, 0 failed, so no Linux-only fixes were needed. `A_source_that_cant_be_deleted_is_kept_with_an_error_and_the_job_still_succeeds` is Windows-only (returns early on Linux) and counts as a pass there.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 384 passed, 0 failed | Windows, dev ffmpeg 9.0 |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | n/a, as planned | the whole backend suite in the `test` stage: `docker build --target test --no-cache-filter test .` printed `ffmpeg version 6.1.1-3ubuntu5` and 384 passed, 0 failed (the first run was a cache hit and printed nothing, so it was rerun with `--no-cache-filter test`) |
+| Manual: `docker build --target test .` on the home server | Not run | needs the developer's Linux host |
+
+## Outcome (2026-10-22, commit e4aa2bc)
+
+**Status:** Implemented
+**Summary:** The Dockerfile has a `test` stage (SDK 10.0 image plus the distro's ffmpeg) that restores and runs the backend suite; `docker build --target test .` runs it with ffmpeg 6.1.1, the runtime image's version, and all 384 tests pass on Linux with no fixes needed. `docker compose build` still builds only the runtime image.
+**Changed:** 2 files: `Dockerfile` (new `test` stage only; stages 1–3 untouched), the slice file.
+**Deviations:** none.
+**Follow-ups:**
+- Manual (developer): run `docker build --target test .` once on the home server.
+- A cached test stage prints nothing on a rebuild; use `--no-cache-filter test` to force a fresh run (note for the Docker docs slice).
+- The Windows-only "source can't be deleted" test returns early on Linux, so the Linux run doesn't cover that path.

@@ -1,13 +1,13 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 63 review, 2026-10-21, commit 4477da4_
+_Updated: slice 64 review, 2026-10-22, commit e4aa2bc_
 
 ## Branch
 `phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
-- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default.
+- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default. `docker build --target test .` runs the backend suite on Linux (Ubuntu 24.04) with the runtime's ffmpeg 6.1.1; all 384 pass (slice 64). Add `--no-cache-filter test` to force a rerun.
 - **Tag safety:** proven by tests. MP3 writes go through TagLibSharp; M4B writes go through an ffmpeg `-c copy` remux without `chpl`, then TagLibSharp. Chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
@@ -20,11 +20,11 @@ _Updated: slice 63 review, 2026-10-21, commit 4477da4_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 9, Hardening & release, is in progress: M4B copies without chapters is done (63); the Docker test run, end-to-end, restart, repeat-scan and release work remain (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is in progress: M4B copies without chapters (63) and the backend suite in Docker (64) are done; end-to-end, restart, repeat-scan and release work remain (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
-- Last: 63 m4b-copies-without-chapters, Implemented
-- Next: 64, not written (next phase 9 item from PLAN.md).
+- Last: 64 backend-tests-in-docker, Implemented
+- Next: 65, not written (next phase 9 item from PLAN.md).
 
 ## Open questions
 - Audible catalog API rate limits and terms (phase 5)
@@ -90,6 +90,7 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters is don
 - 2026-10-20 (developer, slice 61): M4B uses candidate B: copies carry chapters only in the QuickTime chapter track (ffmpeg `disable_chpl`) and are tagged by TagLibSharp; players that read only `chpl` lose chapters. AGENTS.md updated.
 - 2026-10-21 (developer): M4B copies carry no chapters (option A): a real book's copy kept 6 of 27 chapters and failed its read-back. The M4B remux drops chapters and the read-back skips the chapter check for M4B; MP3 keeps its chapters. AGENTS.md's M4B rule changes with the slice.
 - 2026-10-22 (developer): the track tag is the bare position ("1"), with no total: MP3 `TRCK` is written directly because TagLibSharp pads it, and any source total is cleared. Copies made before this keep "01/39".
+- 2026-10-22 (slice 64): the backend suite runs in a `test` stage of the Dockerfile on the SDK image the build stage already uses; the runtime stage doesn't depend on it.
 - 2026-10-21: phase 8 browser checks (slices 54–62) passed against fixture copies with Playwright; Mp3tag and player checks remain.
 - 2026-10-20 (developer, slice 62): the intermittent `JobsPage` Retry test failure (slice 59's test, 2 of ~30 runs) is accepted for now. PLAN.md's phase 8 done-when reads "the Mp3tag script's fields, on MP3 and M4B".
 - 2026-10-20 (developer): Audiobookshelf compatibility isn't the tagging goal; files carry full tags for the developer's own renaming and regrouping, modelled on their Mp3tag Audible script (`mp3tagscipt.src`). Narrator stays `composer`.
@@ -101,4 +102,4 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters is don
 - 2026-10-19 (developer, slice 49): one intermittent backend failure, test unidentified (72 reruns passed; a stalled 34 s run), is accepted as a flake. Test runs keep full output (TRX) so a repeat names the test, which then gets fixed.
 
 ## Verification
-Full suite: backend 384 passed / 0 failed, frontend 271 passed with one intermittent failure (accepted, below). Manual checks for slices 33–43, 45–53 and 54–59, the Mp3tag and player checks for 60, the player check for 61 and the Mp3tag comparison for 62 and the real-book and Mp3tag checks for 63, not run yet; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. Accepted: one unidentified intermittent backend failure (slice 49) and the intermittent `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again` failure (slice 62); see Decisions. The tests run against dev ffmpeg 9.0; the image has 6.1.
+Full suite: backend 384 passed / 0 failed, frontend 271 passed with one intermittent failure (accepted, below). Manual checks for slices 33–43, 45–53 and 54–59, the Mp3tag and player checks for 60, the player check for 61 and the Mp3tag comparison for 62 and the real-book and Mp3tag checks for 63 and the home-server Docker test run for 64, not run yet; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. Accepted: one unidentified intermittent backend failure (slice 49) and the intermittent `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again` failure (slice 62); see Decisions. The tests run against dev ffmpeg 9.0 locally and pass against the image's 6.1.1 in the Docker `test` stage.
