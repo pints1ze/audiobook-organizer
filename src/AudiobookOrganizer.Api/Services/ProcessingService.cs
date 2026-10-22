@@ -326,6 +326,34 @@ public class ProcessingService(
         }
     }
 
+    /// <summary>
+    /// Fails every Running job as interrupted: at startup nothing can still be processing, so it was cut off by a
+    /// restart. Its copies and the in-flight file's <c>.partial</c> are removed as a failed run does, unless a source
+    /// was already deleted; then every copy is kept, because it may be the only copy left. Sources are never touched.
+    /// shortcut: a Pending file's destination is left even though a cut-off run may have moved its copy there before
+    /// marking it Copied; the job can't tell it from someone else's file — revisit if retries keep hitting it.
+    /// </summary>
+    public void FailInterruptedJobs()
+    {
+        foreach (var (job, files) in jobs.GetJobs().Where(j => j.Job.Status == ProcessingJob.Running))
+        {
+            if (files.All(f => f.Status != ProcessingJobFile.SourceDeleted))
+            {
+                // Files run in position order, so the first Pending one was in flight; Copy refuses to start when its
+                // .partial already exists, so one there is this job's.
+                var partial = files.FirstOrDefault(f => f.Status == ProcessingJobFile.Pending) is { } inFlight
+                    && File.Exists(inFlight.DestinationPath + ".partial")
+                    ? inFlight.DestinationPath + ".partial"
+                    : null;
+                RemoveCopies(job, files, partial);
+            }
+            job.Status = ProcessingJob.Failed;
+            job.Error = Interrupted;
+            job.FinishedAtUtc = DateTime.UtcNow.ToString("O");
+            jobs.UpdateJob(job);
+        }
+    }
+
     /// <summary>Marks a job Failed with the message, whatever state it was left in (the worker's last resort).</summary>
     public void Fail(long jobId, string message)
     {

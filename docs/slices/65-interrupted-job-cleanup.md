@@ -4,11 +4,11 @@
 **Goal:** a job cut off by a restart fails cleanly: at startup its copies and its `.partial` file are removed, so approving the book again processes it with no "already exists" refusal, and no source is ever put at risk.
 
 ## Done when
-- [ ] at startup, each `Running` job with no `SourceDeleted` file is failed as interrupted, the destinations of its `Copied` files and the `.partial` of its first `Pending` file are deleted, and those `Copied` files go back to `Pending` (what a failed run already does through `RemoveCopies`)
-- [ ] after that cleanup, approving the same book again queues it (preview clean) and the job runs to `Succeeded`
-- [ ] a `Running` job with any `SourceDeleted` file keeps every copy: it's only failed as interrupted, because its sources may already be gone
-- [ ] sources are never touched by the startup cleanup, and a `Pending` file's destination (which this job may not own) is never deleted
-- [ ] all four checks pass (build, backend tests, typecheck, frontend tests)
+- [x] at startup, each `Running` job with no `SourceDeleted` file is failed as interrupted, the destinations of its `Copied` files and the `.partial` of its first `Pending` file are deleted, and those `Copied` files go back to `Pending` (what a failed run already does through `RemoveCopies`)
+- [x] after that cleanup, approving the same book again queues it (preview clean) and the job runs to `Succeeded`
+- [x] a `Running` job with any `SourceDeleted` file keeps every copy: it's only failed as interrupted, because its sources may already be gone
+- [x] sources are never touched by the startup cleanup, and a `Pending` file's destination (which this job may not own) is never deleted
+- [x] all four checks pass (build, backend tests, typecheck, frontend tests)
 
 ## Read first
 - `src/AudiobookOrganizer.Api/Program.cs:76-82`: the startup calls for interrupted scans and jobs
@@ -18,10 +18,10 @@
 - `docs/CURRENT-STATE.md`, Decisions for slices 55 and 57 (a failed job removes only its own copies; sources deleted only after the whole job verified)
 
 ## Tasks
-- [ ] In `JobsControllerTests.cs`, add the cleanup test: with a `QueueOnly` host, scan two books, approve book 1, then simulate a cut-off run: copy file 1's source to its destination (create the folder) and mark that file `Copied`, write a few bytes to file 2's `destination + ".partial"`, and set the job `Running` (SQL through `SqliteConnectionFactory`, as the existing interrupt test does). Start the worker host (`_factory.CreateClient()`): the job is `Failed` with the interrupted message, no destination or `.partial` exists, both sources are intact, and every job file is `Pending`. Then approve the book again: 201, and it runs to `Succeeded`. Watch it fail.
-- [ ] In `ProcessingService`, add `FailInterruptedJobs()`: for each `Running` job (from `jobs.GetJobs()`), when no file is `SourceDeleted`, call `RemoveCopies(job, files, partial)` with `partial` = the first `Pending` file's `DestinationPath + ".partial"` (or null); then fail it with `Interrupted` and a finish time via `jobs.UpdateJob`. A job with a `SourceDeleted` file is only failed. Replace the repository call in `Program.cs:81-82` with this method and keep its comment accurate. Delete `ProcessingRepository.FailInterruptedJobs` if nothing else uses it, and move its test (`FailInterruptedJobs_fails_only_running_jobs`) to call the service method, so it still proves only `Running` jobs change. The first test goes green.
-- [ ] Add the source-safety test: as above, but mark file 1 `SourceDeleted` (delete its source too) and file 2 `Copied` with its copy in place. After startup the job is `Failed` as interrupted, both copies still exist, file 2's source still exists, and the statuses are unchanged.
-- [ ] Add the not-ours test: a `Running` job whose files are both `Pending`, with a file already at file 1's destination (written by the test, not the job). After startup that file still exists and the job is `Failed` as interrupted. Run all four checks.
+- [x] In `JobsControllerTests.cs`, add the cleanup test: with a `QueueOnly` host, scan two books, approve book 1, then simulate a cut-off run: copy file 1's source to its destination (create the folder) and mark that file `Copied`, write a few bytes to file 2's `destination + ".partial"`, and set the job `Running` (SQL through `SqliteConnectionFactory`, as the existing interrupt test does). Start the worker host (`_factory.CreateClient()`): the job is `Failed` with the interrupted message, no destination or `.partial` exists, both sources are intact, and every job file is `Pending`. Then approve the book again: 201, and it runs to `Succeeded`. Watch it fail.
+- [x] In `ProcessingService`, add `FailInterruptedJobs()`: for each `Running` job (from `jobs.GetJobs()`), when no file is `SourceDeleted`, call `RemoveCopies(job, files, partial)` with `partial` = the first `Pending` file's `DestinationPath + ".partial"` (or null); then fail it with `Interrupted` and a finish time via `jobs.UpdateJob`. A job with a `SourceDeleted` file is only failed. Replace the repository call in `Program.cs:81-82` with this method and keep its comment accurate. Delete `ProcessingRepository.FailInterruptedJobs` if nothing else uses it, and move its test (`FailInterruptedJobs_fails_only_running_jobs`) to call the service method, so it still proves only `Running` jobs change. The first test goes green.
+- [x] Add the source-safety test: as above, but mark file 1 `SourceDeleted` (delete its source too) and file 2 `Copied` with its copy in place. After startup the job is `Failed` as interrupted, both copies still exist, file 2's source still exists, and the statuses are unchanged.
+- [x] Add the not-ours test: a `Running` job whose files are both `Pending`, with a file already at file 1's destination (written by the test, not the job). After startup that file still exists and the job is `Failed` as interrupted. Run all four checks.
 - Data: none (no schema change; job file statuses change at startup as they do on a failed run)
 - Auth: none
 - Accessibility: none

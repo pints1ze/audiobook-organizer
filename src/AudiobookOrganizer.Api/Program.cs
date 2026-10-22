@@ -77,9 +77,9 @@ app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
 // Nothing can still be scanning at startup, so a Running row is left over from a stopped or crashed process.
 app.Services.GetRequiredService<ScanRepository>()
     .FailInterruptedRuns("Interrupted by an application restart.", DateTime.UtcNow.ToString("O"));
-// Likewise for processing; the worker only starts with the host, after this, and then runs the Queued jobs.
-app.Services.GetRequiredService<ProcessingRepository>()
-    .FailInterruptedJobs(ProcessingService.Interrupted, DateTime.UtcNow.ToString("O"));
+// Likewise for processing, removing the cut-off jobs' copies; the worker only starts with the host, after this, and
+// then runs the Queued jobs.
+app.Services.GetRequiredService<ProcessingService>().FailInterruptedJobs();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

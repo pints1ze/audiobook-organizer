@@ -732,6 +732,112 @@ public class JobsControllerTests : IDisposable
         Assert.Equal("Succeeded", ran.GetProperty("status").GetString());
     }
 
+    /// <summary>Sets the job's status and each listed file's status (by position from 1) straight in the database.</summary>
+    private static void SetStatuses(WebApplicationFactory<Program> host, long jobId, string jobStatus, params (int Position, string Status)[] files)
+    {
+        using var connection = host.Services.GetRequiredService<SqliteConnectionFactory>().Open();
+        connection.Execute("UPDATE ProcessingJob SET Status = @jobStatus WHERE Id = @jobId", new { jobId, jobStatus });
+        foreach (var (position, status) in files)
+            connection.Execute("UPDATE ProcessingJobFile SET Status = @status WHERE JobId = @jobId AND Position = @position",
+                new { jobId, position, status });
+    }
+
+    private static void PlaceFile(string source, string destination)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(source, destination);
+    }
+
+    private static List<string> FileStatuses(JsonElement job) => job.GetProperty("files").EnumerateArray()
+        .Select(f => f.GetProperty("status").GetString()!).ToList();
+
+    [Fact]
+    public async Task At_startup_an_interrupted_jobs_copies_and_partial_are_removed_and_the_book_can_run_again()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var jobId = created.GetProperty("id").GetInt64();
+        var sources = Sources(created);
+        var destinations = Destinations(created);
+        var sourcesBefore = Hashes(sources);
+        // A run cut off while writing file 2: file 1 is copied into place, file 2's temporary file is half-written.
+        PlaceFile(sources[0], destinations[0]);
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[1])!);
+        File.WriteAllBytes(destinations[1] + ".partial", [1, 2, 3]);
+        SetStatuses(host, jobId, ProcessingJob.Running, (1, ProcessingJobFile.Copied));
+
+        var client = _factory.CreateClient();
+        var failed = await WaitForJob(client, jobId);
+
+        Assert.Equal(("Failed", "Interrupted by an application restart."),
+            (failed.GetProperty("status").GetString(), failed.GetProperty("error").GetString()));
+        Assert.All(destinations, d => Assert.False(File.Exists(d)));
+        Assert.Empty(PartialFiles());
+        Assert.Equal(sourcesBefore, Hashes(sources));
+        Assert.All(FileStatuses(failed), s => Assert.Equal("Pending", s));
+
+        var retried = await ApproveJob(client, ids[0]);
+        var ran = await WaitForJob(client, retried.GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", ran.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_job_with_a_deleted_source_keeps_every_copy()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var jobId = created.GetProperty("id").GetInt64();
+        var sources = Sources(created);
+        var destinations = Destinations(created);
+        // A run cut off while deleting sources: both copies verified, file 1's source is already gone.
+        PlaceFile(sources[0], destinations[0]);
+        PlaceFile(sources[1], destinations[1]);
+        File.Delete(sources[0]);
+        var copiesBefore = Hashes(destinations);
+        var remainingSource = Hashes([sources[1]]);
+        SetStatuses(host, jobId, ProcessingJob.Running, (1, ProcessingJobFile.SourceDeleted), (2, ProcessingJobFile.Copied));
+
+        var failed = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Failed", "Interrupted by an application restart."),
+            (failed.GetProperty("status").GetString(), failed.GetProperty("error").GetString()));
+        Assert.Equal(copiesBefore, Hashes(destinations));
+        Assert.Equal(remainingSource, Hashes([sources[1]]));
+        Assert.Equal(["SourceDeleted", "Copied"], FileStatuses(failed));
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_job_never_deletes_a_file_at_a_pending_destination()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var jobId = created.GetProperty("id").GetInt64();
+        var sources = Sources(created);
+        var destinations = Destinations(created);
+        var sourcesBefore = Hashes(sources);
+        // Not this job's: the file appeared at file 1's destination after approval.
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[0])!);
+        File.WriteAllBytes(destinations[0], [4, 5, 6]);
+        SetStatuses(host, jobId, ProcessingJob.Running);
+
+        var failed = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Failed", "Interrupted by an application restart."),
+            (failed.GetProperty("status").GetString(), failed.GetProperty("error").GetString()));
+        Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(destinations[0]));
+        Assert.Equal(sourcesBefore, Hashes(sources));
+        Assert.All(FileStatuses(failed), s => Assert.Equal("Pending", s));
+    }
+
     [Fact]
     public void FailInterruptedJobs_fails_only_running_jobs()
     {
@@ -753,14 +859,18 @@ public class JobsControllerTests : IDisposable
         var succeeded = Insert(ProcessingJob.Succeeded, "2026-10-19T00:30:00.0000000Z", null);
         var failed = Insert(ProcessingJob.Failed, "2026-10-19T00:30:00.0000000Z", "Earlier failure.");
 
-        repository.FailInterruptedJobs("Interrupted by an application restart.", "2026-10-19T01:00:00.0000000Z");
+        var before = DateTime.UtcNow;
+
+        host.Services.GetRequiredService<ProcessingService>().FailInterruptedJobs();
 
         (string, string?, string?) Read(long id)
         {
             var job = repository.GetJob(id)!.Value.Job;
             return (job.Status, job.Error, job.FinishedAtUtc);
         }
-        Assert.Equal(("Failed", "Interrupted by an application restart.", "2026-10-19T01:00:00.0000000Z"), Read(running));
+        var (status, error, finishedAt) = Read(running);
+        Assert.Equal(("Failed", "Interrupted by an application restart."), (status, error));
+        Assert.True(DateTime.Parse(finishedAt!, null, System.Globalization.DateTimeStyles.RoundtripKind) >= before);
         Assert.Equal(("Queued", null, null), Read(queued));
         Assert.Equal(("Succeeded", null, "2026-10-19T00:30:00.0000000Z"), Read(succeeded));
         Assert.Equal(("Failed", "Earlier failure.", "2026-10-19T00:30:00.0000000Z"), Read(failed));

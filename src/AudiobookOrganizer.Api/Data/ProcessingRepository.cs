@@ -90,13 +90,4 @@ public class ProcessingRepository(SqliteConnectionFactory connections)
         connection.Execute(
             "UPDATE ProcessingJobFile SET Status = @Status, Error = @Error WHERE JobId = @JobId AND Position = @Position", file);
     }
-
-    /// <summary>Fails every Running job: at startup nothing can still be processing, so it was cut off by a restart.</summary>
-    public void FailInterruptedJobs(string message, string finishedAt)
-    {
-        using var connection = connections.Open();
-        connection.Execute(
-            "UPDATE ProcessingJob SET Status = @failed, Error = @message, FinishedAtUtc = @finishedAt WHERE Status = @running",
-            new { failed = ProcessingJob.Failed, running = ProcessingJob.Running, message, finishedAt });
-    }
 }
