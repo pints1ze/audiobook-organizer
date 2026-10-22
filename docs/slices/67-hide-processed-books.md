@@ -61,7 +61,7 @@
 | Backend tests | 391 passed, 0 failed | |
 | Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
 | New tests | 4 of 4 covered, passing | `A_processed_book_leaves_the_groups_list_the_preview_and_the_dashboard_counts_but_its_book_page_stays` (lists, preview 404, dashboard counts, book page), `A_book_whose_only_job_failed_is_still_listed_and_previewed`; the re-approval 400 is covered by the updated `Approving_a_book_whose_job_succeeded_is_refused_so_it_is_never_copied_twice` |
-| Manual: process a book in the dev app; it leaves Incoming, Preview and the dashboard count, book page still opens | Not run | dev API not running; start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+| Manual: process a book in the dev app; it leaves Incoming, Preview and the dashboard count, book page still opens | Not run | dev API not running; start with `scripts/start.ps1` |
 
 ## Outcome (2026-10-22, commit 4887d68)
 

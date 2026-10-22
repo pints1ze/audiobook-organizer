@@ -6,7 +6,7 @@ _Updated: slice 67 review, 2026-10-22, commit 4887d68_
 `phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
 
 ## Where things stand
-- **Locally:** the API runs on port 5070 (`scripts/start-api.ps1`) with SQLite at `<repo>/data/audiobooks.db`. The React client runs on port 5173 (`scripts/start-client.ps1`) and shows the API and database status.
+- **Locally:** the API runs on port 5070 and the React client on 5173 (`scripts/start.ps1`, default `both`) with SQLite at `<repo>/data/audiobooks.db`. The client shows the API and database status.
 - **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default. `docker build --target test .` runs the backend suite on Linux (Ubuntu 24.04) with the runtime's ffmpeg 6.1.1; all 384 pass (slice 64). Add `--no-cache-filter test` to force a rerun.
 - **Tag safety:** proven by tests. MP3 writes go through TagLibSharp; M4B writes go through an ffmpeg `-c copy` remux without `chpl`, then TagLibSharp. Chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.

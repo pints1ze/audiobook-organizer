@@ -155,7 +155,7 @@ docs/PLAN.md        goal, finished-when, phases (see section 3)
 docs/CURRENT-STATE.md   start here: branch, last/next slice, open questions, decisions
 docs/slices/        one file per slice, NN-short-name.md
 docs/templates/     the blank PRD, PLAN, CURRENT-STATE and slice files the skills copy from
-scripts/            start-api.ps1, start-client.ps1
+scripts/            start.ps1 (api | client | both)
 Dockerfile, docker-compose.yml   production image: API serves the built client from wwwroot
 reference/          read-only reference material, never import from it
 ```
@@ -166,7 +166,7 @@ reference/          read-only reference material, never import from it
 - **Test (backend):** `dotnet test src/AudiobookOrganizer.Api.Tests`
 - **Typecheck:** `npx tsc -b --noEmit` in `src/AudiobookOrganizer.Client` (`-b` follows the project references; plain `tsc --noEmit` checks nothing)
 - **Test (frontend):** `npm test` in `src/AudiobookOrganizer.Client`
-- **Run locally:** `scripts/start-api.ps1` (API) and `scripts/start-client.ps1` (Vite, proxies `/api` to the API)
+- **Run locally:** `scripts/start.ps1` (default `both`: API here, Vite client in a new window; or `api` / `client`). Client proxies `/api` to the API.
 - **Ports:** API 5070, client 5173, container 8080
 - **Package:** `docker compose build` (only when I ask)
 
