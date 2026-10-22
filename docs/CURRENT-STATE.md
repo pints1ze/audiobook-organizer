@@ -24,7 +24,7 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 
 ## Last slice / next slice
 - Last: 70 docker-deploy-docs, Implemented
-- Next: none planned until the developer's home-server run; then the PR, or slices for the carried-in polish items if they stay in phase 9.
+- Next: 71 windows-docker-deploy, written; needs the developer's OK for its AGENTS.md and PLAN.md edits (gate 4).
 
 ## Open questions
 - AGENTS.md says logs live under `/data`, but Serilog writes only to the console. Change the AGENTS.md line, or add a file sink (new package)? (raised in slice 70)
@@ -35,6 +35,7 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-22 (developer): the app is hosted in Docker Desktop on the developer's Windows machine, compose under `C:\dockerudiobook-organizer\`, image built from the repo; `/data` is a named volume; `/incoming` and `/library` are CIFS volumes on `\cookserv\d` (mapped as `Y:`). Slice 71 updates the docs; its AGENTS.md and PLAN.md edits await the developer's OK.
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
 - 2026-10-18: SQLite + Dapper, not PostgreSQL. One user, one file on a mounted volume.
 - 2026-10-18: TagLibSharp handles tag reading and MP3 writes.
