@@ -1,3 +1,4 @@
+using System.Globalization;
 using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Api;
 using AudiobookOrganizer.Api.Models.Local;
@@ -142,7 +143,8 @@ public class ProcessingService(
         }
 
         if (error is not null) RemoveCopies(job, files, partial);
-        else if (!settings.Get().KeepSourceFiles) DeleteSources(job, files, sources);
+        else if (!settings.Get().KeepSourceFiles)
+            DeleteSources(job, files, sources.Select(s => ((long, DateTime)?)(s.Size, s.LastWriteUtc)).ToList());
         job.Status = error is null ? ProcessingJob.Succeeded : ProcessingJob.Failed;
         job.Error = error;
         job.FinishedAtUtc = DateTime.UtcNow.ToString("O");
@@ -273,19 +275,22 @@ public class ProcessingService(
     private static string Chapters(int count) => count == 1 ? "1 chapter" : $"{count} chapters";
 
     /// <summary>
-    /// Deletes each verified file's source and marks it SourceDeleted. A source whose size or last write time changed
-    /// since its copy was made, or that can't be deleted, is kept: the file stays Copied with the reason as its error.
-    /// Then the deleted sources' AudioFile rows go, and the incoming folders they leave empty.
+    /// Deletes the source of each file that's Copied with no error and marks it SourceDeleted. A source whose size or
+    /// last write time differs from <paramref name="expected"/> (the file's entry, by position; null when unknown), or
+    /// that can't be deleted, is kept: the file stays Copied with the reason as its error. Then every SourceDeleted
+    /// file's AudioFile row goes, and the incoming folders they leave empty.
     /// </summary>
-    private void DeleteSources(ProcessingJob job, IReadOnlyList<ProcessingJobFile> files, IReadOnlyList<SourceFacts> sources)
+    private void DeleteSources(
+        ProcessingJob job, IReadOnlyList<ProcessingJobFile> files, IReadOnlyList<(long Size, DateTime LastWriteUtc)?> expected)
     {
         for (var i = 0; i < files.Count; i++)
         {
             var file = files[i];
+            if (file.Status != ProcessingJobFile.Copied || file.Error is not null) continue;
             try
             {
                 var info = new FileInfo(file.SourcePath);
-                if (info.Length != sources[i].Size || info.LastWriteTimeUtc != sources[i].LastWriteUtc)
+                if (expected[i] is not { } facts || info.Length != facts.Size || info.LastWriteTimeUtc != facts.LastWriteUtc)
                 {
                     logger.LogWarning("Kept {Path} for job {JobId}: it changed after it was copied", file.SourcePath, job.Id);
                     file.Error = SourceChanged;
@@ -374,9 +379,11 @@ public class ProcessingService(
     }
 
     /// <summary>
-    /// Fails every Running job as interrupted: at startup nothing can still be processing, so it was cut off by a
-    /// restart. Its copies and the in-flight file's <c>.partial</c> are removed as a failed run does, unless a source
-    /// was already deleted; then every copy is kept, because it may be the only copy left. Sources are never touched.
+    /// Ends every Running job: at startup nothing can still be processing, so it was cut off by a restart. A job with a
+    /// SourceDeleted file had verified every copy, so it finishes as a run does: unless "keep source files" is on, each
+    /// remaining unchanged source is deleted (checked against the scan's size and last write time, since the copy-time
+    /// facts were in memory only), and the job Succeeds. Any other job fails as interrupted, and its copies and the
+    /// in-flight file's <c>.partial</c> are removed as a failed run does; its sources are never touched.
     /// shortcut: a Pending file's destination is left even though a cut-off run may have moved its copy there before
     /// marking it Copied; the job can't tell it from someone else's file — revisit if retries keep hitting it.
     /// </summary>
@@ -384,7 +391,13 @@ public class ProcessingService(
     {
         foreach (var (job, files) in jobs.GetJobs().Where(j => j.Job.Status == ProcessingJob.Running))
         {
-            if (files.All(f => f.Status != ProcessingJobFile.SourceDeleted))
+            if (files.Any(f => f.Status == ProcessingJobFile.SourceDeleted))
+            {
+                if (!settings.Get().KeepSourceFiles) DeleteSources(job, files, ScannedFacts(files));
+                job.Status = ProcessingJob.Succeeded;
+                job.Error = null;
+            }
+            else
             {
                 // Files run in position order, so the first Pending one was in flight; Copy refuses to start when its
                 // .partial already exists, so one there is this job's.
@@ -393,12 +406,21 @@ public class ProcessingService(
                     ? inFlight.DestinationPath + ".partial"
                     : null;
                 RemoveCopies(job, files, partial);
+                job.Status = ProcessingJob.Failed;
+                job.Error = Interrupted;
             }
-            job.Status = ProcessingJob.Failed;
-            job.Error = Interrupted;
             job.FinishedAtUtc = DateTime.UtcNow.ToString("O");
             jobs.UpdateJob(job);
         }
+    }
+
+    /// <summary>Each file's size and last write time from its AudioFile row, by position; null when the row is gone.</summary>
+    private List<(long Size, DateTime LastWriteUtc)?> ScannedFacts(IReadOnlyList<ProcessingJobFile> files)
+    {
+        var rows = groups.GetFiles(files.Select(f => f.AudioFileId).ToList()).ToDictionary(r => r.Id);
+        return files.Select(f => rows.TryGetValue(f.AudioFileId, out var row)
+            ? ((long, DateTime)?)(row.SizeBytes, DateTime.Parse(row.ModifiedAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind))
+            : null).ToList();
     }
 
     /// <summary>Marks a job Failed with the message, whatever state it was left in (the worker's last resort).</summary>

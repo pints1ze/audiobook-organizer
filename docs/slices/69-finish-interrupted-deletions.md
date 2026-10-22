@@ -4,11 +4,11 @@
 **Goal:** at startup, a job cut off while deleting its sources (it has a `SourceDeleted` file, so every copy verified) finishes deleting the remaining unchanged sources, cleans up their rows and emptied folders, and is marked `Succeeded` instead of `Failed`.
 
 ## Done when
-- [ ] at startup, a `Running` job with any `SourceDeleted` file deletes the source of each file still `Copied` with no error, marks it `SourceDeleted`, removes those files' `AudioFile`/`FileGroupFile` rows and the incoming folders left empty (slice 68's cleanup), and ends `Succeeded` with no error and a finish time
-- [ ] a remaining source whose size or last write time differs from its `AudioFile` row (or whose row is gone), or that can't be deleted, is kept with `SourceChanged` / `SourceNotDeleted` as its file error, as a normal run does; the job still ends `Succeeded`
-- [ ] with keep-source on at startup, such a job ends `Succeeded` and no remaining source is deleted
-- [ ] every copy is kept; a `Running` job with no `SourceDeleted` file is still failed and cleaned up as in slice 65
-- [ ] all four checks pass (build, backend tests, typecheck, frontend tests)
+- [x] at startup, a `Running` job with any `SourceDeleted` file deletes the source of each file still `Copied` with no error, marks it `SourceDeleted`, removes those files' `AudioFile`/`FileGroupFile` rows and the incoming folders left empty (slice 68's cleanup), and ends `Succeeded` with no error and a finish time
+- [x] a remaining source whose size or last write time differs from its `AudioFile` row (or whose row is gone), or that can't be deleted, is kept with `SourceChanged` / `SourceNotDeleted` as its file error, as a normal run does; the job still ends `Succeeded`
+- [x] with keep-source on at startup, such a job ends `Succeeded` and no remaining source is deleted
+- [x] every copy is kept; a `Running` job with no `SourceDeleted` file is still failed and cleaned up as in slice 65
+- [x] all four checks pass (build, backend tests, typecheck, frontend tests)
 
 ## Read first
 - `src/AudiobookOrganizer.Api/Services/ProcessingService.cs`: `Run` (~96, calls `DeleteSources` with in-memory `SourceFacts`), `DeleteSources` (~280), `RemoveEmptyFolders` (~317), `FailInterruptedJobs` (~383)
@@ -19,11 +19,11 @@
 - `docs/CURRENT-STATE.md`, Decisions dated 2026-10-22 (finish the deletions; slice 65 and 68 rules)
 
 ## Tasks
-- [ ] Write the tests below in `JobsControllerTests.cs` first. Rework `At_startup_an_interrupted_job_with_a_deleted_source_keeps_every_copy` into the first new test (its "Failed, statuses unchanged" asserts are superseded by the 2026-10-22 decision, not weakened). Watch them fail.
-- [ ] Add `GroupRepository.GetFiles(IReadOnlyList<long> ids)` returning those `AudioFile` rows (Dapper, `WHERE Id IN @ids`).
-- [ ] In `ProcessingService`, let `DeleteSources` take each file's expected size and last write time instead of `SourceFacts` (e.g. a list of `(long Size, DateTime LastWriteUtc)?`, null meaning "unknown, keep"), and skip any file that isn't `Copied` or already has an error. `Run` passes its in-memory facts as before.
-- [ ] In `FailInterruptedJobs`, for a `Running` job with a `SourceDeleted` file: unless keep-source is on, build the expected facts from `GetFiles` (`SizeBytes`, `ModifiedAtUtc` parsed round-trip as UTC; a missing row is null) and call `DeleteSources`; then mark the job `Succeeded` with no error and a finish time. Jobs without a `SourceDeleted` file keep the slice 65 path. Update the method's doc comment and the `Program.cs` comment to match.
-- [ ] Run all four checks.
+- [x] Write the tests below in `JobsControllerTests.cs` first. Rework `At_startup_an_interrupted_job_with_a_deleted_source_keeps_every_copy` into the first new test (its "Failed, statuses unchanged" asserts are superseded by the 2026-10-22 decision, not weakened). Watch them fail.
+- [x] Add `GroupRepository.GetFiles(IReadOnlyList<long> ids)` returning those `AudioFile` rows (Dapper, `WHERE Id IN @ids`).
+- [x] In `ProcessingService`, let `DeleteSources` take each file's expected size and last write time instead of `SourceFacts` (e.g. a list of `(long Size, DateTime LastWriteUtc)?`, null meaning "unknown, keep"), and skip any file that isn't `Copied` or already has an error. `Run` passes its in-memory facts as before.
+- [x] In `FailInterruptedJobs`, for a `Running` job with a `SourceDeleted` file: unless keep-source is on, build the expected facts from `GetFiles` (`SizeBytes`, `ModifiedAtUtc` parsed round-trip as UTC; a missing row is null) and call `DeleteSources`; then mark the job `Succeeded` with no error and a finish time. Jobs without a `SourceDeleted` file keep the slice 65 path. Update the method's doc comment and the `Program.cs` comment to match.
+- [x] Run all four checks.
 - Data: none (no schema change; rows and folders are removed as in slice 68)
 - Auth: none
 - Accessibility: none

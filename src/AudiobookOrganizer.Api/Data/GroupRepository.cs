@@ -301,6 +301,14 @@ public class GroupRepository(SqliteConnectionFactory connections)
         transaction.Commit();
     }
 
+    /// <summary>The <c>AudioFile</c> rows of <paramref name="ids"/> that still exist.</summary>
+    public IReadOnlyList<AudioFile> GetFiles(IReadOnlyList<long> ids)
+    {
+        if (ids.Count == 0) return [];
+        using var connection = connections.Open();
+        return connection.Query<AudioFile>("SELECT * FROM AudioFile WHERE Id IN @ids", new { ids }).ToList();
+    }
+
     /// <summary>Each of <paramref name="fileIds"/>' user state and whether it's in a group.</summary>
     public IReadOnlyDictionary<long, (string? UserState, bool Grouped)> GetUserStates(IReadOnlyList<long> fileIds)
     {

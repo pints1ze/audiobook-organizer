@@ -1007,8 +1007,12 @@ public class JobsControllerTests : IDisposable
         Assert.Equal("Succeeded", ran.GetProperty("status").GetString());
     }
 
-    [Fact]
-    public async Task At_startup_an_interrupted_job_with_a_deleted_source_keeps_every_copy()
+    /// <summary>
+    /// A job cut off while deleting sources: both copies of the first book verified and placed, file 1's source already
+    /// deleted, file 2 still Copied. <paramref name="beforeRestart"/> runs on the setup host just before the restart.
+    /// </summary>
+    private async Task<(long JobId, List<string> Sources, List<string> Destinations)> CutOffWhileDeleting(
+        Func<HttpClient, List<string>, Task>? beforeRestart = null)
     {
         using var host = QueueOnly();
         var setup = host.CreateClient();
@@ -1018,21 +1022,72 @@ public class JobsControllerTests : IDisposable
         var jobId = created.GetProperty("id").GetInt64();
         var sources = Sources(created);
         var destinations = Destinations(created);
-        // A run cut off while deleting sources: both copies verified, file 1's source is already gone.
         PlaceFile(sources[0], destinations[0]);
         PlaceFile(sources[1], destinations[1]);
         File.Delete(sources[0]);
+        SetStatuses(host, jobId, ProcessingJob.Running, (1, ProcessingJobFile.SourceDeleted), (2, ProcessingJobFile.Copied));
+        if (beforeRestart is not null) await beforeRestart(setup, sources);
+        return (jobId, sources, destinations);
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_job_with_a_deleted_source_finishes_deleting_and_succeeds_keeping_every_copy()
+    {
+        var (jobId, sources, destinations) = await CutOffWhileDeleting();
+        var copiesBefore = Hashes(destinations);
+
+        var done = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (done.GetProperty("status").GetString(), done.GetProperty("error").ValueKind));
+        Assert.NotEqual(JsonValueKind.Null, done.GetProperty("finishedAtUtc").ValueKind);
+        Assert.Equal(["SourceDeleted", "SourceDeleted"], FileStatuses(done));
+        Assert.All(done.GetProperty("files").EnumerateArray(), f => Assert.Equal(JsonValueKind.Null, f.GetProperty("error").ValueKind));
+        Assert.False(File.Exists(sources[1]));
+        Assert.Equal(copiesBefore, Hashes(destinations));
+        Assert.Equal((0L, 0L), FileRows(FileIds(done)));
+        Assert.False(Directory.Exists(Path.Combine(_folders.Incoming, "alpha")));
+        Assert.True(Directory.Exists(Path.Combine(_folders.Incoming, "beta")));
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_jobs_changed_remaining_source_is_kept_with_an_error_and_the_job_succeeds()
+    {
+        var (jobId, sources, destinations) = await CutOffWhileDeleting((_, sources) =>
+        {
+            File.AppendAllText(sources[1], "changed");
+            return Task.CompletedTask;
+        });
+        var copiesBefore = Hashes(destinations);
+        var changedSource = Hashes([sources[1]]);
+
+        var done = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (done.GetProperty("status").GetString(), done.GetProperty("error").ValueKind));
+        var files = done.GetProperty("files").EnumerateArray().ToList();
+        Assert.Equal("SourceDeleted", files[0].GetProperty("status").GetString());
+        Assert.Equal(("Copied", "The source changed after it was copied, so it was kept."),
+            (files[1].GetProperty("status").GetString(), files[1].GetProperty("error").GetString()));
+        Assert.Equal(changedSource, Hashes([sources[1]]));
+        Assert.Equal(copiesBefore, Hashes(destinations));
+        var ids = FileIds(done);
+        Assert.Equal((0L, 0L), FileRows([ids[0]]));
+        Assert.Equal((1L, 1L), FileRows([ids[1]]));
+    }
+
+    [Fact]
+    public async Task At_startup_with_keep_source_on_an_interrupted_job_with_a_deleted_source_succeeds_and_keeps_the_rest()
+    {
+        var (jobId, sources, destinations) = await CutOffWhileDeleting((setup, _) =>
+            SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true));
         var copiesBefore = Hashes(destinations);
         var remainingSource = Hashes([sources[1]]);
-        SetStatuses(host, jobId, ProcessingJob.Running, (1, ProcessingJobFile.SourceDeleted), (2, ProcessingJobFile.Copied));
 
-        var failed = await WaitForJob(_factory.CreateClient(), jobId);
+        var done = await WaitForJob(_factory.CreateClient(), jobId);
 
-        Assert.Equal(("Failed", "Interrupted by an application restart."),
-            (failed.GetProperty("status").GetString(), failed.GetProperty("error").GetString()));
-        Assert.Equal(copiesBefore, Hashes(destinations));
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (done.GetProperty("status").GetString(), done.GetProperty("error").ValueKind));
+        Assert.Equal(["SourceDeleted", "Copied"], FileStatuses(done));
         Assert.Equal(remainingSource, Hashes([sources[1]]));
-        Assert.Equal(["SourceDeleted", "Copied"], FileStatuses(failed));
+        Assert.Equal(copiesBefore, Hashes(destinations));
     }
 
     [Fact]
