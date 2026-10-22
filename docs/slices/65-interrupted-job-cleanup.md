@@ -46,3 +46,30 @@
 - Open question for the developer (added to CURRENT-STATE.md at review): a job cut off while deleting sources has verified every copy; should startup finish the deletions and mark it `Succeeded` instead of failing it?
 - Files touched: `ProcessingService.cs`, `ProcessingRepository.cs`, `Program.cs`, `JobsControllerTests.cs`, this slice file (5).
 - Remaining phase 9 work: end-to-end fixture scan → process as one test, repeat scans after processing (deleted sources, empty incoming folders), Docker docs for the home server, and the carried-in items in PLAN.md.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 387 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | 3 of 3 present, passing | cleanup-and-retry, source-safety and not-ours tests in `JobsControllerTests`; the reworked `FailInterruptedJobs_fails_only_running_jobs` and the existing startup test pass (6 interrupt tests filtered: 6 passed) |
+| Manual: stop the dev API mid-job, restart, re-approve | Not run | needs the dev API and a real multi-file book; start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+
+## Outcome (2026-10-22, commit 2b8a1be)
+
+**Status:** Implemented
+**Summary:** At startup `ProcessingService.FailInterruptedJobs()` fails each `Running` job as interrupted and, unless one of its sources was already deleted, removes its `Copied` copies and the in-flight `.partial` through `RemoveCopies`, so approving the book again runs cleanly. Sources and `Pending` destinations are never touched; the repository's SQL-only version is gone.
+**Changed:** 5 files: `Services/ProcessingService.cs` (`FailInterruptedJobs`), `Program.cs` (startup call), `Data/ProcessingRepository.cs` (old method removed), `Tests/Controllers/JobsControllerTests.cs` (3 new tests, helpers, reworked repository test), the slice file.
+**Deviations:**
+- The `.partial` is passed to `RemoveCopies` only when it exists, so a never-created folder doesn't log a spurious warning: *fine*.
+- `FailInterruptedJobs()` stamps its own finish time, so the reworked test checks the time is at or after the call instead of an exact value: *fine*.
+- The source-safety and not-ours tests passed on their first run (written after the code, as the slice ordered); the implementer proved they fail against a temporarily broken guard: *fine*.
+**Follow-ups:**
+- Open question: should a job cut off while deleting sources (every copy verified) finish the deletions and be marked `Succeeded`?
+- Shortcut: a cut-off copy sitting at a `Pending` file's destination is left, and a retry refuses it with "A file is already at …".
+- Manual (developer): stop the dev API mid-job, restart, re-approve.
