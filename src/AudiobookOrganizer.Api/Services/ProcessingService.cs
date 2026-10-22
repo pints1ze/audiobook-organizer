@@ -275,6 +275,7 @@ public class ProcessingService(
     /// <summary>
     /// Deletes each verified file's source and marks it SourceDeleted. A source whose size or last write time changed
     /// since its copy was made, or that can't be deleted, is kept: the file stays Copied with the reason as its error.
+    /// Then the deleted sources' AudioFile rows go, and the incoming folders they leave empty.
     /// </summary>
     private void DeleteSources(ProcessingJob job, IReadOnlyList<ProcessingJobFile> files, IReadOnlyList<SourceFacts> sources)
     {
@@ -302,6 +303,49 @@ public class ProcessingService(
             }
             jobs.UpdateFile(file);
         }
+
+        var deleted = files.Where(f => f.Status == ProcessingJobFile.SourceDeleted).ToList();
+        groups.RemoveFiles(deleted.Select(f => f.AudioFileId).ToList());
+        RemoveEmptyFolders(job, deleted.Select(f => Path.GetDirectoryName(f.SourcePath)).OfType<string>().Distinct().ToList());
+    }
+
+    /// <summary>
+    /// Deletes each folder, and each parent up to (never including) the incoming root, while it's empty. Folders not
+    /// under the incoming path are left alone, as is everything when it isn't set. A failure logs a warning and stops
+    /// that folder's walk; it never fails the job.
+    /// </summary>
+    private void RemoveEmptyFolders(ProcessingJob job, IReadOnlyList<string> folders)
+    {
+        if (string.IsNullOrWhiteSpace(settings.Get().IncomingPath) || folders.Count == 0) return;
+        var root = Path.GetFullPath(settings.Get().IncomingPath!);
+        foreach (var folder in folders)
+        {
+            var current = Path.GetFullPath(folder);
+            try
+            {
+                while (IsStrictlyUnder(current, root) && Directory.Exists(current)
+                       && !Directory.EnumerateFileSystemEntries(current).Any())
+                {
+                    Directory.Delete(current);
+                    current = Path.GetDirectoryName(current)!;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Couldn't remove the empty folder {Path} for job {JobId}", current, job.Id);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="path"/> is inside <paramref name="root"/> and not the root itself, compared as the OS
+    /// compares paths (ignoring case on Windows only).
+    /// </summary>
+    private static bool IsStrictlyUnder(string path, string root)
+    {
+        var relative = Path.GetRelativePath(root, path);
+        return relative != "." && !Path.IsPathRooted(relative)
+            && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
     }
 
     /// <summary>

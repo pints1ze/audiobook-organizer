@@ -740,7 +740,7 @@ public class JobsControllerTests : IDisposable
 
         var rescan = await Scan(client);
 
-        Assert.Equal(2, rescan.GetProperty("filesMissing").GetInt32());
+        Assert.Equal(0, rescan.GetProperty("filesMissing").GetInt32());
         var listAfter = await GroupList(client);
         Assert.Equal([ids[1]], listAfter.Groups);
         Assert.Empty(listAfter.Unresolved);
@@ -797,6 +797,96 @@ public class JobsControllerTests : IDisposable
         Assert.All(second.GetProperty("files").EnumerateArray(), f => Assert.Equal("Copied", f.GetProperty("status").GetString()));
         Assert.Equal(libraryBefore.Select(e => e.Split('|')[0]).Concat(Destinations(second)).Order(),
             Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+    }
+
+    /// <summary>How many AudioFile and FileGroupFile rows the files have.</summary>
+    private (long Files, long Members) FileRows(IReadOnlyList<long> fileIds)
+    {
+        using var connection = _factory.Services.GetRequiredService<SqliteConnectionFactory>().Open();
+        return (connection.ExecuteScalar<long>("SELECT COUNT(*) FROM AudioFile WHERE Id IN @fileIds", new { fileIds }),
+            connection.ExecuteScalar<long>("SELECT COUNT(*) FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }));
+    }
+
+    private static List<long> FileIds(JsonElement job) => job.GetProperty("files").EnumerateArray()
+        .Select(f => f.GetProperty("fileId").GetInt64()).ToList();
+
+    [Fact]
+    public async Task With_keep_source_off_a_processed_books_rows_and_emptied_folder_are_removed_and_its_job_history_stays()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.Equal((0L, 0L), FileRows(FileIds(done)));
+        var listed = await ScansControllerTests.ReadJson(await client.GetAsync($"/api/jobs/{done.GetProperty("id").GetInt64()}"));
+        Assert.Equal(["SourceDeleted", "SourceDeleted"], FileStatuses(listed));
+        Assert.Equal(Sources(done), Sources(listed));
+        Assert.False(Directory.Exists(Path.Combine(_folders.Incoming, "alpha")));
+        Assert.True(Directory.Exists(Path.Combine(_folders.Incoming, "beta")));
+        Assert.True(Directory.Exists(_folders.Incoming));
+        Assert.Equal(2, (await BookSources(client, ids[1])).Count);
+
+        var rescan = await Scan(client);
+
+        Assert.Equal(0, rescan.GetProperty("filesMissing").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_folder_left_holding_a_non_audio_file_stays()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+        var cover = Path.Combine(_folders.Incoming, "alpha", "cover.jpg");
+        File.WriteAllText(cover, "not audio");
+
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.All(Sources(done), s => Assert.False(File.Exists(s)));
+        Assert.Equal([cover], Directory.GetFileSystemEntries(Path.Combine(_folders.Incoming, "alpha")));
+        Assert.Equal((0L, 0L), FileRows(FileIds(done)));
+    }
+
+    [Fact]
+    public async Task With_keep_source_on_a_processed_books_rows_and_folder_stay()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
+        var ids = await ScanTwoBooks(client);
+
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.Equal((2L, 2L), FileRows(FileIds(done)));
+        Assert.All(Sources(done), s => Assert.True(File.Exists(s)));
+        Assert.True(Directory.Exists(Path.Combine(_folders.Incoming, "alpha")));
+    }
+
+    [Fact]
+    public async Task A_book_nested_two_folders_deep_removes_both_emptied_folders()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var book = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "author", "title")).FullName;
+        File.Copy(ChapterReaderTests.Fixture("chapters.mp3"), Path.Combine(book, "track1.mp3"));
+        File.Copy(ChapterReaderTests.Fixture("chapters.mp3"), Path.Combine(book, "track2.mp3"));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.mp3"));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.m4b"));
+        await Scan(client);
+        var groupId = Assert.Single(await GroupIds(client));
+        var renamed = await client.PutAsJsonAsync($"/api/groups/{groupId}", new { title = "Nested Book", author = "Ann Author" });
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+
+        var done = await WaitForJob(client, (await ApproveJob(client, groupId)).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.False(Directory.Exists(Path.Combine(_folders.Incoming, "author")));
+        Assert.True(Directory.Exists(_folders.Incoming));
+        Assert.Empty(Directory.GetFileSystemEntries(_folders.Incoming));
     }
 
     [Fact]

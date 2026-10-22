@@ -287,6 +287,20 @@ public class GroupRepository(SqliteConnectionFactory connections)
         transaction.Commit();
     }
 
+    /// <summary>
+    /// Deletes the files' <c>FileGroupFile</c> rows, then their <c>AudioFile</c> rows, in one transaction. Their groups
+    /// are left as they are (a processed book's group keeps its metadata, cover and job link).
+    /// </summary>
+    public void RemoveFiles(IReadOnlyList<long> fileIds)
+    {
+        if (fileIds.Count == 0) return;
+        using var connection = connections.Open();
+        using var transaction = connection.BeginTransaction();
+        connection.Execute("DELETE FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }, transaction);
+        connection.Execute("DELETE FROM AudioFile WHERE Id IN @fileIds", new { fileIds }, transaction);
+        transaction.Commit();
+    }
+
     /// <summary>Each of <paramref name="fileIds"/>' user state and whether it's in a group.</summary>
     public IReadOnlyDictionary<long, (string? UserState, bool Grouped)> GetUserStates(IReadOnlyList<long> fileIds)
     {

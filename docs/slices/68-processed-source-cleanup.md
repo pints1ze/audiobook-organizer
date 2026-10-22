@@ -4,11 +4,11 @@
 **Goal:** once a processed book's sources are deleted, their `AudioFile` rows go and the incoming folders they leave empty are removed, so rescans stop counting them as missing.
 
 ## Done when
-- [ ] after a job succeeds with keep-source off, every `SourceDeleted` file's `AudioFile` row (and its `FileGroupFile` row) is gone; the `ProcessingJob` and `ProcessingJobFile` history is untouched
-- [ ] each source's folder, and each parent folder up to (never including) the incoming root, is deleted when it's left empty; a folder holding anything else (another book, a cover image, a file the job kept) stays
-- [ ] a rescan after processing reports `filesMissing` 0 for the processed book
-- [ ] with keep-source on, or for a source kept because it changed or couldn't be deleted, the row and folder stay
-- [ ] all four checks pass (build, backend tests, typecheck, frontend tests)
+- [x] after a job succeeds with keep-source off, every `SourceDeleted` file's `AudioFile` row (and its `FileGroupFile` row) is gone; the `ProcessingJob` and `ProcessingJobFile` history is untouched
+- [x] each source's folder, and each parent folder up to (never including) the incoming root, is deleted when it's left empty; a folder holding anything else (another book, a cover image, a file the job kept) stays
+- [x] a rescan after processing reports `filesMissing` 0 for the processed book
+- [x] with keep-source on, or for a source kept because it changed or couldn't be deleted, the row and folder stay
+- [x] all four checks pass (build, backend tests, typecheck, frontend tests)
 
 ## Read first
 - `src/AudiobookOrganizer.Api/Services/ProcessingService.cs`: `Run` (~96) and `DeleteSources` (~279)
@@ -18,10 +18,10 @@
 - `docs/CURRENT-STATE.md`, Decisions dated 2026-10-22
 
 ## Tasks
-- [ ] Write the tests below in `JobsControllerTests.cs` first and watch them fail.
-- [ ] Add `GroupRepository.RemoveFiles(IReadOnlyList<long> fileIds)`: in one transaction, delete the files' `FileGroupFile` rows, then their `AudioFile` rows. Nothing else is touched (the group stays, hidden as processed).
-- [ ] At the end of `ProcessingService.DeleteSources`, call `RemoveFiles` with the ids of the files now `SourceDeleted`, then remove empty folders: for each distinct source directory, walk up while the directory is strictly under the saved incoming path (compare full paths, ignoring case on Windows only through `Path.GetRelativePath` not starting with `..`) and has no entries, deleting it. A failure logs a warning and stops that walk; it never fails the job. Skip folder cleanup when the incoming path isn't set or the source isn't under it.
-- [ ] Update the slice 66 keep-source-off rescan test: its rescan now expects `filesMissing` 0 instead of 2, following the 2026-10-22 decision (not a weakened test). Run all four checks.
+- [x] Write the tests below in `JobsControllerTests.cs` first and watch them fail.
+- [x] Add `GroupRepository.RemoveFiles(IReadOnlyList<long> fileIds)`: in one transaction, delete the files' `FileGroupFile` rows, then their `AudioFile` rows. Nothing else is touched (the group stays, hidden as processed).
+- [x] At the end of `ProcessingService.DeleteSources`, call `RemoveFiles` with the ids of the files now `SourceDeleted`, then remove empty folders: for each distinct source directory, walk up while the directory is strictly under the saved incoming path (compare full paths, ignoring case on Windows only through `Path.GetRelativePath` not starting with `..`) and has no entries, deleting it. A failure logs a warning and stops that walk; it never fails the job. Skip folder cleanup when the incoming path isn't set or the source isn't under it.
+- [x] Update the slice 66 keep-source-off rescan test: its rescan now expects `filesMissing` 0 instead of 2, following the 2026-10-22 decision (not a weakened test). Run all four checks.
 - Data: no schema change; rows are deleted in a transaction
 - Auth: none
 - Accessibility: none
