@@ -48,3 +48,27 @@
 - Assumption: keep-source is read at startup, as `Run` reads it at the end of a run; turning it on before a restart keeps the remaining sources.
 - Files touched: `ProcessingService.cs`, `GroupRepository.cs`, `Program.cs`, `JobsControllerTests.cs`, this slice file, PLAN.md (6).
 - Remaining phase 9 work: Docker docs and the home-server run, and the other carried-in items in PLAN.md.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 397 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | 3 of 3 present, passing | finishes deleting and succeeds keeping every copy (reworked slice 65 test); a changed remaining source is kept with an error and the job succeeds; keep-source on succeeds and keeps the rest. Slice 65 startup tests still pass |
+| Manual: none | Not applicable | the slice lists no manual check (cut-off timing is simulated by the tests) |
+
+## Outcome (2026-10-22, commit 9b95c50)
+
+**Status:** Implemented
+**Summary:** At startup, a `Running` job with a `SourceDeleted` file now finishes like a run: unless keep-source is on, `DeleteSources` deletes each remaining `Copied` source that still matches its `AudioFile` row's size and last write time, removes the rows and emptied incoming folders, and the job ends `Succeeded`. Other interrupted jobs still fail and lose their copies as in slice 65.
+**Changed:** 5 files: `Services/ProcessingService.cs` (`DeleteSources` takes expected facts and skips files not `Copied` or with an error; `FailInterruptedJobs` branch; `ScannedFacts`), `Data/GroupRepository.cs` (`GetFiles`), `Program.cs` (comment), `Tests/Controllers/JobsControllerTests.cs` (one reworked and two new tests, `CutOffWhileDeleting` helper), the slice file.
+**Deviations:**
+- PLAN.md wasn't touched in the feat commit (the slice's file list named it); it's updated in this review: *fine*.
+**Follow-ups:**
+- `ScannedFacts` parses `ModifiedAtUtc` with `DateTime.Parse`; a malformed stored value would throw at startup. Values are written by the scan in round-trip format, so not hit today.
+- No test covers a remaining source that can't be deleted at startup; it goes through the same catch as a run (slice 57's test).
