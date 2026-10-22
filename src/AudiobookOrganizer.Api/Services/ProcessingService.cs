@@ -258,7 +258,9 @@ public class ProcessingService(
         if (copy.Track != tags.Track)
             return $"The copy of {name} has track {copy.Track?.ToString() ?? "none"}; it should be {tags.Track}.";
         if ((tags.Cover is not null || source.HasCover) && !copy.HasCover) return $"The copy of {name} has no cover.";
-        if (copy.ChapterCount != source.ChapterCount)
+        // M4B copies carry no chapters (decision 2026-10-21), so only MP3 copies are held to the source's count.
+        if (!string.Equals(Path.GetExtension(destination), ".m4b", StringComparison.OrdinalIgnoreCase)
+            && copy.ChapterCount != source.ChapterCount)
             return $"The copy of {name} has {Chapters(copy.ChapterCount)}; the source has {source.ChapterCount}.";
         if (Math.Abs(copy.DurationMs - source.DurationMs) > 1000)
             return $"The copy of {name} runs {copy.DurationMs / 1000.0:0.0} s; the source runs {source.DurationMs / 1000.0:0.0} s.";

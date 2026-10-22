@@ -91,6 +91,13 @@ public class TagWriterTests : IDisposable
 
     private static string Hash(string path) => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
 
+    /// <summary>The snapshot's duration and audio hash, for a copy that has no chapters to snapshot.</summary>
+    private static (long Duration50Ms, string AudioHash) M4bAudio(string path)
+    {
+        using var file = TagLib.File.Create(path);
+        return ((long)Math.Round(file.Properties.Duration.TotalMilliseconds / 50), TagRoundTripTests.Mp4AudioHash(path));
+    }
+
     [Fact]
     public void An_mp3_copy_gets_every_tag_and_only_the_cover_and_keeps_chapters_audio_and_other_tags()
     {
@@ -126,7 +133,7 @@ public class TagWriterTests : IDisposable
     }
 
     [Fact]
-    public void An_m4b_copy_has_no_chpl_and_gets_every_tag_and_the_cover_and_keeps_chapters_audio_and_other_tags()
+    public void An_m4b_copy_has_no_chpl_and_gets_every_tag_and_the_cover_and_drops_chapters_and_keeps_audio_and_other_tags()
     {
         var source = M4bSource();
         Assert.NotNull(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(source), "moov", "udta", "chpl"));
@@ -136,9 +143,10 @@ public class TagWriterTests : IDisposable
 
         _writer.Write(source, temp, Full);
 
-        // Chapters now come only from the QuickTime chapter track: same titles and starts through ChapterReader.
+        // M4B copies carry no chapters (2026-10-21 decision): neither chpl nor a QuickTime chapter track.
         Assert.Null(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(temp), "moov", "udta", "chpl"));
-        Assert.Equal(before, TagRoundTripTests.Snapshot(temp, TagRoundTripTests.Mp4AudioHash));
+        Assert.Empty(ChapterReaderTests.NewReader().Read(temp));
+        Assert.Equal((before.Duration50Ms, before.AudioHash), M4bAudio(temp));
         Assert.Empty(Directory.GetFiles(_dir, "*.cover.*"));
         using var file = TagLib.File.Create(temp, "audio/mp4", TagLib.ReadStyle.Average);
         var tag = file.Tag;
@@ -304,7 +312,7 @@ public class TagWriterTests : IDisposable
     }
 
     [Fact]
-    public void An_m4b_copy_gets_the_scripts_book_atoms_has_no_chpl_and_keeps_chapters_and_audio()
+    public void An_m4b_copy_gets_the_scripts_book_atoms_has_no_chpl_and_drops_chapters_and_keeps_audio()
     {
         var source = M4bSource();
         var sourceHash = Hash(source);
@@ -314,8 +322,8 @@ public class TagWriterTests : IDisposable
         _writer.Write(source, temp, Full);
 
         Assert.Null(M4bFreeformSpikeTests.FindPath(File.ReadAllBytes(temp), "moov", "udta", "chpl"));
-        Assert.Equal(before, TagRoundTripTests.Snapshot(temp, TagRoundTripTests.Mp4AudioHash));
-        Assert.Equal(3, ChapterReaderTests.NewReader().Read(temp).Count);
+        Assert.Empty(ChapterReaderTests.NewReader().Read(temp));
+        Assert.Equal((before.Duration50Ms, before.AudioHash), M4bAudio(temp));
         using var file = TagLib.File.Create(temp, "audio/mp4", TagLib.ReadStyle.Average);
         var apple = Apple(file);
         Assert.Equal(["Nora Narrator, Ned Reader"], apple.GetText(Writer));
