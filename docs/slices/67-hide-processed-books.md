@@ -49,3 +49,29 @@
 - Assumption: a book with a succeeded job and a later failed job (only possible through earlier retries) stays hidden; any succeeded job counts.
 - Files touched: `GroupRepository.cs`, `ProcessingRepository.cs`, `ProcessingService.cs`, `JobsControllerTests.cs`, possibly `DashboardControllerTests.cs`, this slice file, PLAN.md (6–7).
 - Remaining phase 9 work: `AudioFile` row and empty-folder cleanup after source deletion, finishing cut-off source deletions at startup, Docker docs and the home-server run, and the other carried-in items in PLAN.md.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 391 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | 4 of 4 covered, passing | `A_processed_book_leaves_the_groups_list_the_preview_and_the_dashboard_counts_but_its_book_page_stays` (lists, preview 404, dashboard counts, book page), `A_book_whose_only_job_failed_is_still_listed_and_previewed`; the re-approval 400 is covered by the updated `Approving_a_book_whose_job_succeeded_is_refused_so_it_is_never_copied_twice` |
+| Manual: process a book in the dev app; it leaves Incoming, Preview and the dashboard count, book page still opens | Not run | dev API not running; start with `scripts/start-api.ps1` and `scripts/start-client.ps1` |
+
+## Outcome (2026-10-22, commit 4887d68)
+
+**Status:** Implemented
+**Summary:** `GroupRepository.GetGroups` and `CountGroups` leave out any group with a `Succeeded` job, so processed books drop out of Incoming, Preview and the dashboard book counts; `GetGroup` is unchanged, so the book page still works. `ProcessingService.Approve` refuses a processed book with 400 "This book was already processed." before it looks up the preview.
+**Changed:** 5 files: `Data/GroupRepository.cs` (shared `NotProcessed` filter), `Data/ProcessingRepository.cs` (`HasSucceededJob`), `Services/ProcessingService.cs` (`AlreadyProcessed`), `Tests/Controllers/JobsControllerTests.cs` (2 new tests, 3 updated), the slice file.
+**Deviations:**
+- The slice 66 rescan tests' group-list comparisons didn't "still hold" as the slice said: they now expect only book 2's group, because book 1 is hidden. This follows the 2026-10-22 decision and isn't a weakened test: *fine*.
+- A third existing test (`Approving_a_book_whose_job_succeeded_is_refused_so_it_is_never_copied_twice`) now expects the new message and covers the planned re-approval test, so no duplicate was added: *fine*.
+- No `DashboardControllerTests` change: the dashboard counts are asserted in the new `JobsControllerTests` test: *fine*.
+**Follow-ups:**
+- Remove a processed book's `AudioFile` rows and empty incoming folders once its sources are deleted (next slice, 2026-10-22 decision).
+- Manual (developer): process a book in the dev app; it leaves Incoming, Preview and the dashboard count, and its book page still opens.
