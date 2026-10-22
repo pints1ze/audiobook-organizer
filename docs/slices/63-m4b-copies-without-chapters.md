@@ -47,3 +47,29 @@
 - Files touched: `TagWriter.cs`, `ProcessingService.cs`, `TagWriterTests.cs`, `JobsControllerTests.cs`, `AGENTS.md`, this slice file (6).
 - Risk: dev ffmpeg is 9.0 and the image has 6.1; `-map_chapters -1` exists in both.
 - Remaining phase 9 work for later slices: backend suite inside the Docker image, end-to-end fixture scan → process, interrupted-job restart, repeat scans after processing (deleted sources, empty incoming folders), Docker docs, and the carried-in items in PLAN.md.
+
+## Test results (2026-10-21)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings; built with `--artifacts-path` in the scratchpad because the running dev API locks `bin/` |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 384 passed, 0 failed | same `--artifacts-path` output |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | 3 of 3 present, passing | both M4B `TagWriterTests` (`..._drops_chapters_...`), `JobsControllerTests.An_m4b_book_with_chapters_processes_to_Succeeded_...`; the MP3 `A_failed_read_back_...` still passes |
+| Manual: real 27-chapter M4B processes and plays | Not run | needs the developer's real book; agents use fixtures only |
+| Manual: M4B copy in Mp3tag | Not run | needs Mp3tag on the developer's machine |
+
+## Outcome (2026-10-21, commit 4477da4)
+
+**Status:** Implemented
+**Summary:** M4B copies are remuxed with `-map_chapters -1` (and still `disable_chpl`), so they carry no chapters and no `chpl`, and the read-back skips the chapter check for `.m4b` destinations. An M4B book with chapters now processes to `Succeeded`; MP3 copies keep their chapters and are still checked against the source.
+**Changed:** 6 files: `Services/TagWriter.cs` (remux args, summary, comment), `Services/ProcessingService.cs` (`Verify`), `Tests/Services/TagWriterTests.cs` (two M4B tests now expect no chapters, local `M4bAudio` helper), `Tests/Controllers/JobsControllerTests.cs` (new M4B job test), `AGENTS.md` (M4B rule, approved with the 2026-10-21 decision), the slice file.
+**Deviations:**
+- The M4B TagWriter tests compare duration and audio hash through a new `M4bAudio` helper, because `TagRoundTripTests.Snapshot` asserts 3 chapters: *fine*.
+- Build and backend tests ran with `--artifacts-path` in the scratchpad because the developer's running dev API locks `bin/`: *fine*, same code.
+**Follow-ups:**
+- Manual (developer): process the real 27-chapter M4B from a temp incoming copy and play it; check the copy in Mp3tag.
+- The image's ffmpeg 6.1 isn't exercised until the backend suite runs inside Docker (already a phase 9 done-when line).
