@@ -20,7 +20,7 @@ _Updated: slice 66 review, 2026-10-22, commit f1409d1_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64) interrupted-job cleanup (65) and the scan → process → rescan tests (66) are done; the processed-books question, Docker docs and the home-server run remain (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64) interrupted-job cleanup (65) and the scan → process → rescan tests (66) are done; hiding and cleaning up processed books, finishing a cut-off job's source deletions at startup, Docker docs and the home-server run remain (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
 - Last: 66 rescan-after-processing, Implemented
@@ -30,8 +30,6 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
-- After a book is processed, should it leave the Incoming and Preview lists, and should its `AudioFile` rows and empty incoming folders be removed once its sources are deleted? (slice 57's carried-in item, pinned by slice 66's tests)
-- Should a job cut off while deleting sources (every copy verified) finish the deletions at startup and be marked `Succeeded`, instead of failing with its copies kept? (raised in slice 65)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
@@ -92,6 +90,8 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 - 2026-10-20 (developer, slice 61): M4B uses candidate B: copies carry chapters only in the QuickTime chapter track (ffmpeg `disable_chpl`) and are tagged by TagLibSharp; players that read only `chpl` lose chapters. AGENTS.md updated.
 - 2026-10-21 (developer): M4B copies carry no chapters (option A): a real book's copy kept 6 of 27 chapters and failed its read-back. The M4B remux drops chapters and the read-back skips the chapter check for M4B; MP3 keeps its chapters. AGENTS.md's M4B rule changes with the slice.
 - 2026-10-22 (developer): the track tag is the bare position ("1"), with no total: MP3 `TRCK` is written directly because TagLibSharp pads it, and any source total is cleared. Copies made before this keep "01/39".
+- 2026-10-22 (developer): a processed book (its job `Succeeded`) leaves the Incoming and Preview lists. Once its sources are deleted, their `AudioFile` rows and the incoming folders left empty are removed too.
+- 2026-10-22 (developer): at startup, an interrupted job that already has a `SourceDeleted` file (so every copy verified) finishes deleting the remaining sources and is marked `Succeeded`, instead of failing with its copies kept.
 - 2026-10-22 (slice 65): startup cleanup of an interrupted job reuses `RemoveCopies`; a job with a `SourceDeleted` file keeps every copy, and a `Pending` file's destination is never deleted (a cut-off copy there blocks a retry; shortcut).
 - 2026-10-22 (slice 64): the backend suite runs in a `test` stage of the Dockerfile on the SDK image the build stage already uses; the runtime stage doesn't depend on it.
 - 2026-10-21: phase 8 browser checks (slices 54–62) passed against fixture copies with Playwright; Mp3tag and player checks remain.
