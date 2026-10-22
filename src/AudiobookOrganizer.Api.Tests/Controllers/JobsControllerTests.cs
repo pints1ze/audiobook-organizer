@@ -54,10 +54,12 @@ public class JobsControllerTests : IDisposable
         return ids;
     }
 
-    private static async Task Scan(HttpClient client)
+    private static async Task<JsonElement> Scan(HttpClient client)
     {
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync("/api/scans", null)).StatusCode);
-        Assert.Equal("Completed", (await ScanTestFolders.WaitForFinish(client)).GetProperty("status").GetString());
+        var run = await ScanTestFolders.WaitForFinish(client);
+        Assert.Equal("Completed", run.GetProperty("status").GetString());
+        return run;
     }
 
     private static async Task<List<long>> GroupIds(HttpClient client)
@@ -664,6 +666,92 @@ public class JobsControllerTests : IDisposable
             (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
         Assert.Single(await Jobs(client));
         Assert.Equal(libraryBefore, Snapshot(_folders.Library));
+    }
+
+    /// <summary>The groups' ids plus the unresolved and excluded file ids, as GET /api/groups lists them.</summary>
+    private static async Task<(List<long> Groups, List<long> Unresolved, List<long> Excluded)> GroupList(HttpClient client)
+    {
+        var list = await ScansControllerTests.ReadJson(await client.GetAsync("/api/groups"));
+        List<long> Ids(string name, string id) => list.GetProperty(name).EnumerateArray().Select(e => e.GetProperty(id).GetInt64()).ToList();
+        return (Ids("groups", "id"), Ids("unresolved", "fileId"), Ids("excluded", "fileId"));
+    }
+
+    [Fact]
+    public async Task After_processing_with_keep_source_off_a_rescan_keeps_the_groups_and_the_book_cant_be_processed_again()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.All(Sources(done), s => Assert.False(File.Exists(s)));
+        var listBefore = await GroupList(client);
+        Assert.Empty(listBefore.Unresolved);
+        Assert.Empty(listBefore.Excluded);
+        var libraryBefore = Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order().ToList();
+        Assert.Equal(Destinations(done).Order(), libraryBefore);
+
+        var rescan = await Scan(client);
+
+        Assert.Equal(2, rescan.GetProperty("filesMissing").GetInt32());
+        var listAfter = await GroupList(client);
+        Assert.Equal(ids, listAfter.Groups);
+        Assert.Empty(listAfter.Unresolved);
+        Assert.Empty(listAfter.Excluded);
+        var again = await Approve(client, ids[0]);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal($"A file is already at {firstFile}.",
+            (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
+        Assert.Single(await Jobs(client));
+        Assert.Equal(libraryBefore, Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+
+        // The untouched second book still processes normally after the rescan.
+        var second = await WaitForJob(client, (await ApproveJob(client, ids[1])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", second.GetProperty("status").GetString());
+        Assert.All(second.GetProperty("files").EnumerateArray(), f => Assert.Equal("SourceDeleted", f.GetProperty("status").GetString()));
+        Assert.Equal(libraryBefore.Concat(Destinations(second)).Order(),
+            Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+    }
+
+    [Fact]
+    public async Task After_processing_with_keep_source_on_a_rescan_finds_the_sources_unchanged_and_leaves_groups_and_library_alone()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
+        var ids = await ScanTwoBooks(client);
+        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        var listBefore = await GroupList(client);
+        Assert.Empty(listBefore.Unresolved);
+        Assert.Empty(listBefore.Excluded);
+        var libraryBefore = Snapshot(_folders.Library);
+        Assert.Equal(Destinations(done).Order(), libraryBefore.Select(e => e.Split('|')[0]));
+
+        var rescan = await Scan(client);
+
+        Assert.All(Sources(done), s => Assert.True(File.Exists(s)));
+        // All four sources (book 1's included) are unchanged; none is new, updated or missing.
+        Assert.Equal((4, 0, 0, 0), (rescan.GetProperty("filesUnchanged").GetInt32(), rescan.GetProperty("filesAdded").GetInt32(),
+            rescan.GetProperty("filesUpdated").GetInt32(), rescan.GetProperty("filesMissing").GetInt32()));
+        var listAfter = await GroupList(client);
+        Assert.Equal(ids, listAfter.Groups);
+        Assert.Empty(listAfter.Unresolved);
+        Assert.Empty(listAfter.Excluded);
+        var again = await Approve(client, ids[0]);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal($"A file is already at {firstFile}.",
+            (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
+        Assert.Single(await Jobs(client));
+        Assert.Equal(libraryBefore, Snapshot(_folders.Library));
+
+        // The untouched second book still processes normally after the rescan.
+        var second = await WaitForJob(client, (await ApproveJob(client, ids[1])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", second.GetProperty("status").GetString());
+        Assert.All(second.GetProperty("files").EnumerateArray(), f => Assert.Equal("Copied", f.GetProperty("status").GetString()));
+        Assert.Equal(libraryBefore.Select(e => e.Split('|')[0]).Concat(Destinations(second)).Order(),
+            Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
     }
 
     [Fact]
