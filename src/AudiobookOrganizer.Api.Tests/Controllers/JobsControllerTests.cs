@@ -356,7 +356,7 @@ public class JobsControllerTests : IDisposable
             Assert.Equal(("First Book", "First Book"), (tagged.Tag.Title, tagged.Tag.Album));
             Assert.Equal(["Ann Author"], tagged.Tag.Performers);
             Assert.Equal(["Ann Author"], tagged.Tag.AlbumArtists);
-            Assert.Equal(((uint)i + 1, 2u), (tagged.Tag.Track, tagged.Tag.TrackCount));
+            Assert.Equal(((uint)i + 1, 0u), (tagged.Tag.Track, tagged.Tag.TrackCount));
             Assert.Equal(TagRoundTripTests.CoverJpeg, Assert.Single(tagged.Tag.Pictures).Data.Data);
         }
         Assert.Empty(PartialFiles());

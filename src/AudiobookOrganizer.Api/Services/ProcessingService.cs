@@ -166,7 +166,7 @@ public class ProcessingService(
         var discs = groups.GetGroupFiles(groupId).ToDictionary(f => f.FileId, f => f.Disc);
 
         return files.Select((file, index) => new BookTags(
-            fields.Title.Value, artists, genres, year, index + 1, files.Count,
+            fields.Title.Value, artists, genres, year, index + 1,
             discs.GetValueOrDefault(file.AudioFileId), cover)
         {
             Narrators = narrators,

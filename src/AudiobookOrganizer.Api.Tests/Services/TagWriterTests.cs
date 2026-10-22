@@ -13,7 +13,6 @@ public class TagWriterTests : IDisposable
         Genres: ["Fantasy", "Adventure"],
         Year: 2001,
         Track: 2,
-        TrackCount: 3,
         Disc: 1,
         Cover: Cover)
     {
@@ -31,7 +30,7 @@ public class TagWriterTests : IDisposable
 
     /// <summary>A book with only the standard tags: none of the script's book fields.</summary>
     private static readonly BookTags Plain = new(
-        Title: "The Book", Artists: ["Ann Author"], Genres: [], Year: null, Track: 1, TrackCount: 1, Disc: null, Cover: null);
+        Title: "The Book", Artists: ["Ann Author"], Genres: [], Year: null, Track: 1, Disc: null, Cover: null);
 
     private const string ITunes = "com.apple.iTunes";
 
@@ -123,7 +122,11 @@ public class TagWriterTests : IDisposable
         Assert.Equal(["Ann Author", "Bob Writer"], tag.AlbumArtists);
         Assert.Equal(["Fantasy", "Adventure"], tag.Genres);
         Assert.Equal(2001u, tag.Year);
-        Assert.Equal((2u, 3u, 1u), (tag.Track, tag.TrackCount, tag.Disc));
+        Assert.Equal((2u, 0u, 1u), (tag.Track, tag.TrackCount, tag.Disc));
+        // The track frame is the bare position: no zero padding and no "/count".
+        var trck = TagLib.Id3v2.TextInformationFrame.Get((TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2), "TRCK", false);
+        Assert.NotNull(trck);
+        Assert.Equal(["2"], trck.Text);
         var picture = Assert.Single(tag.Pictures);
         Assert.Equal(TagLib.PictureType.FrontCover, picture.Type);
         Assert.Equal("image/jpeg", picture.MimeType);
@@ -156,7 +159,7 @@ public class TagWriterTests : IDisposable
         Assert.Equal(["Ann Author, Bob Writer"], tag.AlbumArtists);
         Assert.Equal(["Fantasy, Adventure"], tag.Genres);
         Assert.Equal(2001u, tag.Year);
-        Assert.Equal((2u, 3u, 1u), (tag.Track, tag.TrackCount, tag.Disc));
+        Assert.Equal((2u, 0u, 1u), (tag.Track, tag.TrackCount, tag.Disc));
         var picture = Assert.Single(tag.Pictures);
         Assert.Equal(TagRoundTripTests.CoverJpeg, picture.Data.Data);
         Assert.Equal("Source comment", tag.Comment);

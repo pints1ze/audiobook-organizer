@@ -14,7 +14,6 @@ public record BookTags(
     IReadOnlyList<string> Genres,
     int? Year,
     int Track,
-    int TrackCount,
     int? Disc,
     TagCover? Cover)
 {
@@ -146,6 +145,7 @@ public class TagWriter(FfmpegRunner ffmpeg)
         if (tags.AlbumSort is { } sort) tag.AlbumSort = sort;
         SetText("TLAN", tags.Language);
         SetText("TPUB", tags.Publisher);
+        SetText("TRCK", tags.Track.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SetUser("FORMAT", tags.Format);
         SetUser("ISBN", tags.Isbn);
         SetUser("ASIN", tags.Asin);
@@ -222,7 +222,9 @@ public class TagWriter(FfmpegRunner ffmpeg)
         if (tags.Genres.Count > 0) tag.Genres = List(tags.Genres);
         if (tags.Year is { } year) tag.Year = (uint)year;
         tag.Track = (uint)tags.Track;
-        tag.TrackCount = (uint)tags.TrackCount;
+        // The track tag is the bare position ("1", not "01/39"), so any count the source had is cleared. MP3 also
+        // rewrites TRCK in ApplyMp3BookFrames, because TagLibSharp pads it to two digits.
+        tag.TrackCount = 0;
         if (tags.Disc is { } disc) tag.Disc = (uint)disc;
         if (tags.Cover is { } cover)
             tag.Pictures =
