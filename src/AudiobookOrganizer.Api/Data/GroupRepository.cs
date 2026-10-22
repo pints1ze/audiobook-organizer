@@ -67,17 +67,28 @@ public class GroupRepository(SqliteConnectionFactory connections)
     private const string GroupColumns =
         "Id, Title, Author, Confidence, EvidenceJson, FileCount, TotalDurationMs, ScanRunId, UserCorrected";
 
-    /// <summary>Every group, the ones needing review first: Low, Medium, High, then by title.</summary>
+    /// <summary>
+    /// Leaves out groups that were processed (any Succeeded job). Needs the <c>succeeded</c> parameter, from
+    /// <see cref="NotProcessedParameters"/>.
+    /// </summary>
+    private const string NotProcessed =
+        "NOT EXISTS (SELECT 1 FROM ProcessingJob j WHERE j.GroupId = FileGroup.Id AND j.Status = @succeeded)";
+
+    private static readonly object NotProcessedParameters = new { succeeded = ProcessingJob.Succeeded };
+
+    /// <summary>Every group not yet processed, the ones needing review first: Low, Medium, High, then by title.</summary>
     public IReadOnlyList<FileGroup> GetGroups()
     {
         using var connection = connections.Open();
         return connection.Query<FileGroup>(
             $"""
             SELECT {GroupColumns} FROM FileGroup
+            WHERE {NotProcessed}
             ORDER BY CASE Confidence WHEN 'Low' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, Title COLLATE NOCASE, Id
-            """).ToList();
+            """, NotProcessedParameters).ToList();
     }
 
+    /// <summary>The group, processed or not.</summary>
     public FileGroup? GetGroup(long id)
     {
         using var connection = connections.Open();
@@ -289,19 +300,23 @@ public class GroupRepository(SqliteConnectionFactory connections)
             .ToDictionary(r => r.Id, r => (r.UserState, r.Grouped != 0));
     }
 
-    /// <summary>How many groups there are, by confidence, and how many the user corrected. Zeros when there are none.</summary>
+    /// <summary>
+    /// How many groups not yet processed there are, by confidence, and how many the user corrected. Zeros when there
+    /// are none.
+    /// </summary>
     public GroupCounts CountGroups()
     {
         using var connection = connections.Open();
         return connection.QuerySingle<GroupCounts>(
-            """
+            $"""
             SELECT COUNT(*) AS Total,
                 COALESCE(SUM(CASE WHEN Confidence = 'Low' THEN 1 ELSE 0 END), 0) AS Low,
                 COALESCE(SUM(CASE WHEN Confidence = 'Medium' THEN 1 ELSE 0 END), 0) AS Medium,
                 COALESCE(SUM(CASE WHEN Confidence = 'High' THEN 1 ELSE 0 END), 0) AS High,
                 COALESCE(SUM(CASE WHEN UserCorrected = 1 THEN 1 ELSE 0 END), 0) AS Corrected
             FROM FileGroup
-            """);
+            WHERE {NotProcessed}
+            """, NotProcessedParameters);
     }
 
     /// <summary>

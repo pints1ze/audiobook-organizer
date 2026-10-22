@@ -4,12 +4,12 @@
 **Goal:** a book whose processing job succeeded leaves the Incoming list, the Preview page and the dashboard book counts, and approving it again is refused with a clear reason.
 
 ## Done when
-- [ ] `GET /api/groups` doesn't list a group that has a `Succeeded` job; groups with only failed, queued or running jobs (or none) are still listed
-- [ ] `GET /api/preview` leaves the processed book out of its books and counts, and `GET /api/groups/{id}/preview` for it is 404
-- [ ] `GET /api/dashboard` book counts (total, by confidence, corrected) leave processed books out
-- [ ] `POST /api/jobs` for a processed book is 400 with "This book was already processed."
-- [ ] the book page (`GET /api/groups/{id}`, metadata, cover) still works for a processed book, and the Jobs page still lists its job
-- [ ] all four checks pass (build, backend tests, typecheck, frontend tests)
+- [x] `GET /api/groups` doesn't list a group that has a `Succeeded` job; groups with only failed, queued or running jobs (or none) are still listed
+- [x] `GET /api/preview` leaves the processed book out of its books and counts, and `GET /api/groups/{id}/preview` for it is 404
+- [x] `GET /api/dashboard` book counts (total, by confidence, corrected) leave processed books out
+- [x] `POST /api/jobs` for a processed book is 400 with "This book was already processed."
+- [x] the book page (`GET /api/groups/{id}`, metadata, cover) still works for a processed book, and the Jobs page still lists its job
+- [x] all four checks pass (build, backend tests, typecheck, frontend tests)
 
 ## Read first
 - `src/AudiobookOrganizer.Api/Data/GroupRepository.cs`: `GetGroups` (~71) and `CountGroups` (~293), the only list and count queries
@@ -19,11 +19,11 @@
 - `docs/CURRENT-STATE.md`, Decisions dated 2026-10-22 (processed books leave the lists)
 
 ## Tasks
-- [ ] Write the tests below in `JobsControllerTests.cs` first and watch them fail.
-- [ ] In `GroupRepository`, add one shared SQL condition (a `const string`, e.g. `NotProcessed`) — `NOT EXISTS (SELECT 1 FROM ProcessingJob j WHERE j.GroupId = FileGroup.Id AND j.Status = 'Succeeded')` (pass the status as a parameter from `ProcessingJob.Succeeded`) — and apply it in `GetGroups` and `CountGroups`. `GroupingService.List`, `NamingPreviewService.PreviewAll`/`Preview` and `DashboardService` then follow without changes. Leave `GetGroup` alone so the book page keeps working.
-- [ ] In `ProcessingRepository`, add `HasSucceededJob(long groupId)` beside `HasActiveJob`. In `ProcessingService.Approve`, before the preview lookup, return `Invalid` with `"This book was already processed."` (a `public const` on the service) when the group has a succeeded job. Without this the hidden preview would make it a 404.
-- [ ] Update the two slice 66 rescan tests: their second-approval assertion now expects the new message instead of "A file is already at …", and their group-list comparisons still hold (both lists are taken after processing). This follows the 2026-10-22 decision; it isn't a weakened test.
-- [ ] Run all four checks.
+- [x] Write the tests below in `JobsControllerTests.cs` first and watch them fail.
+- [x] In `GroupRepository`, add one shared SQL condition (a `const string`, e.g. `NotProcessed`) — `NOT EXISTS (SELECT 1 FROM ProcessingJob j WHERE j.GroupId = FileGroup.Id AND j.Status = 'Succeeded')` (pass the status as a parameter from `ProcessingJob.Succeeded`) — and apply it in `GetGroups` and `CountGroups`. `GroupingService.List`, `NamingPreviewService.PreviewAll`/`Preview` and `DashboardService` then follow without changes. Leave `GetGroup` alone so the book page keeps working.
+- [x] In `ProcessingRepository`, add `HasSucceededJob(long groupId)` beside `HasActiveJob`. In `ProcessingService.Approve`, before the preview lookup, return `Invalid` with `"This book was already processed."` (a `public const` on the service) when the group has a succeeded job. Without this the hidden preview would make it a 404.
+- [x] Update the two slice 66 rescan tests: their second-approval assertion now expects the new message instead of "A file is already at …", and their group-list comparisons still hold (both lists are taken after processing). This follows the 2026-10-22 decision; it isn't a weakened test.
+- [x] Run all four checks.
 - Data: none (a query filter; no schema change)
 - Auth: none
 - Accessibility: none (no UI change; the pages just receive fewer books)

@@ -30,6 +30,7 @@ public class ProcessingService(
     public const string BookGone = "The book is no longer in the library.";
     public const string SourceChanged = "The source changed after it was copied, so it was kept.";
     public const string SourceNotDeleted = "The copy is in place, but the source couldn't be deleted: ";
+    public const string AlreadyProcessed = "This book was already processed.";
 
     /// <summary>What a source was just before its copy was written: its tags, size and last write time.</summary>
     private record SourceFacts(AudioFileMetadata Read, long Size, DateTime LastWriteUtc);
@@ -39,13 +40,15 @@ public class ProcessingService(
 
     /// <summary>
     /// Queues a job for the group when its preview is clean, snapshotting each file's source and destination in book
-    /// order. Refused (Invalid) for no files, an error, missing values, a duplicate target or an existing destination,
-    /// in that order; Conflict when the book already has a Queued or Running job.
+    /// order. Refused (Invalid) for a book already processed, no files, an error, missing values, a duplicate target or
+    /// an existing destination, in that order; Conflict when the book already has a Queued or Running job.
     /// </summary>
     public ApproveResult Approve(long groupId)
     {
         lock (_lock)
         {
+            // A processed book is hidden from the preview, so check this first or it would be a 404.
+            if (jobs.HasSucceededJob(groupId)) return new ApproveResult(ApproveOutcome.Invalid, Message: AlreadyProcessed);
             if (previews.Preview(groupId) is not { } preview) return new ApproveResult(ApproveOutcome.NotFound);
             if (jobs.HasActiveJob(groupId)) return new ApproveResult(ApproveOutcome.Conflict);
             if (Refusal(preview.Files) is { } message) return new ApproveResult(ApproveOutcome.Invalid, Message: message);

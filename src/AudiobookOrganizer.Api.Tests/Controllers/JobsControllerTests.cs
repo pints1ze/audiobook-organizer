@@ -654,7 +654,6 @@ public class JobsControllerTests : IDisposable
         var client = _factory.CreateClient();
         await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
         var ids = await ScanTwoBooks(client);
-        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
         var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
         Assert.Equal("Succeeded", done.GetProperty("status").GetString());
         var libraryBefore = Snapshot(_folders.Library);
@@ -662,10 +661,58 @@ public class JobsControllerTests : IDisposable
         var again = await Approve(client, ids[0]);
 
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
-        Assert.Equal($"A file is already at {firstFile}.",
+        Assert.Equal(ProcessingService.AlreadyProcessed,
             (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
         Assert.Single(await Jobs(client));
         Assert.Equal(libraryBefore, Snapshot(_folders.Library));
+    }
+
+    [Fact]
+    public async Task A_processed_book_leaves_the_groups_list_the_preview_and_the_dashboard_counts_but_its_book_page_stays()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+        var dashboardBefore = await ScansControllerTests.ReadJson(await client.GetAsync("/api/dashboard"));
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+
+        Assert.Equal([ids[1]], await GroupIds(client));
+        var preview = await ScansControllerTests.ReadJson(await client.GetAsync("/api/preview"));
+        Assert.Equal([ids[1]], preview.GetProperty("books").EnumerateArray().Select(b => b.GetProperty("groupId").GetInt64()));
+        Assert.Equal(2, preview.GetProperty("counts").GetProperty("files").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/groups/{ids[0]}/preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}/metadata")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}/cover")).StatusCode);
+        Assert.Equal(done.GetProperty("id").GetInt64(), Assert.Single(await Jobs(client)).GetProperty("id").GetInt64());
+        var dashboard = await ScansControllerTests.ReadJson(await client.GetAsync("/api/dashboard"));
+        Assert.Equal(2, dashboardBefore.GetProperty("bookCount").GetInt32());
+        Assert.Equal(1, dashboard.GetProperty("bookCount").GetInt32());
+        Assert.Equal(1, dashboard.GetProperty("correctedBookCount").GetInt32());
+        var byConfidence = dashboard.GetProperty("booksByConfidence");
+        Assert.Equal(1, byConfidence.GetProperty("low").GetInt32() + byConfidence.GetProperty("medium").GetInt32()
+            + byConfidence.GetProperty("high").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_book_whose_only_job_failed_is_still_listed_and_previewed()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var destinations = Destinations(created);
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[1])!);
+        File.WriteAllText(destinations[1], "someone else's file");
+        var client = _factory.CreateClient();
+        Assert.Equal("Failed", (await WaitForJob(client, created.GetProperty("id").GetInt64())).GetProperty("status").GetString());
+
+        Assert.Equal(ids.Order(), (await GroupIds(client)).Order());
+        var preview = await ScansControllerTests.ReadJson(await client.GetAsync("/api/preview"));
+        Assert.Equal(ids.Order(), preview.GetProperty("books").EnumerateArray().Select(b => b.GetProperty("groupId").GetInt64()).Order());
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}/preview")).StatusCode);
     }
 
     /// <summary>The groups' ids plus the unresolved and excluded file ids, as GET /api/groups lists them.</summary>
@@ -682,7 +729,6 @@ public class JobsControllerTests : IDisposable
         var client = _factory.CreateClient();
         await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
         var ids = await ScanTwoBooks(client);
-        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
         var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
         Assert.Equal("Succeeded", done.GetProperty("status").GetString());
         Assert.All(Sources(done), s => Assert.False(File.Exists(s)));
@@ -696,12 +742,12 @@ public class JobsControllerTests : IDisposable
 
         Assert.Equal(2, rescan.GetProperty("filesMissing").GetInt32());
         var listAfter = await GroupList(client);
-        Assert.Equal(ids, listAfter.Groups);
+        Assert.Equal([ids[1]], listAfter.Groups);
         Assert.Empty(listAfter.Unresolved);
         Assert.Empty(listAfter.Excluded);
         var again = await Approve(client, ids[0]);
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
-        Assert.Equal($"A file is already at {firstFile}.",
+        Assert.Equal(ProcessingService.AlreadyProcessed,
             (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
         Assert.Single(await Jobs(client));
         Assert.Equal(libraryBefore, Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
@@ -720,7 +766,6 @@ public class JobsControllerTests : IDisposable
         var client = _factory.CreateClient();
         await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
         var ids = await ScanTwoBooks(client);
-        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
         var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
         Assert.Equal("Succeeded", done.GetProperty("status").GetString());
         var listBefore = await GroupList(client);
@@ -736,12 +781,12 @@ public class JobsControllerTests : IDisposable
         Assert.Equal((4, 0, 0, 0), (rescan.GetProperty("filesUnchanged").GetInt32(), rescan.GetProperty("filesAdded").GetInt32(),
             rescan.GetProperty("filesUpdated").GetInt32(), rescan.GetProperty("filesMissing").GetInt32()));
         var listAfter = await GroupList(client);
-        Assert.Equal(ids, listAfter.Groups);
+        Assert.Equal([ids[1]], listAfter.Groups);
         Assert.Empty(listAfter.Unresolved);
         Assert.Empty(listAfter.Excluded);
         var again = await Approve(client, ids[0]);
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
-        Assert.Equal($"A file is already at {firstFile}.",
+        Assert.Equal(ProcessingService.AlreadyProcessed,
             (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
         Assert.Single(await Jobs(client));
         Assert.Equal(libraryBefore, Snapshot(_folders.Library));
