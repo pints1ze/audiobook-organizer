@@ -45,3 +45,28 @@
 - Assumption: a group whose files are all removed is kept (it carries the book's metadata, cover and job link) and stays hidden.
 - Files touched: `GroupRepository.cs`, `ProcessingService.cs`, `JobsControllerTests.cs`, this slice file, PLAN.md (5).
 - Remaining phase 9 work: finishing cut-off source deletions at startup, Docker docs and the home-server run, and the other carried-in items in PLAN.md.
+
+## Test results (2026-10-22)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings |
+| Typecheck | Passed | `npx tsc -b --noEmit` |
+| Backend tests | 395 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | the accepted `JobsPage` Retry flake didn't occur |
+| New tests | 4 of 4 present, passing | rows and emptied folder removed with job history kept and rescan `filesMissing` 0; a `cover.jpg` keeps the folder; keep-source on keeps rows and folder; nested `author/title` folders both removed |
+| Manual: process a book with keep-source off in the dev app; folder gone, missing count 0 after rescan, Jobs page keeps the files | Not run | dev API not running; start with `scripts/start.ps1` |
+
+## Outcome (2026-10-22, commit 97068af)
+
+**Status:** Implemented
+**Summary:** When a job's sources are deleted, `ProcessingService.DeleteSources` now removes the `SourceDeleted` files' `FileGroupFile` and `AudioFile` rows (`GroupRepository.RemoveFiles`, one transaction) and deletes each source folder and parent left empty, stopping before the incoming root. Job history is untouched, and a rescan reports no missing files for the processed book.
+**Changed:** 5 files: `Data/GroupRepository.cs` (`RemoveFiles`), `Services/ProcessingService.cs` (`RemoveEmptyFolders`, `IsStrictlyUnder`), `Tests/Controllers/JobsControllerTests.cs` (4 new tests; the slice 66 rescan now expects `filesMissing` 0), the slice file, and `scripts/start.ps1`.
+**Deviations:**
+- `scripts/start.ps1` was added by the developer during the slice and committed with the feat commit; the old start scripts were removed and AGENTS.md updated in `4a4fc52`: *fine*.
+**Follow-ups:**
+- No test covers a source kept because it changed or couldn't be deleted keeping its row; the code removes only `SourceDeleted` files.
+- Finishing a cut-off job's source deletions at startup (2026-10-22 decision) can reuse this cleanup.
+- Manual (developer): process a book with keep-source off in the dev app; its folder goes, the missing count stays 0 after a rescan, the Jobs page keeps its files.
