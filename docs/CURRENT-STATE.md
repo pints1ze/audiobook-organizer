@@ -24,17 +24,17 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 
 ## Last slice / next slice
 - Last: 71 windows-docker-deploy, Implemented
-- Next: none planned until the developer's first run from DEPLOY.md; then the PR, or slices for the carried-in polish items if they stay in phase 9.
+- Next: 72 log-files (written); then the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover").
 
 ## Open questions
-- AGENTS.md says logs live under `/data`, but Serilog writes only to the console. Change the AGENTS.md line, or add a file sink (new package)? (raised in slice 70)
-- Do the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover") stay in phase 9 or move to a later phase? (raised in slice 70)
+- The developer runs the container on the server that hosts Audiobookshelf, not Docker Desktop on the Windows machine as AGENTS.md, PLAN.md and DEPLOY.md say (slice 71). Update those docs to the real host? (raised 2026-10-23)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-23 (developer): the deployed container works (run on the Audiobookshelf server). The carried-in polish items stay in phase 9. Logs are written to rolling files under `/data/logs` with Serilog's file sink, already a dependency of `Serilog.AspNetCore` (slice 72).
 - 2026-10-22 (developer): the app is hosted in Docker Desktop on the developer's Windows machine, compose under `C:\docker\audiobook-organizer\`, image built from the repo; `/data` is a named volume; `/incoming` and `/library` are CIFS volumes on `\\cookserv\d` (mapped as `Y:`). AGENTS.md, the PRD and PLAN.md updated with the developer's OK (slice 71).
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
 - 2026-10-18: SQLite + Dapper, not PostgreSQL. One user, one file on a mounted volume.

@@ -113,13 +113,20 @@ Then open `http://<windows-pc>:8080` from the other device. Keep the network pro
 
 ## 7. Logs
 
-The app logs to the console only (Serilog), so read them through Docker, in `C:\docker\audiobook-organizer`:
+The app logs (Serilog) to the console and to daily files under `/data/logs/` in the `audiobook-data` volume, named `audiobook-organizer-YYYYMMDD.log`. A new file starts each day and only the newest 14 are kept.
+
+Run these in `C:\docker\audiobook-organizer`:
 
 ```powershell
+# Follow the console log
 docker compose logs -f
+
+# List the log files, then copy one out to read it
+docker compose exec audiobook-organizer ls /data/logs
+docker compose cp audiobook-organizer:/data/logs/audiobook-organizer-20261023.log .
 ```
 
-There are no log files under `/data`.
+Running locally, the same files go to `<repo>/data/logs/` (ignored by git).
 
 ## 8. Updating
 

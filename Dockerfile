@@ -38,6 +38,7 @@ RUN apt-get update \
     && mkdir -p /data /incoming /library
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     ASPNETCORE_ENVIRONMENT=Production \
-    Database__Path=/data/audiobooks.db
+    Database__Path=/data/audiobooks.db \
+    Logs__Path=/data/logs/audiobook-organizer-.log
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "AudiobookOrganizer.Api.dll"]

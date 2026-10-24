@@ -19,9 +19,14 @@ public class AudiobookOrganizerWebApplicationFactory : WebApplicationFactory<Pro
     public string DatabasePath { get; } =
         Path.Combine(Path.GetTempPath(), $"audiobook-organizer-tests-{Guid.NewGuid():N}.db");
 
+    /// <summary>Log files go here, never into the repo's data folder; deleted on dispose.</summary>
+    public string LogDirectory { get; } =
+        Path.Combine(Path.GetTempPath(), $"audiobook-organizer-tests-logs-{Guid.NewGuid():N}");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Database:Path", DatabasePath);
+        builder.UseSetting("Logs:Path", Path.Combine(LogDirectory, "app-.log"));
         if (!RunProcessingWorker) builder.ConfigureTestServices(RemoveProcessingWorker);
     }
 
@@ -37,5 +42,7 @@ public class AudiobookOrganizerWebApplicationFactory : WebApplicationFactory<Pro
         // Pooled connections keep the file open on Windows.
         SqliteConnection.ClearAllPools();
         if (File.Exists(DatabasePath)) File.Delete(DatabasePath);
+        // The host is gone, so the file sink has closed its file.
+        if (Directory.Exists(LogDirectory)) Directory.Delete(LogDirectory, recursive: true);
     }
 }

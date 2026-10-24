@@ -7,9 +7,22 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSerilog((services, config) => config
-    .ReadFrom.Configuration(builder.Configuration)
-    .ReadFrom.Services(services));
+builder.Services.AddSerilog((services, config) =>
+{
+    config
+        .ReadFrom.Configuration(builder.Configuration)
+        .ReadFrom.Services(services);
+
+    // Daily files beside the database (the data folder); an empty path turns the file sink off.
+    var logPath = builder.Configuration["Logs:Path"];
+    if (string.IsNullOrWhiteSpace(logPath)) return;
+    var contentRoot = services.GetRequiredService<IHostEnvironment>().ContentRootPath;
+    config.WriteTo.File(Path.GetFullPath(logPath, contentRoot),
+        rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14);
+},
+// The host owns and disposes its own logger. Otherwise disposal goes through Log.CloseAndFlush(), which closes
+// whichever host set the static logger last, leaving this host's log file open (seen with parallel test hosts).
+preserveStaticLogger: true);
 
 builder.Services.Configure<DatabaseSettings>(builder.Configuration.GetSection(DatabaseSettings.SectionName));
 builder.Services.AddSingleton(services =>
