@@ -1,13 +1,13 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 71 review, 2026-10-22, commit 821f836_
+_Updated: slice 72 review, 2026-10-23, commit ffcfa05_
 
 ## Branch
 `phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 and the React client on 5173 (`scripts/start.ps1`, default `both`) with SQLite at `<repo>/data/audiobooks.db`. The client shows the API and database status.
-- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default. `docker build --target test .` runs the backend suite on Linux (Ubuntu 24.04) with the runtime's ffmpeg 6.1.1; all 384 pass (slice 64). Add `--no-cache-filter test` to force a rerun. `docs/DEPLOY.md` documents hosting in Docker Desktop on the developer's Windows machine: build `audiobook-organizer:latest` in the repo, run it from `C:\docker\audiobook-organizer\` with `docs/deploy/compose.yaml` (named `/data` volume, CIFS volumes on `//cookserv/d` for `/incoming` and `/library`) (slices 70, 71).
+- **Docker:** `docker compose up --build` serves both on port 8080, with `/data`, `/incoming` and `/library` mounted from `./docker/` by default. `docker build --target test .` runs the backend suite on Linux (Ubuntu 24.04) with the runtime's ffmpeg 6.1.1; all 384 pass (slice 64). Add `--no-cache-filter test` to force a rerun. `docs/DEPLOY.md` documents hosting in Docker Desktop on the developer's Windows machine: build `audiobook-organizer:latest` in the repo, run it from `C:\docker\audiobook-organizer\` with `docs/deploy/compose.yaml` (named `/data` volume, CIFS volumes on `//cookserv/d` for `/incoming` and `/library`) (slices 70, 71). Logs go to the console and to daily files under the data folder (`/data/logs/`, `<repo>/data/logs/` in dev), kept 14 days (slice 72).
 - **Tag safety:** proven by tests. MP3 writes go through TagLibSharp; M4B writes go through an ffmpeg `-c copy` remux without `chpl`, then TagLibSharp. Chapters and audio survive both. `ChapterReader` reads chapters from both formats. The image ships ffmpeg/ffprobe 6.1.
 - **Settings API:** `GET`/`PUT /api/settings` stores the validated incoming and library paths and the keep-source toggle in SQLite (`ApplicationSetting`). The Settings page (`/settings`) edits them, inside a layout with nav, a skip link and a not-found page.
 - **Scan inventory:** `ScanService` records every MP3 and M4B under incoming in `AudioFile`, with a `ScanRun` per scan. It skips unchanged files and records unreadable ones, retrying them on the next scan. `POST /api/scans` runs one background scan at a time, `GET /api/scans/latest` shows progress, and `GET /api/dashboard` returns the paths and counts. The dashboard shows the directories, last scan and counts, with a "Scan incoming" button and live progress. The whole flow is verified on Windows dev and in Docker (Linux).
@@ -20,20 +20,22 @@ _Updated: slice 71 review, 2026-10-22, commit 821f836_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69) and the deploy docs for Docker Desktop on Windows (70, 71) are done. Left: the developer's first real run from DEPLOY.md (the last done-when line) and, if wanted in this phase, the carried-in polish items (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69) the deploy docs (70, 71) and log files (72) are done; the developer's container run works. Left: the deploy docs rewritten for the Audiobookshelf server (73), then the carried-in polish items (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
-- Last: 71 windows-docker-deploy, Implemented
-- Next: 72 log-files (written); then the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover").
+- Last: 72 log-files, Implemented
+- Next: 73 deploy docs for the Audiobookshelf server (Windows Docker Desktop, image built there, `/incoming` and `/library` bind-mounted from local disks); then the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover").
 
 ## Open questions
-- The developer runs the container on the server that hosts Audiobookshelf, not Docker Desktop on the Windows machine as AGENTS.md, PLAN.md and DEPLOY.md say (slice 71). Update those docs to the real host? (raised 2026-10-23)
+- Where on the Audiobookshelf server does the repo clone live, and are `D:udiobooks_incoming` and `D:udiobooks` the bind-mount sources? (slice 73)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-23 (developer): the host is the Audiobookshelf server: Windows with Docker Desktop, image built there from the repo, `/incoming` and `/library` bind-mounted from local disks, replacing slice 71's CIFS setup. AGENTS.md, PLAN.md and DEPLOY.md to be updated in slice 73.
+- 2026-10-23 (slice 72): `AddSerilog(..., preserveStaticLogger: true)`, so each host disposes its own logger and parallel test hosts don't leave log files open.
 - 2026-10-23 (developer): the deployed container works (run on the Audiobookshelf server). The carried-in polish items stay in phase 9. Logs are written to rolling files under `/data/logs` with Serilog's file sink, already a dependency of `Serilog.AspNetCore` (slice 72).
 - 2026-10-22 (developer): the app is hosted in Docker Desktop on the developer's Windows machine, compose under `C:\docker\audiobook-organizer\`, image built from the repo; `/data` is a named volume; `/incoming` and `/library` are CIFS volumes on `\\cookserv\d` (mapped as `Y:`). AGENTS.md, the PRD and PLAN.md updated with the developer's OK (slice 71).
 - 2026-10-18: Docker (Linux), single user, no auth. Trusted LAN; overview.md's deployment wins over AGENTS.md's IIS/Entra template.
@@ -109,4 +111,4 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 - 2026-10-19 (developer, slice 49): one intermittent backend failure, test unidentified (72 reruns passed; a stalled 34 s run), is accepted as a flake. Test runs keep full output (TRX) so a repeat names the test, which then gets fixed.
 
 ## Verification
-Full suite: backend 397 passed / 0 failed, frontend 271 passed with one intermittent failure (accepted, below). Manual checks for slices 33–43, 45–53 and 54–59, the Mp3tag and player checks for 60, the player check for 61 and the Mp3tag comparison for 62 and the real-book and Mp3tag checks for 63 and the home-server Docker test run for 64 the stop-mid-job restart check for 65 and the dev-app rescan check for 66 and the dev-app hide check for 67 and the dev-app cleanup check for 68, not run yet; slice 69 has none and the Windows Docker Desktop run, volume backup and firewall checks for 71 (they replace 70's); slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. Accepted: one unidentified intermittent backend failure (slice 49) and the intermittent `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again` failure (slice 62); see Decisions. The tests run against dev ffmpeg 9.0 locally and pass against the image's 6.1.1 in the Docker `test` stage.
+Full suite: backend 400 passed / 0 failed, frontend 271 passed with one intermittent failure (accepted, below). Manual checks for slices 33–43, 45–53 and 54–59, the Mp3tag and player checks for 60, the player check for 61 and the Mp3tag comparison for 62 and the real-book and Mp3tag checks for 63 and the home-server Docker test run for 64 the stop-mid-job restart check for 65 and the dev-app rescan check for 66 and the dev-app hide check for 67 and the dev-app cleanup check for 68, not run yet; slice 69 has none and the Windows Docker Desktop run, volume backup and firewall checks for 71 (they replace 70's) and the container `/data/logs` check for 72; slice 44 needs none. Stop the dev API before building: it locks `bin/`. Typecheck and build clean. Accepted: one unidentified intermittent backend failure (slice 49) and the intermittent `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again` failure (slice 62); see Decisions. The tests run against dev ffmpeg 9.0 locally and pass against the image's 6.1.1 in the Docker `test` stage.
