@@ -1,6 +1,6 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 73 review, 2026-10-24, commit dbd2039_
+_Updated: slice 74 review, 2026-10-24, commit 9006e6d_
 
 ## Branch
 `phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
@@ -20,11 +20,11 @@ _Updated: slice 73 review, 2026-10-24, commit dbd2039_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69), the deploy docs (70, 71) and log files (72) are done; the developer's container run works. The deploy docs now describe the Audiobookshelf server (73). Left: the carried-in polish items (PLAN.md). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69), the deploy docs (70, 71) and log files (72) are done; the developer's container run works. The deploy docs now describe the Audiobookshelf server (73). The Jobs and Incoming focus fixes are in (74). Left: the cover picker's "Current cover" after a match change (75). Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
-- Last: 73 audiobookshelf-server-deploy, Implemented
-- Next: none written; the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover").
+- Last: 74 focus-polish, Implemented
+- Next: 75, the cover picker marks a provider cover "Current cover" only when it came from the current match (plan in slice 74's Notes). It is the last phase 9 item.
 
 ## Open questions
 - Audible catalog API rate limits and terms (phase 5)
@@ -33,6 +33,7 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-24 (developer): an unidentified backend test that failed once in 10 runs during slice 74's tests is accepted for now (gate 2); name it if it fails again.
 - 2026-10-23 (developer): the host is the Audiobookshelf server: Windows with Docker Desktop, image built there from the repo, `/incoming` and `/library` bind-mounted from local disks (`D:\audiobooks_incoming`, `D:\audiobooks`), replacing slice 71's CIFS setup; the repo is at `D:\workspace\audiobook-organizer` there. AGENTS.md, the PRD, PLAN.md and DEPLOY.md updated in slice 73.
 - 2026-10-23 (slice 72): `AddSerilog(..., preserveStaticLogger: true)`, so each host disposes its own logger and parallel test hosts don't leave log files open.
 - 2026-10-23 (developer): the deployed container works (run on the Audiobookshelf server). The carried-in polish items stay in phase 9. Logs are written to rolling files under `/data/logs` with Serilog's file sink, already a dependency of `Serilog.AspNetCore` (slice 72).

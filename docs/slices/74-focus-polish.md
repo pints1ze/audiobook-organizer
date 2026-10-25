@@ -40,3 +40,29 @@
 - Conflict check: frontend only, no new packages, no API change; matches AGENTS.md and the decisions in CURRENT-STATE.md.
 - Split: the third carried-in item, the cover picker marking a provider cover "Current cover" after the match changes (from slice 37), needs a backend DTO change and its own tests; it goes in slice 75. Plan for it: `ProviderCoverDto` gains `IsChosen`, true only when the chosen cover's source is `provider` and it was chosen at or after the current match's `PickedAtUtc` (`Services/CoverService.cs`, `Models/Api/MetadataDtos.cs`, `GroupCoverControllerTests.cs`, `types/metadata.ts`, `components/book/CoverPicker.tsx` and its test). No schema change.
 - The accepted intermittent `JobsPage` Retry failure (slice 62) is near these tests; a new failure in another test is still a gate.
+
+## Test results (2026-10-24)
+
+**Regressions:** one backend test failed once and couldn't be reproduced: the first full run gave 399 passed, 1 failed. Its name wasn't captured because only the summary line was kept. The next 9 runs all passed (400 of 400). This slice changes only frontend files, so the failure isn't caused by it. It isn't on CURRENT-STATE.md's accepted list (gate 2).
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 399 passed, 1 failed (run 1); 400 passed (runs 2–10) | intermittent, test not identified |
+| Frontend tests | 274 passed, 0 failed | 16 files |
+| New tests | 3 of 3 present, passing | Jobs repeat-announcement focus; Incoming reload-failure focus; Incoming first-load failure doesn't take focus |
+| Manual: stop the API mid-edit on `/incoming`, save, load error focused | Not run | app not running; start with `scripts/start.ps1` |
+
+## Outcome (2026-10-24, commit 9006e6d)
+
+**Status:** Implemented
+**Summary:** The Jobs status line takes focus on every announcement, including a repeat of the same text, because each one is stored as a new object. The Incoming load error takes focus (`tabIndex={-1}`) when a reload fails after the page has loaded once, but not when the first load fails.
+**Changed:** 6 files: `pages/JobsPage.tsx`, `pages/IncomingPage.tsx` and their two test files, plus this slice file and `docs/PLAN.md` (the writer's edits, in the feat commit as in slice 73).
+**Deviations:**
+- The Jobs announcement is stored as `{ text }`, not `{ text, seq }`; a new object already re-runs the effect: *fine*.
+- An unidentified backend test failed once in 10 runs (frontend-only slice): *debt*; the developer accepted it on 2026-10-24.
+**Follow-ups:**
+- Next: slice 75, the cover picker marking a provider cover "Current cover" only when it came from the current match (plan in this slice's Notes).
+- Manual (developer): stop the API mid-edit on `/incoming`, save, and confirm the load error is focused.
+- Debt: name and fix the intermittent backend test if it shows up again (keep the full `dotnet test` output, or use a trx logger).
