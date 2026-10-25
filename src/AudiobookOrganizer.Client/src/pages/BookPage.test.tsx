@@ -181,21 +181,21 @@ describe('BookPage', () => {
     expect(await within(metadataSection()).findAllByText('From files')).toHaveLength(2)
   })
 
-  it('reloads the metadata after "Use this match" succeeds', async () => {
+  it('reloads the metadata after "Accept match" succeeds', async () => {
     pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
     await loadedPage()
     await within(metadataSection()).findAllByText('From files')
     await searchFor([openLibrary, audible])
 
     getMetadataMock.mockResolvedValue(metadataWith('Project Hail Mary', 'provider', ['Ray Porter']))
-    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' }))
 
     expect(await within(metadataSection()).findByText('Ray Porter')).toBeInTheDocument()
     expect(within(metadataSection()).getAllByText('From Audible').length).toBeGreaterThan(0)
     expect(getMetadataMock).toHaveBeenCalledTimes(2)
   })
 
-  it('reloads the people section after "Use this match" succeeds', async () => {
+  it('reloads the people section after "Accept match" succeeds', async () => {
     pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
     await loadedPage()
     const people = screen.getByRole('heading', { level: 2, name: 'People' }).closest('section')!
@@ -207,7 +207,7 @@ describe('BookPage', () => {
       authors: [],
       narrators: [{ name: 'Ray Porter', entry: { id: 3, name: 'Ray Porter', aliases: [] }, suggestions: [] }],
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' }))
 
     expect(await within(people).findByText('Normalized: Ray Porter')).toBeInTheDocument()
     expect(getBookPeopleMock).toHaveBeenCalledTimes(2)
@@ -247,7 +247,7 @@ describe('BookPage', () => {
     expect(getBookGenresMock).toHaveBeenCalledTimes(2)
   })
 
-  it('reloads the covers after "Use this match" succeeds, so the match cover follows it', async () => {
+  it('reloads the covers after "Accept match" succeeds, so the match cover follows it', async () => {
     pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: audible, pickedAtUtc: '2026-10-19T10:00:00Z' } })
     await loadedPage()
     const cover = screen.getByRole('heading', { level: 2, name: 'Cover' }).closest('section')!
@@ -260,7 +260,7 @@ describe('BookPage', () => {
       embedded: [],
       provider: { provider: 'audible', coverUrl: 'https://example.test/phm.jpg', isChosen: false },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' }))
 
     expect(await within(cover).findByRole('button', { name: "Use the match's cover: Audible" })).toBeInTheDocument()
     expect(getCoversMock).toHaveBeenCalledTimes(2)
@@ -400,8 +400,8 @@ describe('BookPage', () => {
     await within(chosenSection()).findByText('No match chosen yet.')
     await searchFor([openLibrary, audible])
 
-    const first = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 1 of 2' })
-    const second = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' })
+    const first = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 1 of 2' })
+    const second = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' })
     fireEvent.click(second)
     expect(pickMock).toHaveBeenCalledWith(4, audible)
     expect(first).toBeDisabled()
@@ -415,7 +415,7 @@ describe('BookPage', () => {
     const items = resultItems()
     expect(within(items[1]).getByText('Current match')).toBeInTheDocument()
     expect(within(items[1]).queryByRole('button')).not.toBeInTheDocument()
-    expect(within(items[0]).getByRole('button', { name: /Use this match/ })).toBeEnabled()
+    expect(within(items[0]).getByRole('button', { name: /Accept match/ })).toBeEnabled()
   })
 
   it('replaces the stored match, which reads "Current match" until another is picked', async () => {
@@ -426,13 +426,13 @@ describe('BookPage', () => {
     await searchFor([openLibrary, audible])
 
     expect(within(resultItems()[0]).getByText('Current match')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' }))
 
     expect(await screen.findByText('Match saved: Project Hail Mary')).toBeInTheDocument()
     expect(within(chosenSection()).queryByText('9780593135204')).not.toBeInTheDocument()
     expect(within(chosenSection()).getByText('B08G9PRS1K')).toBeInTheDocument()
     const items = resultItems()
-    expect(within(items[0]).getByRole('button', { name: /Use this match/ })).toBeEnabled()
+    expect(within(items[0]).getByRole('button', { name: /Accept match/ })).toBeEnabled()
     expect(within(items[1]).getByText('Current match')).toBeInTheDocument()
   })
 
@@ -443,7 +443,7 @@ describe('BookPage', () => {
     await within(chosenSection()).findByText('9780593135204')
     await searchFor([openLibrary, audible])
 
-    const button = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' })
+    const button = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' })
     fireEvent.click(button)
 
     const alert = await screen.findByRole('alert')
@@ -458,7 +458,7 @@ describe('BookPage', () => {
     pickMock.mockResolvedValue({ ok: false, notFound: true })
     await loadedPage()
     await searchFor([audible, openLibrary])
-    fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 1 of 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 1 of 2' }))
 
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('This book no longer exists')
@@ -470,7 +470,7 @@ describe('BookPage', () => {
     pickMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
     await loadedPage()
     await searchFor([audible, openLibrary])
-    const button = screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 1 of 2' })
+    const button = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 1 of 2' })
     fireEvent.click(button)
 
     expect(await screen.findByRole('alert')).toHaveTextContent("The match couldn't be saved.")
@@ -482,12 +482,89 @@ describe('BookPage', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('focuses and highlights the first result after a search; the others are outline', async () => {
+    await loadedPage()
+    await within(chosenSection()).findByText('No match chosen yet.')
+    await searchFor([audible, openLibrary])
+
+    const first = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 1 of 2' })
+    const second = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' })
+    expect(first).toHaveTextContent('Accept match')
+    await waitFor(() => expect(first).toHaveFocus())
+    expect(first).toHaveClass('bg-foreground')
+    expect(second).not.toHaveClass('bg-foreground')
+    const items = resultItems()
+    expect(items[0]).toHaveAttribute('data-highlighted', 'true')
+    expect(items[1]).not.toHaveAttribute('data-highlighted')
+  })
+
+  it('skips the current match when focusing the first result', async () => {
+    getMatchMock.mockResolvedValue(storedMatch)
+    await loadedPage()
+    await within(chosenSection()).findByText('9780593135204')
+    await searchFor([openLibrary, audible])
+
+    const second = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' })
+    await waitFor(() => expect(second).toHaveFocus())
+    expect(second).toHaveClass('bg-foreground')
+    expect(resultItems()[1]).toHaveAttribute('data-highlighted', 'true')
+    expect(resultItems()[0]).not.toHaveAttribute('data-highlighted')
+  })
+
+  it('moves focus and the highlight with ArrowDown and ArrowUp, stopping at the ends, and accepts the focused one', async () => {
+    pickMock.mockResolvedValue({ ok: true, match: { groupId: 4, match: openLibrary, pickedAtUtc: '2026-10-19T10:00:00Z' } })
+    await loadedPage()
+    await within(chosenSection()).findByText('No match chosen yet.')
+    await searchFor([audible, openLibrary])
+    const first = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 1 of 2' })
+    const second = screen.getByRole('button', { name: 'Accept match: Project Hail Mary, result 2 of 2' })
+    await waitFor(() => expect(first).toHaveFocus())
+
+    expect(fireEvent.keyDown(first, { key: 'ArrowDown' })).toBe(false)
+    expect(second).toHaveFocus()
+    expect(second).toHaveClass('bg-foreground')
+    expect(first).not.toHaveClass('bg-foreground')
+    expect(resultItems()[1]).toHaveAttribute('data-highlighted', 'true')
+
+    expect(fireEvent.keyDown(second, { key: 'ArrowDown' })).toBe(false)
+    expect(second).toHaveFocus()
+
+    fireEvent.keyDown(second, { key: 'ArrowUp' })
+    expect(first).toHaveFocus()
+    expect(first).toHaveClass('bg-foreground')
+
+    fireEvent.focus(second)
+    expect(second).toHaveClass('bg-foreground')
+    expect(first).not.toHaveClass('bg-foreground')
+
+    fireEvent.click(second)
+    expect(pickMock).toHaveBeenCalledWith(4, openLibrary)
+    expect(await screen.findByText('Match saved: Project Hail Mary')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Chosen match' })).toHaveFocus()
+  })
+
+  it('leaves focus in Keywords after a search with no results or a failure', async () => {
+    await loadedPage()
+    const input = screen.getByLabelText('Keywords')
+    input.focus()
+
+    searchMock.mockResolvedValueOnce({ ok: true, result: { candidates: [], providerErrors: [] } })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await screen.findByText('No matches found.')
+    expect(input).toHaveFocus()
+
+    searchMock.mockResolvedValueOnce({ ok: false, providerFailure: 'Audible search failed.' })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+    await screen.findByText('Audible search failed.')
+    expect(input).toHaveFocus()
+  })
+
   it('still lets the user search when loading the match fails', async () => {
     getMatchMock.mockRejectedValue(new Error('Loading the match failed with status 500'))
     await loadedPage()
 
     expect(await within(chosenSection()).findByText("The chosen match couldn't be loaded.")).toBeInTheDocument()
     await searchFor([audible, openLibrary])
-    expect(screen.getAllByRole('button', { name: /Use this match/ })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /Accept match/ })).toHaveLength(2)
   })
 })

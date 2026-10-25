@@ -191,7 +191,7 @@ function IncomingContent({ data, onSaved, onReload }: IncomingContentProps) {
     return (
       <p className="mt-4">
         No books found yet.{' '}
-        <Link to="/" className="underline underline-offset-4">
+        <Link to="/dashboard" className="underline underline-offset-4">
           Run a scan from the Dashboard
         </Link>
       </p>

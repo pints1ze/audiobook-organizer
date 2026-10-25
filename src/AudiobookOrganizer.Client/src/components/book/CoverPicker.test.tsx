@@ -29,17 +29,17 @@ const covers: BookCovers = {
 
 const empty: BookCovers = { groupId: 4, chosen: null, embedded: [], provider: null }
 
-function renderPicker(reloadKey = 0) {
+function renderPicker(reloadKey = 0, onSaved?: () => void) {
   return render(
     <MemoryRouter>
-      <CoverPicker groupId={4} reloadKey={reloadKey} />
+      <CoverPicker groupId={4} reloadKey={reloadKey} onSaved={onSaved} />
     </MemoryRouter>,
   )
 }
 
-async function loaded(value: BookCovers = covers) {
+async function loaded(value: BookCovers = covers, onSaved?: () => void) {
   getCoversMock.mockResolvedValue(value)
-  const view = renderPicker()
+  const view = renderPicker(0, onSaved)
   await screen.findByRole('heading', { level: 2, name: 'Cover' })
   await waitFor(() => expect(screen.queryByText('Loading the covers…')).not.toBeInTheDocument())
   return view
@@ -153,6 +153,24 @@ describe('CoverPicker', () => {
 
     expect(await screen.findByText('From Disc 2/01.mp3')).toBeInTheDocument()
     expect(chooseCoverMock).toHaveBeenCalledWith(4, { source: 'embedded', fileId: 12 })
+  })
+
+  it('calls onSaved once after a cover saves, and not after a failed save', async () => {
+    const onSaved = vi.fn()
+    chooseCoverMock.mockResolvedValueOnce({ ok: false, downloadFailed: 'The cover download failed: 404 Not Found.' })
+    await loaded(covers, onSaved)
+
+    fireEvent.click(screen.getByRole('button', { name: "Use the match's cover: Audible" }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('The cover download failed')
+    expect(onSaved).not.toHaveBeenCalled()
+
+    chooseCoverMock.mockResolvedValueOnce({
+      ok: true,
+      cover: { ...covers, chosen: { ...covers.chosen!, fileId: 12, chosenAtUtc: '2026-10-19T11:00:00Z' } },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Use this cover: Disc 2/01.mp3' }))
+    expect(await screen.findByText('Cover saved.')).toBeInTheDocument()
+    expect(onSaved).toHaveBeenCalledTimes(1)
   })
 
   it('shows a 502 downloadFailed message as an alert', async () => {

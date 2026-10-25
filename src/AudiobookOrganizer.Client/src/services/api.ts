@@ -37,7 +37,8 @@ import type {
   NameKind,
   SaveEntryResult,
 } from '../types/names'
-import type { LibraryPreview } from '../types/preview'
+import type { BookPreview, LibraryPreview } from '../types/preview'
+import type { ReviewList } from '../types/review'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -89,6 +90,24 @@ export async function getPreview(): Promise<LibraryPreview> {
     throw new Error(`Loading the preview failed with status ${response.status}`)
   }
   return (await response.json()) as LibraryPreview
+}
+
+/** Where one book's files would go in the library, with any problem that blocks approval. */
+export async function getBookPreview(groupId: number): Promise<BookPreview> {
+  const response = await fetch(`/api/groups/${groupId}/preview`)
+  if (response.status !== 200) {
+    throw new Error(`Loading the book preview failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookPreview
+}
+
+/** Every unprocessed book with its stage, and the counts per stage. */
+export async function getReview(): Promise<ReviewList> {
+  const response = await fetch('/api/review')
+  if (response.status !== 200) {
+    throw new Error(`Loading the review list failed with status ${response.status}`)
+  }
+  return (await response.json()) as ReviewList
 }
 
 /** Every processing job, newest first. */

@@ -58,6 +58,8 @@ builder.Services.AddTransient<CoverService>();
 builder.Services.AddSingleton<ScanService>();
 builder.Services.AddSingleton<ScanRunner>();
 builder.Services.AddSingleton<DashboardService>();
+// Transient because it holds the transient CoverService.
+builder.Services.AddTransient<ReviewService>();
 
 builder.Services.AddHttpClient<AudibleClient>(http =>
 {

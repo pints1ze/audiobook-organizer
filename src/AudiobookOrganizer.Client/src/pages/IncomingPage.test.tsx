@@ -129,7 +129,7 @@ describe('IncomingPage', () => {
     renderPage()
 
     expect(await screen.findByText(/No books found yet\./)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard')
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 

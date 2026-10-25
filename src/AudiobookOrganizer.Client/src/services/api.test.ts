@@ -8,7 +8,9 @@ import {
   getCovers,
   excludeFiles,
   getDashboard,
+  getBookPreview,
   getPreview,
+  getReview,
   getGroup,
   getGroups,
   getHealth,
@@ -722,6 +724,25 @@ describe('getPreview', () => {
   })
 })
 
+describe('getBookPreview', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns the parsed body on a 200', async () => {
+    const preview = { groupId: 7, libraryPath: '/lib', title: 'Dune', author: 'Frank Herbert', files: [] }
+    const fetchMock = mockFetch(200, preview)
+
+    await expect(getBookPreview(7)).resolves.toEqual(preview)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/7/preview')
+  })
+
+  it('throws on a 404', async () => {
+    mockFetch(404, { title: 'Not found' })
+    await expect(getBookPreview(7)).rejects.toThrow()
+  })
+})
+
 describe('approveBook', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -806,5 +827,41 @@ describe('getJobs', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(getJobs()).rejects.toThrow()
+  })
+})
+
+describe('getReview', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns the parsed body on a 200', async () => {
+    const review = {
+      books: [
+        {
+          groupId: 1,
+          title: 'The Hobbit',
+          author: 'J.R.R. Tolkien',
+          narrator: null,
+          durationMs: 3600000,
+          fileCount: 2,
+          stage: 'NeedsMatch',
+          coverSource: null,
+          coverFileId: null,
+          coverChosenAtUtc: null,
+        },
+      ],
+      counts: { needsMatch: 1, needsReview: 0, ready: 0, queued: 0, failed: 0 },
+    }
+    const fetchMock = mockFetch(200, review)
+
+    await expect(getReview()).resolves.toEqual(review)
+    expect(fetchMock).toHaveBeenCalledWith('/api/review')
+  })
+
+  it('throws on any other status', async () => {
+    mockFetch(500, { title: 'Server error' })
+
+    await expect(getReview()).rejects.toThrow()
   })
 })
