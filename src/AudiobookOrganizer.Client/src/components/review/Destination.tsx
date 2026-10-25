@@ -100,7 +100,7 @@ function DestinationContent({ preview }: { preview: BookPreview }) {
       {problems.length === 0 ? (
         <p className="mt-2 flex items-center gap-2">
           <CircleCheck aria-hidden="true" className="size-5 shrink-0" />
-          Ready to approve.
+          No problems with the destination.
         </p>
       ) : (
         <ul aria-label="Problems" className="mt-2 space-y-1">

@@ -88,6 +88,12 @@ export default function ReviewPage() {
     void reload()
   }
 
+  // The selection j/k step from: a key repeat can fire again before the URL change re-renders the page.
+  const currentId = useRef(selectedId)
+  useEffect(() => {
+    currentId.current = selectedId
+  }, [selectedId])
+
   // Single-key shortcuts (UIUX "Actions and keyboard"); each matches a visible control, and none fires while typing.
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -98,12 +104,15 @@ export default function ReviewPage() {
           if (state.kind !== 'loaded') return
           const shown = stage ? state.review.books.filter((b) => b.stage === stage) : state.review.books
           if (shown.length === 0) return
-          const index = shown.findIndex((b) => b.groupId === selectedId)
+          const index = shown.findIndex((b) => b.groupId === currentId.current)
           const target =
             index < 0
               ? event.key === 'j' ? shown[0] : shown[shown.length - 1]
               : shown[Math.min(Math.max(index + (event.key === 'j' ? 1 : -1), 0), shown.length - 1)]
-          if (target.groupId !== selectedId) setSearchParams(searchFor(stage, target.groupId))
+          if (target.groupId !== currentId.current) {
+            currentId.current = target.groupId
+            setSearchParams(searchFor(stage, target.groupId))
+          }
           // Focus scrolls the link into view inside the list.
           document.querySelector<HTMLElement>(`[data-group-id="${target.groupId}"]`)?.focus()
           return
@@ -126,7 +135,7 @@ export default function ReviewPage() {
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [state, stage, selectedId, setSearchParams])
+  }, [state, stage, setSearchParams])
 
   return (
     <>

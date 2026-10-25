@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -548,7 +548,7 @@ describe('ReviewPage', () => {
     expect(headings[1].level).toBe(2)
     expect(headings.every((h) => h.level === 2 || h.level === 3)).toBe(true)
   })
-  it('shows the destination folder, the file count and "Ready to approve." for a clean book', async () => {
+  it('shows the destination folder, the file count and "No problems with the destination." for a clean book', async () => {
     getReviewMock.mockResolvedValue(review)
     let resolvePreview: (preview: BookPreview) => void = () => {}
     getBookPreviewMock.mockReturnValue(new Promise((resolve) => (resolvePreview = resolve)))
@@ -557,7 +557,7 @@ describe('ReviewPage', () => {
     const destination = await screen.findByRole('region', { name: 'Destination' })
     expect(within(destination).getByRole('status')).toHaveTextContent('Loading the destination…')
     resolvePreview(previewFor(1, 'J.R.R. Tolkien/The Hobbit', [{}, {}]))
-    expect(await within(destination).findByText('Ready to approve.')).toBeInTheDocument()
+    expect(await within(destination).findByText('No problems with the destination.')).toBeInTheDocument()
     expect(getBookPreviewMock).toHaveBeenCalledWith(1)
     expect(destination).toHaveTextContent('/lib/J.R.R. Tolkien/The Hobbit')
     expect(destination).toHaveTextContent('2 files')
@@ -573,7 +573,7 @@ describe('ReviewPage', () => {
     const destination = await screen.findByRole('region', { name: 'Destination' })
     const problem = await within(destination).findByText('02.mp3: Missing: Series')
     expect(problem.closest('details')).toBeNull()
-    expect(destination).not.toHaveTextContent('Ready to approve.')
+    expect(destination).not.toHaveTextContent('No problems with the destination.')
   })
 
   it('reloads the destination after a metadata save and shows the new folder', async () => {
@@ -767,6 +767,19 @@ describe('ReviewPage', () => {
       key('k')
       expect(search().get('book')).toBe('1')
       await waitFor(() => expect(bookLink(/The Hobbit/)).toHaveFocus())
+    })
+
+    it('steps once per press even when presses come faster than renders (key repeat)', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt()
+      await screen.findByRole('list', { name: 'Books' })
+
+      act(() => {
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))
+        document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', bubbles: true }))
+      })
+      expect(search().get('book')).toBe('2')
+      await waitFor(() => expect(bookLink(/Dune/)).toHaveFocus())
     })
 
     it('k with no book selects the last; j on the last shown book stays put and keeps the stage', async () => {
