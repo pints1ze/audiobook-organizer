@@ -46,3 +46,31 @@
 - The `j`/`k`/`a`/`Enter` shortcuts are unchanged; `Enter` stays tied to the Catalog search highlight.
 - Files touched: `types/metadata.ts`, `services/api.ts`, `components/review/SuggestedMatches.tsx` (new), `SuggestedMatches.test.tsx` (new), `components/review/BookPane.tsx`, `components/book/CatalogSearch.tsx` (export only), `pages/ReviewPage.test.tsx`: 7.
 - Later slices for this phase: background search after a scan, throttled; select books and "Accept suggested match"; select Ready books and approve.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings; `-p:OutDir=<scratchpad>` because the running dev API locks `bin/Debug` |
+| Typecheck | Passed | |
+| Backend tests | 427 passed, 0 failed | |
+| Frontend tests | 359 passed, 0 failed | 21 files |
+| New tests | 4 of 4 present, passing | `SuggestedMatches.test.tsx` (9 tests: cards best first with scores and time; error and empty result as text; load failure alert; Find suggestions then heading focus; search failure alert; accept via `pickMatch` then `onPicked`; Current match; pick failure alert); `ReviewPage.test.tsx` pane calls `getCandidates` and shows a suggestion |
+| Manual: real Audible suggestions, accept updates the stage | Not run | needs the dev API restarted (`scripts/start.ps1`) |
+| Manual: keyboard order and `Enter` shortcut | Not run | same |
+
+## Outcome (2026-10-25, commit 58802a3)
+
+**Status:** Implemented
+**Summary:** The Review pane's Match section has a Suggested matches area that loads the stored candidates and shows them as cards side by side (cover, details, "Score N of 100"), best first, with "Find suggestions"/"Search again" and an Accept match on each card that goes through the same pick path as Catalog search.
+**Changed:** 7 code files (`components/review/SuggestedMatches.tsx` and its test new, `BookPane.tsx`, `CatalogSearch.tsx` export, `services/api.ts`, `types/metadata.ts`, `pages/ReviewPage.test.tsx`)
+**Done when:** all 5 met; manual checks not run.
+**Deviations:**
+- Status says "Search finished." for an empty result (the area already says "No suggestions found."): fine.
+- Stored errors are plain paragraphs, not list items: fine.
+- A pick on a deleted book says "This book no longer exists." without Catalog search's "Back to Incoming" link: fine, the list reload removes it.
+- `data-primary` on the filled button, for the test: fine.
+- Focus moves to the heading only after the first search; after "Search again" it stays on the button: fine, matches the slice (focus moves only when the button disappears).
+**Follow-ups:** none new; background search and batch actions remain for this phase.

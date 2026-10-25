@@ -66,4 +66,4 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 11. Parallel identification (in progress)
 **Goal:** books arrive with suggested matches, so identifying takes a glance.
 **Done when:** after a scan every new book is searched in the background (throttled) and its candidates stored with a score including runtime vs duration; the detail pane shows them side by side; selected books can accept their suggested match, and selected Ready books can be approved, in one action.
-**Slices:** 86 (implemented), 87 (written). Candidates searched on request, scored and stored in `CandidateSearch` and `MetadataCandidate` (86). Suggested matches side by side in the pane, found on request (87).
+**Slices:** 86 (implemented), 87 (implemented). Candidates searched on request, scored and stored in `CandidateSearch` and `MetadataCandidate` (86). Suggested matches side by side in the pane, found on request (87).
