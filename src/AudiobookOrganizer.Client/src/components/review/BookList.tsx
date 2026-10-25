@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link, type To } from 'react-router-dom'
 import { chosenCoverUrl, fileCoverUrl } from '../../services/api'
 import type { ReviewBook, ReviewCounts, ReviewStage } from '../../types/review'
@@ -28,6 +29,7 @@ function initials(title: string) {
 
 /** The book's chosen or embedded cover, or its initials when it has none. Decorative: the title sits beside it. */
 export function BookCover({ book, size }: { book: ReviewBook; size: 48 | 160 }) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const box = size === 48 ? 'size-12 text-sm' : 'size-40 text-4xl'
   const src =
     book.coverSource === 'chosen'
@@ -35,7 +37,9 @@ export function BookCover({ book, size }: { book: ReviewBook; size: 48 | 160 }) 
       : book.coverSource === 'embedded' && book.coverFileId !== null
         ? fileCoverUrl(book.groupId, book.coverFileId)
         : null
-  if (src) return <img src={src} alt="" className={cn(box, 'shrink-0 rounded object-cover')} />
+  // A cover URL can 404 when the scanned file has moved since the scan; fall back to the initials.
+  if (src && src !== failedSrc)
+    return <img src={src} alt="" onError={() => setFailedSrc(src)} className={cn(box, 'shrink-0 rounded object-cover')} />
   return (
     <span
       aria-hidden="true"

@@ -112,6 +112,21 @@ describe('ReviewPage', () => {
     expect(within(items[2]).getByText('TL')).toBeInTheDocument()
   })
 
+  it('shows the initials when a cover fails to load, in the list and the pane', async () => {
+    getReviewMock.mockResolvedValue(review)
+    renderAt('/?book=2')
+
+    const items = await within(await screen.findByRole('list', { name: 'Books' })).findAllByRole('listitem')
+    fireEvent.error(items[1].querySelector('img')!)
+    expect(items[1].querySelector('img')).toBeNull()
+    expect(within(items[1]).getByText('D')).toBeInTheDocument()
+
+    const pane = screen.getByRole('region', { name: 'Dune' })
+    fireEvent.error(pane.querySelector('img')!)
+    expect(pane.querySelector('img')).toBeNull()
+    expect(within(pane).getByText('D')).toBeInTheDocument()
+  })
+
   it('filters by stage through the URL and says when a stage is empty', async () => {
     getReviewMock.mockResolvedValue(review)
     renderAt('/?book=1')
