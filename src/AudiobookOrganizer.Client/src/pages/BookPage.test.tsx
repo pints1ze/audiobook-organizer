@@ -258,7 +258,7 @@ describe('BookPage', () => {
       groupId: 4,
       chosen: null,
       embedded: [],
-      provider: { provider: 'audible', coverUrl: 'https://example.test/phm.jpg' },
+      provider: { provider: 'audible', coverUrl: 'https://example.test/phm.jpg', isChosen: false },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Use this match: Project Hail Mary, result 2 of 2' }))
 

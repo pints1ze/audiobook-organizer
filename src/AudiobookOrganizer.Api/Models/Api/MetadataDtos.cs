@@ -73,8 +73,11 @@ public record ChosenCoverDto(string Source, long? FileId, string MimeType, DateT
 /// <summary>A file of the book whose scan found an embedded cover.</summary>
 public record EmbeddedCoverDto(long FileId, string RelativePath);
 
-/// <summary>The current match's cover, which PUT .../cover with source "provider" downloads.</summary>
-public record ProviderCoverDto(string Provider, string CoverUrl);
+/// <summary>
+/// The current match's cover, which PUT .../cover with source "provider" downloads. IsChosen is true when the chosen
+/// cover was downloaded from this match (chosen at or after the match was picked).
+/// </summary>
+public record ProviderCoverDto(string Provider, string CoverUrl, bool IsChosen);
 
 /// <summary>
 /// A book's (a group's) chosen cover, if any, and the covers it can choose from: the embedded ones in file order and

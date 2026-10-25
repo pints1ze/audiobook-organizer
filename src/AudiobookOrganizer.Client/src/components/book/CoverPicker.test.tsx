@@ -24,7 +24,7 @@ const covers: BookCovers = {
     { fileId: 11, relativePath: 'Disc 1/01.mp3' },
     { fileId: 12, relativePath: 'Disc 2/01.mp3' },
   ],
-  provider: { provider: 'audible', coverUrl: 'https://m.media-amazon.com/images/I/phm.jpg' },
+  provider: { provider: 'audible', coverUrl: 'https://m.media-amazon.com/images/I/phm.jpg', isChosen: false },
 }
 
 const empty: BookCovers = { groupId: 4, chosen: null, embedded: [], provider: null }
@@ -110,6 +110,7 @@ describe('CoverPicker', () => {
       cover: {
         ...covers,
         chosen: { source: 'provider', fileId: null, mimeType: 'image/jpeg', chosenAtUtc: '2026-10-19T11:00:00Z' },
+        provider: { ...covers.provider!, isChosen: true },
       },
     })
     expect(await screen.findByText('Cover saved.')).toHaveAttribute('role', 'status')
@@ -120,6 +121,25 @@ describe('CoverPicker', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Cover' })).toHaveFocus()
     expect(screen.getByRole('button', { name: 'Use this cover: Disc 1/01.mp3' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: /Use the match's cover/ })).not.toBeInTheDocument()
+  })
+
+  it("marks the match's cover current only when the chosen cover came from the current match", async () => {
+    const fromProvider = {
+      ...covers,
+      chosen: { source: 'provider', fileId: null, mimeType: 'image/jpeg', chosenAtUtc: '2026-10-19T11:00:00Z' },
+    } satisfies BookCovers
+    const view = await loaded(fromProvider)
+
+    const match = screen.getByText("The match's cover (Audible)").closest('li')!
+    expect(within(match).getByRole('button', { name: "Use the match's cover: Audible" })).toBeEnabled()
+    expect(within(match).queryByText('Current cover')).not.toBeInTheDocument()
+    expect(screen.getByText('From the match (Audible)')).toBeInTheDocument()
+    view.unmount()
+
+    await loaded({ ...fromProvider, provider: { ...covers.provider!, isChosen: true } })
+    const current = screen.getByText("The match's cover (Audible)").closest('li')!
+    expect(within(current).getByText('Current cover')).toBeInTheDocument()
+    expect(within(current).queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('chooses an embedded cover by its file id', async () => {

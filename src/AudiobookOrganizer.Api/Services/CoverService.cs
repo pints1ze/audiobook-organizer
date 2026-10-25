@@ -33,8 +33,8 @@ public class CoverService(GroupingService grouping, GroupRepository groups, Audi
         var withCover = audiobooks.GetCoverFiles(groupId).Select(f => f.FileId).ToHashSet();
         var embedded = detail.Files.Where(f => withCover.Contains(f.FileId))
             .Select(f => new EmbeddedCoverDto(f.FileId, f.RelativePath)).ToList();
-        return new BookCoverDto(groupId, audiobooks.GetCover(groupId) is { } cover ? ToDto(cover) : null, embedded,
-            ProviderCover(groupId));
+        var cover = audiobooks.GetCover(groupId);
+        return new BookCoverDto(groupId, cover is null ? null : ToDto(cover), embedded, ProviderCover(groupId, cover));
     }
 
     /// <summary>
@@ -115,13 +115,22 @@ public class CoverService(GroupingService grouping, GroupRepository groups, Audi
         return new ChooseCoverResult(GetCovers(groupId), new Dictionary<string, string[]>());
     }
 
-    /// <summary>The current match's provider and cover URL; null when there's no match or it has no cover URL.</summary>
-    private ProviderCoverDto? ProviderCover(long groupId)
+    /// <summary>
+    /// The current match's provider and cover URL, and whether <paramref name="cover"/> (the chosen one) was downloaded
+    /// from this match: source "provider", chosen at or after the match was picked. Null when there's no match or it has
+    /// no cover URL.
+    /// </summary>
+    private ProviderCoverDto? ProviderCover(long groupId, AudiobookCover? cover = null)
     {
         if (audiobooks.GetMatch(groupId) is not { } match) return null;
         var candidate = JsonSerializer.Deserialize<MetadataCandidateDto>(match.CandidateJson, JsonSerializerOptions.Web);
-        return string.IsNullOrWhiteSpace(candidate?.CoverUrl) ? null : new ProviderCoverDto(match.Provider, candidate.CoverUrl);
+        if (string.IsNullOrWhiteSpace(candidate?.CoverUrl)) return null;
+        var isChosen = cover?.Source == "provider" && ParseUtc(cover.ChosenAtUtc) >= ParseUtc(match.PickedAtUtc);
+        return new ProviderCoverDto(match.Provider, candidate.CoverUrl, isChosen);
     }
+
+    private static DateTimeOffset ParseUtc(string value) =>
+        DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 
     /// <summary>"image/jpeg" or "image/png" when the bytes start with a JPEG or PNG signature; else null.</summary>
     private static string? SignatureType(byte[] bytes) =>
@@ -156,7 +165,6 @@ public class CoverService(GroupingService grouping, GroupRepository groups, Audi
         _ => null,
     };
 
-    private static ChosenCoverDto ToDto(AudiobookCover cover) => new(
-        cover.Source, cover.FileId, cover.MimeType,
-        DateTimeOffset.Parse(cover.ChosenAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+    private static ChosenCoverDto ToDto(AudiobookCover cover) =>
+        new(cover.Source, cover.FileId, cover.MimeType, ParseUtc(cover.ChosenAtUtc));
 }

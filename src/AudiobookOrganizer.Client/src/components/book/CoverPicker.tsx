@@ -248,7 +248,7 @@ function CoverOptions({ groupId, covers, saving, buttonClass, onChoose }: CoverO
               <Thumbnail src={provider.coverUrl} />
               <div className="min-w-0">
                 <p>The match's cover ({providerName(provider.provider)})</p>
-                {chosen?.source === 'provider' ? (
+                {provider.isChosen ? (
                   <p className="mt-2 text-sm font-medium">Current cover</p>
                 ) : (
                   <button
