@@ -22,3 +22,6 @@ dist/
 # Secrets
 .env
 secrets.local.*
+
+# Playwright MCP snapshots
+.playwright-mcp/

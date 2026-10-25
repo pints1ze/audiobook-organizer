@@ -622,7 +622,7 @@ describe('covers', () => {
     groupId: 4,
     chosen: { source: 'upload', fileId: null, mimeType: 'image/png', chosenAtUtc: '2026-10-19T10:00:00+00:00' },
     embedded: [{ fileId: 7, relativePath: 'book/track1.mp3' }],
-    provider: { provider: 'audible', coverUrl: 'https://m.media-amazon.com/images/I/x.jpg' },
+    provider: { provider: 'audible', coverUrl: 'https://m.media-amazon.com/images/I/x.jpg', isChosen: false },
   }
 
   it('builds the image URLs', () => {

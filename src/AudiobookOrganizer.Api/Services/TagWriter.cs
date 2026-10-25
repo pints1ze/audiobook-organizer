@@ -14,7 +14,6 @@ public record BookTags(
     IReadOnlyList<string> Genres,
     int? Year,
     int Track,
-    int TrackCount,
     int? Disc,
     TagCover? Cover)
 {
@@ -61,8 +60,8 @@ public class TagTargetExistsException(string path, Exception? inner = null) : IO
 
 /// <summary>
 /// Writes a tagged copy of a source file to a new path. The source is only read. MP3 copies are tagged with
-/// TagLibSharp; M4B copies are first remuxed by ffmpeg (<c>-c copy</c>) without the Nero <c>chpl</c> chapter atom,
-/// which TagLibSharp corrupts, and then tagged the same way.
+/// TagLibSharp; M4B copies are first remuxed by ffmpeg (<c>-c copy</c>) with no chapters at all, so no Nero
+/// <c>chpl</c> atom for TagLibSharp to corrupt, and then tagged the same way. MP3 copies keep their chapters.
 /// </summary>
 public class TagWriter(FfmpegRunner ffmpeg)
 {
@@ -103,12 +102,13 @@ public class TagWriter(FfmpegRunner ffmpeg)
         // (-y). ffmpeg's own -n refusal exits 0, so it couldn't tell a race from success.
         CreateNew(tempPath).Dispose();
 
-        // Remux without the Nero chpl atom: chapters stay in the QuickTime chapter track, and TagLibSharp (which
-        // corrupts chpl when it saves) then has nothing to damage. -map_metadata 0 keeps the source's tags and cover.
+        // Remux with no chapters (decision 2026-10-21: a chapter track could come back truncated and fail the
+        // read-back). disable_chpl stays as a guard, so TagLibSharp (which corrupts chpl when it saves) never meets
+        // one. -map_metadata 0 keeps the source's tags and cover.
         // ipod is the muxer ffmpeg picks for .m4b; it's named because the .partial name has no extension.
         ffmpeg.Ffmpeg(
         [
-            "-y", "-v", "error", "-i", sourcePath, "-map", "0:a", "-map", "0:v?", "-c", "copy", "-map_chapters", "0",
+            "-y", "-v", "error", "-i", sourcePath, "-map", "0:a", "-map", "0:v?", "-c", "copy", "-map_chapters", "-1",
             "-map_metadata", "0", "-disposition:v:0", "attached_pic", "-movflags", "disable_chpl", "-f", "ipod", tempPath,
         ]);
 
@@ -145,6 +145,7 @@ public class TagWriter(FfmpegRunner ffmpeg)
         if (tags.AlbumSort is { } sort) tag.AlbumSort = sort;
         SetText("TLAN", tags.Language);
         SetText("TPUB", tags.Publisher);
+        SetText("TRCK", tags.Track.ToString(System.Globalization.CultureInfo.InvariantCulture));
         SetUser("FORMAT", tags.Format);
         SetUser("ISBN", tags.Isbn);
         SetUser("ASIN", tags.Asin);
@@ -221,7 +222,9 @@ public class TagWriter(FfmpegRunner ffmpeg)
         if (tags.Genres.Count > 0) tag.Genres = List(tags.Genres);
         if (tags.Year is { } year) tag.Year = (uint)year;
         tag.Track = (uint)tags.Track;
-        tag.TrackCount = (uint)tags.TrackCount;
+        // The track tag is the bare position ("1", not "01/39"), so any count the source had is cleared. MP3 also
+        // rewrites TRCK in ApplyMp3BookFrames, because TagLibSharp pads it to two digits.
+        tag.TrackCount = 0;
         if (tags.Disc is { } disc) tag.Disc = (uint)disc;
         if (tags.Cover is { } cover)
             tag.Pictures =

@@ -7,9 +7,22 @@ using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddSerilog((services, config) => config
-    .ReadFrom.Configuration(builder.Configuration)
-    .ReadFrom.Services(services));
+builder.Services.AddSerilog((services, config) =>
+{
+    config
+        .ReadFrom.Configuration(builder.Configuration)
+        .ReadFrom.Services(services);
+
+    // Daily files beside the database (the data folder); an empty path turns the file sink off.
+    var logPath = builder.Configuration["Logs:Path"];
+    if (string.IsNullOrWhiteSpace(logPath)) return;
+    var contentRoot = services.GetRequiredService<IHostEnvironment>().ContentRootPath;
+    config.WriteTo.File(Path.GetFullPath(logPath, contentRoot),
+        rollingInterval: RollingInterval.Day, retainedFileCountLimit: 14);
+},
+// The host owns and disposes its own logger. Otherwise disposal goes through Log.CloseAndFlush(), which closes
+// whichever host set the static logger last, leaving this host's log file open (seen with parallel test hosts).
+preserveStaticLogger: true);
 
 builder.Services.Configure<DatabaseSettings>(builder.Configuration.GetSection(DatabaseSettings.SectionName));
 builder.Services.AddSingleton(services =>
@@ -77,9 +90,9 @@ app.Services.GetRequiredService<DatabaseInitializer>().Initialize();
 // Nothing can still be scanning at startup, so a Running row is left over from a stopped or crashed process.
 app.Services.GetRequiredService<ScanRepository>()
     .FailInterruptedRuns("Interrupted by an application restart.", DateTime.UtcNow.ToString("O"));
-// Likewise for processing; the worker only starts with the host, after this, and then runs the Queued jobs.
-app.Services.GetRequiredService<ProcessingRepository>()
-    .FailInterruptedJobs(ProcessingService.Interrupted, DateTime.UtcNow.ToString("O"));
+// Likewise for processing: a job cut off while deleting sources finishes its deletions and succeeds; any other is
+// failed and its copies removed. The worker only starts with the host, after this, and then runs the Queued jobs.
+app.Services.GetRequiredService<ProcessingService>().FailInterruptedJobs();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();

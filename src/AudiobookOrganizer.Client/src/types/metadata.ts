@@ -114,6 +114,8 @@ export interface EmbeddedCover {
 export interface ProviderCover {
   provider: string
   coverUrl: string
+  /** True when the chosen cover was downloaded from this match (not from an earlier one). */
+  isChosen: boolean
 }
 
 /** A book's chosen cover, if any, and the covers it can choose from. */

@@ -44,12 +44,12 @@ public class GroupCoverControllerTests : IDisposable
     }
 
     /// <summary>Picks an Audible candidate with <paramref name="coverUrl"/> as the group's match.</summary>
-    private static async Task PickMatch(HttpClient client, long groupId, string? coverUrl)
+    private static async Task PickMatch(HttpClient client, long groupId, string? coverUrl, string asin = "B0TEST0001")
     {
         var response = await client.PutAsJsonAsync($"/api/groups/{groupId}/match", new
         {
             provider = "audible",
-            asin = "B0TEST0001",
+            asin,
             title = "The Test Book",
             authors = new[] { "Ann Author" },
             narrators = new[] { "Ned Narrator" },
@@ -314,6 +314,37 @@ public class GroupCoverControllerTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, (await Choose(client, books.BookId, new { source = "provider" })).StatusCode);
         Assert.Equal("image/png", (await GetCover(client, books.BookId)).GetProperty("chosen").GetProperty("mimeType").GetString());
         Assert.Equal(1, CoverCount());
+    }
+
+    [Fact]
+    public async Task Provider_is_chosen_only_while_the_chosen_cover_came_from_the_current_match()
+    {
+        var client = Client();
+        var books = await ScanBooks(client);
+        await PickMatch(client, books.BookId, AudibleCoverUrl);
+        Assert.False((await GetCover(client, books.BookId)).GetProperty("provider").GetProperty("isChosen").GetBoolean());
+
+        var put = await Choose(client, books.BookId, new { source = "provider" });
+
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        Assert.True((await ScansControllerTests.ReadJson(put)).GetProperty("provider").GetProperty("isChosen").GetBoolean());
+        Assert.True((await GetCover(client, books.BookId)).GetProperty("provider").GetProperty("isChosen").GetBoolean());
+
+        // A different match: the stored cover still came from the old one.
+        await PickMatch(client, books.BookId, "https://m.media-amazon.com/images/I/other.jpg", asin: "B0TEST0002");
+        var afterPick = await GetCover(client, books.BookId);
+        Assert.Equal("provider", afterPick.GetProperty("chosen").GetProperty("source").GetString());
+        Assert.False(afterPick.GetProperty("provider").GetProperty("isChosen").GetBoolean());
+
+        // Choosing it again downloads the new match's cover and marks it chosen.
+        Assert.Equal(HttpStatusCode.OK, (await Choose(client, books.BookId, new { source = "provider" })).StatusCode);
+        Assert.True((await GetCover(client, books.BookId)).GetProperty("provider").GetProperty("isChosen").GetBoolean());
+
+        // An embedded cover isn't the match's.
+        var embedded = await Choose(client, books.BookId, new { source = "embedded", fileId = books.PngFileId });
+        Assert.Equal(HttpStatusCode.OK, embedded.StatusCode);
+        Assert.False((await ScansControllerTests.ReadJson(embedded)).GetProperty("provider").GetProperty("isChosen").GetBoolean());
+        Assert.False((await GetCover(client, books.BookId)).GetProperty("provider").GetProperty("isChosen").GetBoolean());
     }
 
     [Fact]

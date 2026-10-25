@@ -1,6 +1,7 @@
 services:
   audiobook-organizer:
     build: .
+    image: audiobook-organizer:latest
     ports:
       - "8080:8080"
     volumes:

@@ -237,6 +237,27 @@ describe('JobsPage', () => {
     expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
   })
 
+  it('focuses the status line again when a second book with the same title is queued', async () => {
+    const firstFailed = { ...failedJob, id: 12, groupId: 1, title: 'The Hobbit' }
+    const secondFailed = { ...failedJob, id: 11, groupId: 2, title: 'The Hobbit' }
+    getJobsMock.mockResolvedValue([firstFailed, secondFailed])
+    approveBookMock.mockResolvedValue({ ok: true, job: job({ id: 13, groupId: 1 }) })
+    renderPage()
+
+    const [firstRetry, secondRetry] = await screen.findAllByRole('button', { name: 'Retry' })
+    fireEvent.click(firstRetry)
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent('The Hobbit is queued again.')
+    expect(status).toHaveFocus()
+
+    secondRetry.focus()
+    fireEvent.click(secondRetry)
+
+    await vi.waitFor(() => expect(approveBookMock).toHaveBeenCalledWith(2))
+    await vi.waitFor(() => expect(screen.getByRole('status')).toHaveFocus())
+    expect(screen.getByRole('status')).toHaveTextContent('The Hobbit is queued again.')
+  })
+
   it('shows a refused retry in an alert beside the button', async () => {
     getJobsMock.mockResolvedValue([{ ...failedJob, groupId: 1, title: 'The Hobbit' }])
     approveBookMock.mockResolvedValue({ ok: false, message: 'A file is already at Tolkien/The Hobbit/02.mp3.' })

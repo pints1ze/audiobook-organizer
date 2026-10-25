@@ -1,0 +1,17 @@
+# Copy to C:\docker\audiobook-organizer\compose.yaml on the Audiobookshelf server, next to a .env made from .env.example.
+# Runs the image built in the repo with `docker compose build`; there is no build: here.
+name: audiobook-organizer
+services:
+  audiobook-organizer:
+    image: audiobook-organizer:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - audiobook-data:/data
+      - ${INCOMING_DIR}:/incoming
+      - ${LIBRARY_DIR}:/library
+    restart: unless-stopped
+
+volumes:
+  # SQLite database. A named volume, because SQLite locking over a Windows bind mount isn't reliable.
+  audiobook-data:

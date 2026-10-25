@@ -54,10 +54,12 @@ public class JobsControllerTests : IDisposable
         return ids;
     }
 
-    private static async Task Scan(HttpClient client)
+    private static async Task<JsonElement> Scan(HttpClient client)
     {
         Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync("/api/scans", null)).StatusCode);
-        Assert.Equal("Completed", (await ScanTestFolders.WaitForFinish(client)).GetProperty("status").GetString());
+        var run = await ScanTestFolders.WaitForFinish(client);
+        Assert.Equal("Completed", run.GetProperty("status").GetString());
+        return run;
     }
 
     private static async Task<List<long>> GroupIds(HttpClient client)
@@ -356,7 +358,7 @@ public class JobsControllerTests : IDisposable
             Assert.Equal(("First Book", "First Book"), (tagged.Tag.Title, tagged.Tag.Album));
             Assert.Equal(["Ann Author"], tagged.Tag.Performers);
             Assert.Equal(["Ann Author"], tagged.Tag.AlbumArtists);
-            Assert.Equal(((uint)i + 1, 2u), (tagged.Tag.Track, tagged.Tag.TrackCount));
+            Assert.Equal(((uint)i + 1, 0u), (tagged.Tag.Track, tagged.Tag.TrackCount));
             Assert.Equal(TagRoundTripTests.CoverJpeg, Assert.Single(tagged.Tag.Pictures).Data.Data);
         }
         Assert.Empty(PartialFiles());
@@ -461,6 +463,35 @@ public class JobsControllerTests : IDisposable
             Assert.Equal(("First Book", (uint)i + 1), (tagged.Tag.Title, tagged.Tag.Track));
         }
         Assert.All(otherBook, s => Assert.True(File.Exists(s)));
+        Assert.Empty(PartialFiles());
+    }
+
+    [Fact]
+    public async Task An_m4b_book_with_chapters_processes_to_Succeeded_its_copy_has_no_chapters_and_its_source_is_deleted()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var book = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "m4b-book")).FullName;
+        var source = Path.Combine(book, "book.m4b");
+        File.Copy(ChapterReaderTests.Fixture("chapters.m4b"), source);
+        Assert.NotEmpty(ChapterReaderTests.NewReader().Read(source));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.mp3"));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.m4b"));
+        await Scan(client);
+        var groupId = Assert.Single(await GroupIds(client));
+        var renamed = await client.PutAsJsonAsync($"/api/groups/{groupId}", new { title = "Chaptered Book", author = "Ann Author" });
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+
+        var created = await ApproveJob(client, groupId);
+        var job = await WaitForJob(client, created.GetProperty("id").GetInt64());
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (job.GetProperty("status").GetString(), job.GetProperty("error").ValueKind));
+        var file = Assert.Single(job.GetProperty("files").EnumerateArray());
+        Assert.Equal("SourceDeleted", file.GetProperty("status").GetString());
+        Assert.False(File.Exists(source));
+        var destination = file.GetProperty("destinationPath").GetString()!;
+        Assert.True(File.Exists(destination));
+        Assert.Empty(ChapterReaderTests.NewReader().Read(destination));
         Assert.Empty(PartialFiles());
     }
 
@@ -623,7 +654,6 @@ public class JobsControllerTests : IDisposable
         var client = _factory.CreateClient();
         await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
         var ids = await ScanTwoBooks(client);
-        var firstFile = (await BookPreview(client, ids[0])).GetProperty("files")[0].GetProperty("relativePath").GetString();
         var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
         Assert.Equal("Succeeded", done.GetProperty("status").GetString());
         var libraryBefore = Snapshot(_folders.Library);
@@ -631,10 +661,232 @@ public class JobsControllerTests : IDisposable
         var again = await Approve(client, ids[0]);
 
         Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
-        Assert.Equal($"A file is already at {firstFile}.",
+        Assert.Equal(ProcessingService.AlreadyProcessed,
             (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
         Assert.Single(await Jobs(client));
         Assert.Equal(libraryBefore, Snapshot(_folders.Library));
+    }
+
+    [Fact]
+    public async Task A_processed_book_leaves_the_groups_list_the_preview_and_the_dashboard_counts_but_its_book_page_stays()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+        var dashboardBefore = await ScansControllerTests.ReadJson(await client.GetAsync("/api/dashboard"));
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+
+        Assert.Equal([ids[1]], await GroupIds(client));
+        var preview = await ScansControllerTests.ReadJson(await client.GetAsync("/api/preview"));
+        Assert.Equal([ids[1]], preview.GetProperty("books").EnumerateArray().Select(b => b.GetProperty("groupId").GetInt64()));
+        Assert.Equal(2, preview.GetProperty("counts").GetProperty("files").GetInt32());
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/groups/{ids[0]}/preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}/metadata")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}/cover")).StatusCode);
+        Assert.Equal(done.GetProperty("id").GetInt64(), Assert.Single(await Jobs(client)).GetProperty("id").GetInt64());
+        var dashboard = await ScansControllerTests.ReadJson(await client.GetAsync("/api/dashboard"));
+        Assert.Equal(2, dashboardBefore.GetProperty("bookCount").GetInt32());
+        Assert.Equal(1, dashboard.GetProperty("bookCount").GetInt32());
+        Assert.Equal(1, dashboard.GetProperty("correctedBookCount").GetInt32());
+        var byConfidence = dashboard.GetProperty("booksByConfidence");
+        Assert.Equal(1, byConfidence.GetProperty("low").GetInt32() + byConfidence.GetProperty("medium").GetInt32()
+            + byConfidence.GetProperty("high").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_book_whose_only_job_failed_is_still_listed_and_previewed()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var destinations = Destinations(created);
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[1])!);
+        File.WriteAllText(destinations[1], "someone else's file");
+        var client = _factory.CreateClient();
+        Assert.Equal("Failed", (await WaitForJob(client, created.GetProperty("id").GetInt64())).GetProperty("status").GetString());
+
+        Assert.Equal(ids.Order(), (await GroupIds(client)).Order());
+        var preview = await ScansControllerTests.ReadJson(await client.GetAsync("/api/preview"));
+        Assert.Equal(ids.Order(), preview.GetProperty("books").EnumerateArray().Select(b => b.GetProperty("groupId").GetInt64()).Order());
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/groups/{ids[0]}/preview")).StatusCode);
+    }
+
+    /// <summary>The groups' ids plus the unresolved and excluded file ids, as GET /api/groups lists them.</summary>
+    private static async Task<(List<long> Groups, List<long> Unresolved, List<long> Excluded)> GroupList(HttpClient client)
+    {
+        var list = await ScansControllerTests.ReadJson(await client.GetAsync("/api/groups"));
+        List<long> Ids(string name, string id) => list.GetProperty(name).EnumerateArray().Select(e => e.GetProperty(id).GetInt64()).ToList();
+        return (Ids("groups", "id"), Ids("unresolved", "fileId"), Ids("excluded", "fileId"));
+    }
+
+    [Fact]
+    public async Task After_processing_with_keep_source_off_a_rescan_keeps_the_groups_and_the_book_cant_be_processed_again()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.All(Sources(done), s => Assert.False(File.Exists(s)));
+        var listBefore = await GroupList(client);
+        Assert.Empty(listBefore.Unresolved);
+        Assert.Empty(listBefore.Excluded);
+        var libraryBefore = Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order().ToList();
+        Assert.Equal(Destinations(done).Order(), libraryBefore);
+
+        var rescan = await Scan(client);
+
+        Assert.Equal(0, rescan.GetProperty("filesMissing").GetInt32());
+        var listAfter = await GroupList(client);
+        Assert.Equal([ids[1]], listAfter.Groups);
+        Assert.Empty(listAfter.Unresolved);
+        Assert.Empty(listAfter.Excluded);
+        var again = await Approve(client, ids[0]);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal(ProcessingService.AlreadyProcessed,
+            (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
+        Assert.Single(await Jobs(client));
+        Assert.Equal(libraryBefore, Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+
+        // The untouched second book still processes normally after the rescan.
+        var second = await WaitForJob(client, (await ApproveJob(client, ids[1])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", second.GetProperty("status").GetString());
+        Assert.All(second.GetProperty("files").EnumerateArray(), f => Assert.Equal("SourceDeleted", f.GetProperty("status").GetString()));
+        Assert.Equal(libraryBefore.Concat(Destinations(second)).Order(),
+            Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+    }
+
+    [Fact]
+    public async Task After_processing_with_keep_source_on_a_rescan_finds_the_sources_unchanged_and_leaves_groups_and_library_alone()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
+        var ids = await ScanTwoBooks(client);
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        var listBefore = await GroupList(client);
+        Assert.Empty(listBefore.Unresolved);
+        Assert.Empty(listBefore.Excluded);
+        var libraryBefore = Snapshot(_folders.Library);
+        Assert.Equal(Destinations(done).Order(), libraryBefore.Select(e => e.Split('|')[0]));
+
+        var rescan = await Scan(client);
+
+        Assert.All(Sources(done), s => Assert.True(File.Exists(s)));
+        // All four sources (book 1's included) are unchanged; none is new, updated or missing.
+        Assert.Equal((4, 0, 0, 0), (rescan.GetProperty("filesUnchanged").GetInt32(), rescan.GetProperty("filesAdded").GetInt32(),
+            rescan.GetProperty("filesUpdated").GetInt32(), rescan.GetProperty("filesMissing").GetInt32()));
+        var listAfter = await GroupList(client);
+        Assert.Equal([ids[1]], listAfter.Groups);
+        Assert.Empty(listAfter.Unresolved);
+        Assert.Empty(listAfter.Excluded);
+        var again = await Approve(client, ids[0]);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        Assert.Equal(ProcessingService.AlreadyProcessed,
+            (await ScansControllerTests.ReadJson(again)).GetProperty("detail").GetString());
+        Assert.Single(await Jobs(client));
+        Assert.Equal(libraryBefore, Snapshot(_folders.Library));
+
+        // The untouched second book still processes normally after the rescan.
+        var second = await WaitForJob(client, (await ApproveJob(client, ids[1])).GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", second.GetProperty("status").GetString());
+        Assert.All(second.GetProperty("files").EnumerateArray(), f => Assert.Equal("Copied", f.GetProperty("status").GetString()));
+        Assert.Equal(libraryBefore.Select(e => e.Split('|')[0]).Concat(Destinations(second)).Order(),
+            Directory.GetFiles(_folders.Library, "*", SearchOption.AllDirectories).Order());
+    }
+
+    /// <summary>How many AudioFile and FileGroupFile rows the files have.</summary>
+    private (long Files, long Members) FileRows(IReadOnlyList<long> fileIds)
+    {
+        using var connection = _factory.Services.GetRequiredService<SqliteConnectionFactory>().Open();
+        return (connection.ExecuteScalar<long>("SELECT COUNT(*) FROM AudioFile WHERE Id IN @fileIds", new { fileIds }),
+            connection.ExecuteScalar<long>("SELECT COUNT(*) FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }));
+    }
+
+    private static List<long> FileIds(JsonElement job) => job.GetProperty("files").EnumerateArray()
+        .Select(f => f.GetProperty("fileId").GetInt64()).ToList();
+
+    [Fact]
+    public async Task With_keep_source_off_a_processed_books_rows_and_emptied_folder_are_removed_and_its_job_history_stays()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.Equal((0L, 0L), FileRows(FileIds(done)));
+        var listed = await ScansControllerTests.ReadJson(await client.GetAsync($"/api/jobs/{done.GetProperty("id").GetInt64()}"));
+        Assert.Equal(["SourceDeleted", "SourceDeleted"], FileStatuses(listed));
+        Assert.Equal(Sources(done), Sources(listed));
+        Assert.False(Directory.Exists(Path.Combine(_folders.Incoming, "alpha")));
+        Assert.True(Directory.Exists(Path.Combine(_folders.Incoming, "beta")));
+        Assert.True(Directory.Exists(_folders.Incoming));
+        Assert.Equal(2, (await BookSources(client, ids[1])).Count);
+
+        var rescan = await Scan(client);
+
+        Assert.Equal(0, rescan.GetProperty("filesMissing").GetInt32());
+    }
+
+    [Fact]
+    public async Task A_folder_left_holding_a_non_audio_file_stays()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(client);
+        var cover = Path.Combine(_folders.Incoming, "alpha", "cover.jpg");
+        File.WriteAllText(cover, "not audio");
+
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.All(Sources(done), s => Assert.False(File.Exists(s)));
+        Assert.Equal([cover], Directory.GetFileSystemEntries(Path.Combine(_folders.Incoming, "alpha")));
+        Assert.Equal((0L, 0L), FileRows(FileIds(done)));
+    }
+
+    [Fact]
+    public async Task With_keep_source_on_a_processed_books_rows_and_folder_stay()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true);
+        var ids = await ScanTwoBooks(client);
+
+        var done = await WaitForJob(client, (await ApproveJob(client, ids[0])).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.Equal((2L, 2L), FileRows(FileIds(done)));
+        Assert.All(Sources(done), s => Assert.True(File.Exists(s)));
+        Assert.True(Directory.Exists(Path.Combine(_folders.Incoming, "alpha")));
+    }
+
+    [Fact]
+    public async Task A_book_nested_two_folders_deep_removes_both_emptied_folders()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var book = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "author", "title")).FullName;
+        File.Copy(ChapterReaderTests.Fixture("chapters.mp3"), Path.Combine(book, "track1.mp3"));
+        File.Copy(ChapterReaderTests.Fixture("chapters.mp3"), Path.Combine(book, "track2.mp3"));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.mp3"));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.m4b"));
+        await Scan(client);
+        var groupId = Assert.Single(await GroupIds(client));
+        var renamed = await client.PutAsJsonAsync($"/api/groups/{groupId}", new { title = "Nested Book", author = "Ann Author" });
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+
+        var done = await WaitForJob(client, (await ApproveJob(client, groupId)).GetProperty("id").GetInt64());
+
+        Assert.Equal("Succeeded", done.GetProperty("status").GetString());
+        Assert.False(Directory.Exists(Path.Combine(_folders.Incoming, "author")));
+        Assert.True(Directory.Exists(_folders.Incoming));
+        Assert.Empty(Directory.GetFileSystemEntries(_folders.Incoming));
     }
 
     [Fact]
@@ -703,6 +955,167 @@ public class JobsControllerTests : IDisposable
         Assert.Equal("Succeeded", ran.GetProperty("status").GetString());
     }
 
+    /// <summary>Sets the job's status and each listed file's status (by position from 1) straight in the database.</summary>
+    private static void SetStatuses(WebApplicationFactory<Program> host, long jobId, string jobStatus, params (int Position, string Status)[] files)
+    {
+        using var connection = host.Services.GetRequiredService<SqliteConnectionFactory>().Open();
+        connection.Execute("UPDATE ProcessingJob SET Status = @jobStatus WHERE Id = @jobId", new { jobId, jobStatus });
+        foreach (var (position, status) in files)
+            connection.Execute("UPDATE ProcessingJobFile SET Status = @status WHERE JobId = @jobId AND Position = @position",
+                new { jobId, position, status });
+    }
+
+    private static void PlaceFile(string source, string destination)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+        File.Copy(source, destination);
+    }
+
+    private static List<string> FileStatuses(JsonElement job) => job.GetProperty("files").EnumerateArray()
+        .Select(f => f.GetProperty("status").GetString()!).ToList();
+
+    [Fact]
+    public async Task At_startup_an_interrupted_jobs_copies_and_partial_are_removed_and_the_book_can_run_again()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var jobId = created.GetProperty("id").GetInt64();
+        var sources = Sources(created);
+        var destinations = Destinations(created);
+        var sourcesBefore = Hashes(sources);
+        // A run cut off while writing file 2: file 1 is copied into place, file 2's temporary file is half-written.
+        PlaceFile(sources[0], destinations[0]);
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[1])!);
+        File.WriteAllBytes(destinations[1] + ".partial", [1, 2, 3]);
+        SetStatuses(host, jobId, ProcessingJob.Running, (1, ProcessingJobFile.Copied));
+
+        var client = _factory.CreateClient();
+        var failed = await WaitForJob(client, jobId);
+
+        Assert.Equal(("Failed", "Interrupted by an application restart."),
+            (failed.GetProperty("status").GetString(), failed.GetProperty("error").GetString()));
+        Assert.All(destinations, d => Assert.False(File.Exists(d)));
+        Assert.Empty(PartialFiles());
+        Assert.Equal(sourcesBefore, Hashes(sources));
+        Assert.All(FileStatuses(failed), s => Assert.Equal("Pending", s));
+
+        var retried = await ApproveJob(client, ids[0]);
+        var ran = await WaitForJob(client, retried.GetProperty("id").GetInt64());
+        Assert.Equal("Succeeded", ran.GetProperty("status").GetString());
+    }
+
+    /// <summary>
+    /// A job cut off while deleting sources: both copies of the first book verified and placed, file 1's source already
+    /// deleted, file 2 still Copied. <paramref name="beforeRestart"/> runs on the setup host just before the restart.
+    /// </summary>
+    private async Task<(long JobId, List<string> Sources, List<string> Destinations)> CutOffWhileDeleting(
+        Func<HttpClient, List<string>, Task>? beforeRestart = null)
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var jobId = created.GetProperty("id").GetInt64();
+        var sources = Sources(created);
+        var destinations = Destinations(created);
+        PlaceFile(sources[0], destinations[0]);
+        PlaceFile(sources[1], destinations[1]);
+        File.Delete(sources[0]);
+        SetStatuses(host, jobId, ProcessingJob.Running, (1, ProcessingJobFile.SourceDeleted), (2, ProcessingJobFile.Copied));
+        if (beforeRestart is not null) await beforeRestart(setup, sources);
+        return (jobId, sources, destinations);
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_job_with_a_deleted_source_finishes_deleting_and_succeeds_keeping_every_copy()
+    {
+        var (jobId, sources, destinations) = await CutOffWhileDeleting();
+        var copiesBefore = Hashes(destinations);
+
+        var done = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (done.GetProperty("status").GetString(), done.GetProperty("error").ValueKind));
+        Assert.NotEqual(JsonValueKind.Null, done.GetProperty("finishedAtUtc").ValueKind);
+        Assert.Equal(["SourceDeleted", "SourceDeleted"], FileStatuses(done));
+        Assert.All(done.GetProperty("files").EnumerateArray(), f => Assert.Equal(JsonValueKind.Null, f.GetProperty("error").ValueKind));
+        Assert.False(File.Exists(sources[1]));
+        Assert.Equal(copiesBefore, Hashes(destinations));
+        Assert.Equal((0L, 0L), FileRows(FileIds(done)));
+        Assert.False(Directory.Exists(Path.Combine(_folders.Incoming, "alpha")));
+        Assert.True(Directory.Exists(Path.Combine(_folders.Incoming, "beta")));
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_jobs_changed_remaining_source_is_kept_with_an_error_and_the_job_succeeds()
+    {
+        var (jobId, sources, destinations) = await CutOffWhileDeleting((_, sources) =>
+        {
+            File.AppendAllText(sources[1], "changed");
+            return Task.CompletedTask;
+        });
+        var copiesBefore = Hashes(destinations);
+        var changedSource = Hashes([sources[1]]);
+
+        var done = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (done.GetProperty("status").GetString(), done.GetProperty("error").ValueKind));
+        var files = done.GetProperty("files").EnumerateArray().ToList();
+        Assert.Equal("SourceDeleted", files[0].GetProperty("status").GetString());
+        Assert.Equal(("Copied", "The source changed after it was copied, so it was kept."),
+            (files[1].GetProperty("status").GetString(), files[1].GetProperty("error").GetString()));
+        Assert.Equal(changedSource, Hashes([sources[1]]));
+        Assert.Equal(copiesBefore, Hashes(destinations));
+        var ids = FileIds(done);
+        Assert.Equal((0L, 0L), FileRows([ids[0]]));
+        Assert.Equal((1L, 1L), FileRows([ids[1]]));
+    }
+
+    [Fact]
+    public async Task At_startup_with_keep_source_on_an_interrupted_job_with_a_deleted_source_succeeds_and_keeps_the_rest()
+    {
+        var (jobId, sources, destinations) = await CutOffWhileDeleting((setup, _) =>
+            SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate, keepSourceFiles: true));
+        var copiesBefore = Hashes(destinations);
+        var remainingSource = Hashes([sources[1]]);
+
+        var done = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (done.GetProperty("status").GetString(), done.GetProperty("error").ValueKind));
+        Assert.Equal(["SourceDeleted", "Copied"], FileStatuses(done));
+        Assert.Equal(remainingSource, Hashes([sources[1]]));
+        Assert.Equal(copiesBefore, Hashes(destinations));
+    }
+
+    [Fact]
+    public async Task At_startup_an_interrupted_job_never_deletes_a_file_at_a_pending_destination()
+    {
+        using var host = QueueOnly();
+        var setup = host.CreateClient();
+        await SaveTemplates(setup, "%artist%/%album%", CleanFileTemplate);
+        var ids = await ScanTwoBooks(setup);
+        var created = await ApproveJob(setup, ids[0]);
+        var jobId = created.GetProperty("id").GetInt64();
+        var sources = Sources(created);
+        var destinations = Destinations(created);
+        var sourcesBefore = Hashes(sources);
+        // Not this job's: the file appeared at file 1's destination after approval.
+        Directory.CreateDirectory(Path.GetDirectoryName(destinations[0])!);
+        File.WriteAllBytes(destinations[0], [4, 5, 6]);
+        SetStatuses(host, jobId, ProcessingJob.Running);
+
+        var failed = await WaitForJob(_factory.CreateClient(), jobId);
+
+        Assert.Equal(("Failed", "Interrupted by an application restart."),
+            (failed.GetProperty("status").GetString(), failed.GetProperty("error").GetString()));
+        Assert.Equal(new byte[] { 4, 5, 6 }, File.ReadAllBytes(destinations[0]));
+        Assert.Equal(sourcesBefore, Hashes(sources));
+        Assert.All(FileStatuses(failed), s => Assert.Equal("Pending", s));
+    }
+
     [Fact]
     public void FailInterruptedJobs_fails_only_running_jobs()
     {
@@ -724,14 +1137,18 @@ public class JobsControllerTests : IDisposable
         var succeeded = Insert(ProcessingJob.Succeeded, "2026-10-19T00:30:00.0000000Z", null);
         var failed = Insert(ProcessingJob.Failed, "2026-10-19T00:30:00.0000000Z", "Earlier failure.");
 
-        repository.FailInterruptedJobs("Interrupted by an application restart.", "2026-10-19T01:00:00.0000000Z");
+        var before = DateTime.UtcNow;
+
+        host.Services.GetRequiredService<ProcessingService>().FailInterruptedJobs();
 
         (string, string?, string?) Read(long id)
         {
             var job = repository.GetJob(id)!.Value.Job;
             return (job.Status, job.Error, job.FinishedAtUtc);
         }
-        Assert.Equal(("Failed", "Interrupted by an application restart.", "2026-10-19T01:00:00.0000000Z"), Read(running));
+        var (status, error, finishedAt) = Read(running);
+        Assert.Equal(("Failed", "Interrupted by an application restart."), (status, error));
+        Assert.True(DateTime.Parse(finishedAt!, null, System.Globalization.DateTimeStyles.RoundtripKind) >= before);
         Assert.Equal(("Queued", null, null), Read(queued));
         Assert.Equal(("Succeeded", null, "2026-10-19T00:30:00.0000000Z"), Read(succeeded));
         Assert.Equal(("Failed", "Earlier failure.", "2026-10-19T00:30:00.0000000Z"), Read(failed));

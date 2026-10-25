@@ -17,6 +17,15 @@ public class ProcessingRepository(SqliteConnectionFactory connections)
             new { groupId, active = new[] { ProcessingJob.Queued, ProcessingJob.Running } });
     }
 
+    /// <summary>True when the group has a Succeeded job: it was processed.</summary>
+    public bool HasSucceededJob(long groupId)
+    {
+        using var connection = connections.Open();
+        return connection.ExecuteScalar<bool>(
+            "SELECT EXISTS (SELECT 1 FROM ProcessingJob WHERE GroupId = @groupId AND Status = @succeeded)",
+            new { groupId, succeeded = ProcessingJob.Succeeded });
+    }
+
     /// <summary>
     /// Inserts the job and its files (positions from 1 in list order) and marks the group user-corrected, so a rescan
     /// keeps it, in one transaction. Returns the new job id.
@@ -89,14 +98,5 @@ public class ProcessingRepository(SqliteConnectionFactory connections)
         using var connection = connections.Open();
         connection.Execute(
             "UPDATE ProcessingJobFile SET Status = @Status, Error = @Error WHERE JobId = @JobId AND Position = @Position", file);
-    }
-
-    /// <summary>Fails every Running job: at startup nothing can still be processing, so it was cut off by a restart.</summary>
-    public void FailInterruptedJobs(string message, string finishedAt)
-    {
-        using var connection = connections.Open();
-        connection.Execute(
-            "UPDATE ProcessingJob SET Status = @failed, Error = @message, FinishedAtUtc = @finishedAt WHERE Status = @running",
-            new { failed = ProcessingJob.Failed, running = ProcessingJob.Running, message, finishedAt });
     }
 }

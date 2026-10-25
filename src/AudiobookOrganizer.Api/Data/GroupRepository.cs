@@ -67,17 +67,28 @@ public class GroupRepository(SqliteConnectionFactory connections)
     private const string GroupColumns =
         "Id, Title, Author, Confidence, EvidenceJson, FileCount, TotalDurationMs, ScanRunId, UserCorrected";
 
-    /// <summary>Every group, the ones needing review first: Low, Medium, High, then by title.</summary>
+    /// <summary>
+    /// Leaves out groups that were processed (any Succeeded job). Needs the <c>succeeded</c> parameter, from
+    /// <see cref="NotProcessedParameters"/>.
+    /// </summary>
+    private const string NotProcessed =
+        "NOT EXISTS (SELECT 1 FROM ProcessingJob j WHERE j.GroupId = FileGroup.Id AND j.Status = @succeeded)";
+
+    private static readonly object NotProcessedParameters = new { succeeded = ProcessingJob.Succeeded };
+
+    /// <summary>Every group not yet processed, the ones needing review first: Low, Medium, High, then by title.</summary>
     public IReadOnlyList<FileGroup> GetGroups()
     {
         using var connection = connections.Open();
         return connection.Query<FileGroup>(
             $"""
             SELECT {GroupColumns} FROM FileGroup
+            WHERE {NotProcessed}
             ORDER BY CASE Confidence WHEN 'Low' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, Title COLLATE NOCASE, Id
-            """).ToList();
+            """, NotProcessedParameters).ToList();
     }
 
+    /// <summary>The group, processed or not.</summary>
     public FileGroup? GetGroup(long id)
     {
         using var connection = connections.Open();
@@ -276,6 +287,28 @@ public class GroupRepository(SqliteConnectionFactory connections)
         transaction.Commit();
     }
 
+    /// <summary>
+    /// Deletes the files' <c>FileGroupFile</c> rows, then their <c>AudioFile</c> rows, in one transaction. Their groups
+    /// are left as they are (a processed book's group keeps its metadata, cover and job link).
+    /// </summary>
+    public void RemoveFiles(IReadOnlyList<long> fileIds)
+    {
+        if (fileIds.Count == 0) return;
+        using var connection = connections.Open();
+        using var transaction = connection.BeginTransaction();
+        connection.Execute("DELETE FROM FileGroupFile WHERE AudioFileId IN @fileIds", new { fileIds }, transaction);
+        connection.Execute("DELETE FROM AudioFile WHERE Id IN @fileIds", new { fileIds }, transaction);
+        transaction.Commit();
+    }
+
+    /// <summary>The <c>AudioFile</c> rows of <paramref name="ids"/> that still exist.</summary>
+    public IReadOnlyList<AudioFile> GetFiles(IReadOnlyList<long> ids)
+    {
+        if (ids.Count == 0) return [];
+        using var connection = connections.Open();
+        return connection.Query<AudioFile>("SELECT * FROM AudioFile WHERE Id IN @ids", new { ids }).ToList();
+    }
+
     /// <summary>Each of <paramref name="fileIds"/>' user state and whether it's in a group.</summary>
     public IReadOnlyDictionary<long, (string? UserState, bool Grouped)> GetUserStates(IReadOnlyList<long> fileIds)
     {
@@ -289,19 +322,23 @@ public class GroupRepository(SqliteConnectionFactory connections)
             .ToDictionary(r => r.Id, r => (r.UserState, r.Grouped != 0));
     }
 
-    /// <summary>How many groups there are, by confidence, and how many the user corrected. Zeros when there are none.</summary>
+    /// <summary>
+    /// How many groups not yet processed there are, by confidence, and how many the user corrected. Zeros when there
+    /// are none.
+    /// </summary>
     public GroupCounts CountGroups()
     {
         using var connection = connections.Open();
         return connection.QuerySingle<GroupCounts>(
-            """
+            $"""
             SELECT COUNT(*) AS Total,
                 COALESCE(SUM(CASE WHEN Confidence = 'Low' THEN 1 ELSE 0 END), 0) AS Low,
                 COALESCE(SUM(CASE WHEN Confidence = 'Medium' THEN 1 ELSE 0 END), 0) AS Medium,
                 COALESCE(SUM(CASE WHEN Confidence = 'High' THEN 1 ELSE 0 END), 0) AS High,
                 COALESCE(SUM(CASE WHEN UserCorrected = 1 THEN 1 ELSE 0 END), 0) AS Corrected
             FROM FileGroup
-            """);
+            WHERE {NotProcessed}
+            """, NotProcessedParameters);
     }
 
     /// <summary>

@@ -28,11 +28,15 @@ const maxTextLength = 500
 export default function IncomingPage() {
   const [state, setState] = useState<IncomingState>({ kind: 'loading' })
   const mounted = useRef(false)
+  const loadedOnce = useRef(false)
+  const loadErrorAlert = useRef<HTMLParagraphElement>(null)
 
   const load = useCallback(() => {
     return getGroups()
       .then((data) => {
-        if (mounted.current) setState({ kind: 'loaded', data })
+        if (!mounted.current) return
+        loadedOnce.current = true
+        setState({ kind: 'loaded', data })
       })
       .catch(() => {
         if (mounted.current) setState({ kind: 'error' })
@@ -46,6 +50,11 @@ export default function IncomingPage() {
       mounted.current = false
     }
   }, [load])
+
+  // A reload that fails mid-session replaces the list (and any focused control), so focus the error.
+  useEffect(() => {
+    if (state.kind === 'error' && loadedOnce.current) loadErrorAlert.current?.focus()
+  }, [state.kind])
 
   function replaceGroup(group: GroupSummary) {
     setState((current) =>
@@ -63,7 +72,7 @@ export default function IncomingPage() {
       <h1 className="text-2xl font-semibold">Incoming</h1>
       {state.kind === 'loading' && <p className="mt-4 text-muted">Loading…</p>}
       {state.kind === 'error' && (
-        <p role="alert" className="mt-4 flex items-center gap-2 text-destructive">
+        <p ref={loadErrorAlert} role="alert" tabIndex={-1} className="mt-4 flex items-center gap-2 text-destructive">
           <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
           The incoming groups couldn't be loaded.
         </p>

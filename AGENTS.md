@@ -127,7 +127,7 @@ Product detail lives in `docs/PRD.md`. UI rules will go in `docs/UIUX.md` once i
 - **State:** React built-ins plus `services/api.ts`. No Redux, Zustand, React Query, etc.
 - **Styling:** CSS custom properties and utility classes in `src/index.css`, including shadcn's theme tokens. No `tailwind.config.js` or `postcss.config.js`.
 - **Extra packages for this project:** TagLibSharp (tag reading for both formats; tag and cover writing for MP3, and for M4B after the ffmpeg remux). No auth packages: the app runs without login on a trusted LAN.
-- **External tools:** ffmpeg/ffprobe, installed in the Docker image and required on PATH in dev and for tests. They handle the M4B remux (stream copy, `-c copy`, never re-encode) and M4B chapter reads. M4B copies are remuxed by ffmpeg with `-movflags disable_chpl` (chapters live only in the QuickTime chapter track), then tagged by TagLibSharp. Never save an M4B that still has a `chpl` atom with TagLibSharp: it corrupts it (slices 04, 60). Call the tools only through `Services/FfmpegRunner.cs`, passing an argument list rather than a shell string.
+- **External tools:** ffmpeg/ffprobe, installed in the Docker image and required on PATH in dev and for tests. They handle the M4B remux (stream copy, `-c copy`, never re-encode) and M4B chapter reads. M4B copies are remuxed by ffmpeg with no chapters (`-map_chapters -1`, `-movflags disable_chpl`), then tagged by TagLibSharp; MP3 copies keep their chapters. Never save an M4B that still has a `chpl` atom with TagLibSharp: it corrupts it (slices 04, 60). Call the tools only through `Services/FfmpegRunner.cs`, passing an argument list rather than a shell string.
 - **Metadata providers:** the Audible catalog API (`api.audible.com/1.0/catalog/products`, unofficial, keyless) is primary and Open Library is the fallback. There's one client per provider in `Services/`, behind a shared provider interface.
 
 ### Layout
@@ -155,7 +155,7 @@ docs/PLAN.md        goal, finished-when, phases (see section 3)
 docs/CURRENT-STATE.md   start here: branch, last/next slice, open questions, decisions
 docs/slices/        one file per slice, NN-short-name.md
 docs/templates/     the blank PRD, PLAN, CURRENT-STATE and slice files the skills copy from
-scripts/            start-api.ps1, start-client.ps1
+scripts/            start.ps1 (api | client | both)
 Dockerfile, docker-compose.yml   production image: API serves the built client from wwwroot
 reference/          read-only reference material, never import from it
 ```
@@ -166,7 +166,7 @@ reference/          read-only reference material, never import from it
 - **Test (backend):** `dotnet test src/AudiobookOrganizer.Api.Tests`
 - **Typecheck:** `npx tsc -b --noEmit` in `src/AudiobookOrganizer.Client` (`-b` follows the project references; plain `tsc --noEmit` checks nothing)
 - **Test (frontend):** `npm test` in `src/AudiobookOrganizer.Client`
-- **Run locally:** `scripts/start-api.ps1` (API) and `scripts/start-client.ps1` (Vite, proxies `/api` to the API)
+- **Run locally:** `scripts/start.ps1` (default `both`: API here, Vite client in a new window; or `api` / `client`). Client proxies `/api` to the API.
 - **Ports:** API 5070, client 5173, container 8080
 - **Package:** `docker compose build` (only when I ask)
 
@@ -175,7 +175,7 @@ reference/          read-only reference material, never import from it
 ### Environment
 
 - **Shell:** Windows, Git Bash / PowerShell (not WSL). Use commands and paths that work there.
-- **Deploy target:** a Linux Docker container via Docker Compose on a home server. Single user, no authentication, trusted LAN only. Incoming and library folders are mounted volumes (`/incoming`, `/library`) and may be on different volumes. The SQLite database and logs live under `/data`. Code must handle both Windows (dev) and Linux (container) paths. Don't change the volume layout or the Dockerfile base images without asking.
+- **Deploy target:** the Linux image running in Docker Desktop (WSL2) on the Audiobookshelf server (Windows), via Docker Compose (`C:\docker\audiobook-organizer\`, image built from the repo; see `docs/DEPLOY.md`). Single user, no authentication, trusted LAN only. `/data` is a named volume; `/incoming` and `/library` are bind-mounted from its local disks and may be on different volumes. The SQLite database and logs live under `/data`. Code must handle both Windows (dev) and Linux (container) paths. Don't change the volume layout or the Dockerfile base images without asking.
 - **File safety:** scans are read-only. Source files are never tagged in place. A source is deleted only after its destination copy is written, tagged and read back. Never overwrite an existing destination file.
 - **Secrets:** use user secrets or `.env` for local config. Encrypt stored credentials at rest. Never read from, write to or quote `secrets.local.*`.
 

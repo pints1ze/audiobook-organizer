@@ -141,6 +141,15 @@ describe('IncomingPage', () => {
     expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
   })
 
+  it('does not move focus to the load error on the first load', async () => {
+    getGroupsMock.mockRejectedValue(new Error('boom'))
+    renderPage()
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent("The incoming groups couldn't be loaded.")
+    expect(alert).not.toHaveFocus()
+  })
+
   describe('editing a title and author', () => {
     async function openHobbitEditor() {
       getGroupsMock.mockResolvedValue(response)
@@ -302,6 +311,19 @@ describe('IncomingPage', () => {
       await waitFor(() => expect(getGroupsMock).toHaveBeenCalledTimes(2))
       const alert = await screen.findByRole('alert')
       expect(alert).toHaveTextContent(/couldn't be saved/)
+      expect(alert).toHaveAttribute('tabindex', '-1')
+      await waitFor(() => expect(alert).toHaveFocus())
+    })
+
+    it('focuses the load error when saving throws and the reload fails too', async () => {
+      await openHobbitEditor()
+      updateGroupMock.mockRejectedValue(new Error('offline'))
+      getGroupsMock.mockRejectedValue(new Error('offline'))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      const alert = await screen.findByRole('alert')
+      expect(alert).toHaveTextContent("The incoming groups couldn't be loaded.")
       expect(alert).toHaveAttribute('tabindex', '-1')
       await waitFor(() => expect(alert).toHaveFocus())
     })
