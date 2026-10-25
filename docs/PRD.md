@@ -2,7 +2,7 @@
 
 **Problem:** Audiobooks arrive as one M4B or dozens of MP3s, with misleading folder names, several books per folder, or one book split across nested folders, and with missing or wrong tags. Identifying, tagging, renaming and filing each one by hand takes several tools and a lot of repetition.
 **Users:** One technically capable collector running the app on their own server or home network, and using it whenever new books land in the incoming folder.
-**Goal:** Point the app at an incoming folder, review the books it proposes, confirm metadata and move consistently tagged files into an organized library without risking the originals.
+**Goal:** Point the app at an incoming folder, review the books it proposes, confirm metadata and move consistently tagged files into an organized library without risking the originals. Identifying, finalizing and approving a book should take a glance and a couple of actions, from one screen (v1.1).
 
 Full background: `overview.md` (v0.1 draft). This PRD supersedes it where they differ.
 
@@ -17,6 +17,8 @@ Full background: `overview.md` (v0.1 draft). This PRD supersedes it where they d
 8. **Dashboard:** shows the configured directories, last scan time, counts by status, failures, and filters by status and confidence. (v1)
 9. **Existing library management** with Audiobookshelf sync, library-wide normalization and duplicate detection. (later)
 10. **Discovery:** follow authors and series, track releases, wishlists. (later)
+11. **Review workspace:** one list-plus-detail screen. The list shows every unprocessed book with a cover thumbnail, title, author and stage (Needs match, Needs review, Ready, Queued, Done, Failed), filterable by stage. The detail pane shows the selected book's match search and chosen match, cover, the metadata values that differ, destination paths and **Approve & next**. `j`/`k` move between books, `Enter` accepts, `a` approves. Scan and its status move into the workspace header; grouping corrections stay reachable from the pane. (v1.1)
+12. **Background identification:** after a scan the server searches every new book in the background (one request at a time, with a delay) and stores the top candidates with a score from title, author and runtime vs the files' duration. The pane shows them side by side. Selected books can "Accept suggested match", and selected Ready books can be approved, in one action. A match is never applied without a click. (v1.1)
 
 ## Data
 - **AudioFile:** source path, size, duration, mtime, extracted tags, track/disc, cover present, chapter count, sequence. It belongs to at most one FileGroup.
@@ -29,7 +31,10 @@ Full background: `overview.md` (v0.1 draft). This PRD supersedes it where they d
 - **ApplicationSetting:** directories, templates, the keep-source toggle.
 - Each metadata value records its origin: file, provider, normalized or user.
 
+- **MetadataCandidate:** per book, a stored search result: provider, candidate JSON, score, searched-at time. Cascade-deleted with its group (v1.1; reverses slice 27's "candidates aren't stored").
+
 ## Rules
+- A background search never applies a match. A provider failure leaves the book at Needs match with the error shown. Candidates are refreshed only for new books or on request.
 - Scanning never modifies files. Nothing is moved or tagged without explicit per-book approval.
 - Source files are never tagged in place. The tags are written to the destination copy.
 - The source is deleted only after the copy and tag read-back succeed. Cross-volume moves are always copy, then verify, then delete.
