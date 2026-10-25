@@ -4,9 +4,10 @@ import { CircleAlert } from 'lucide-react'
 import BookList, { bookTitle, stages } from '../components/review/BookList'
 import BookPane from '../components/review/BookPane'
 import ScanControl from '../components/review/ScanControl'
+import SelectionBar from '../components/review/SelectionBar'
 import ShortcutsHelp from '../components/review/ShortcutsHelp'
 import { getReview } from '../services/api'
-import type { ReviewBook, ReviewList, ReviewStage } from '../types/review'
+import type { AcceptSuggestedResult, ReviewBook, ReviewList, ReviewStage } from '../types/review'
 import { isTypingTarget } from '../utils/isTypingTarget'
 
 type ReviewState = { kind: 'loading' } | { kind: 'loaded'; review: ReviewList } | { kind: 'error' }
@@ -33,30 +34,43 @@ export default function ReviewPage() {
   const statusLine = useRef<HTMLParagraphElement>(null)
   const [approved, setApproved] = useState<Approved | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  // The books ticked for a batch action, and a counter that remounts the pane after one changes the books.
+  const [checked, setChecked] = useState<Set<number>>(() => new Set())
+  const [paneVersion, setPaneVersion] = useState(0)
 
   const stageParam = searchParams.get('stage')
   const stage = stages.some((s) => s.stage === stageParam) ? (stageParam as ReviewStage) : null
   const bookParam = Number(searchParams.get('book'))
   const selectedId = Number.isInteger(bookParam) && bookParam > 0 ? bookParam : null
 
+  /** Shows a loaded list and keeps only the ticked books still in it. */
+  const show = useCallback((review: ReviewList) => {
+    setState({ kind: 'loaded', review })
+    const listed = new Set(review.books.map((b) => b.groupId))
+    setChecked((current) => {
+      const kept = [...current].filter((id) => listed.has(id))
+      return kept.length === current.size ? current : new Set(kept)
+    })
+  }, [])
+
   const load = useCallback(async () => {
     try {
       const review = await getReview()
-      if (mounted.current) setState({ kind: 'loaded', review })
+      if (mounted.current) show(review)
     } catch {
       if (mounted.current) setState({ kind: 'error' })
     }
-  }, [])
+  }, [show])
 
   /** Re-fetches the list without the skeleton; a failure keeps the list on screen. */
   const reload = useCallback(async () => {
     try {
       const review = await getReview()
-      if (mounted.current) setState({ kind: 'loaded', review })
+      if (mounted.current) show(review)
     } catch {
       // Keep the current list; the next reload or page visit refreshes it.
     }
-  }, [])
+  }, [show])
 
   useEffect(() => {
     mounted.current = true
@@ -87,6 +101,20 @@ export default function ReviewPage() {
     setSearchParams(searchFor(stage, nextId))
     setApproved({ message: `Queued ${bookTitle(book)}.`, fromId: book.groupId, bookId: nextId })
     void reload()
+  }
+
+  function toggleChecked(groupId: number) {
+    const next = new Set(checked)
+    if (!next.delete(groupId)) next.add(groupId)
+    setChecked(next)
+  }
+
+  /** Unticks the accepted books, reloads the list, then remounts the pane so the shown book loads its new match. */
+  async function handleAccepted(results: AcceptSuggestedResult[]) {
+    const accepted = new Set(results.filter((r) => r.accepted).map((r) => r.groupId))
+    setChecked((current) => new Set([...current].filter((id) => !accepted.has(id))))
+    await reload()
+    if (mounted.current) setPaneVersion((version) => version + 1)
   }
 
   // The selection j/k step from: a key repeat can fire again before the URL change re-renders the page.
@@ -170,11 +198,25 @@ export default function ReviewPage() {
             </div>
           )}
           {state.kind === 'loaded' && (
+            <SelectionBar
+              selected={state.review.books.filter((b) => checked.has(b.groupId)).map((b) => b.groupId)}
+              shownIds={state.review.books.filter((b) => !stage || b.stage === stage).map((b) => b.groupId)}
+              titleFor={(groupId) => {
+                const book = state.review.books.find((b) => b.groupId === groupId)
+                return book ? bookTitle(book) : 'A book no longer listed'
+              }}
+              onSelectionChange={setChecked}
+              onAccepted={(results) => void handleAccepted(results)}
+            />
+          )}
+          {state.kind === 'loaded' && (
             <BookList
               books={state.review.books}
               counts={state.review.counts}
               stage={stage}
               selectedId={selectedId}
+              selectedIds={checked}
+              onToggle={toggleChecked}
               onStageChange={(next) => setSearchParams(searchFor(next, selectedId))}
               bookHref={(groupId) => ({ search: searchFor(stage, groupId) })}
             />
@@ -183,7 +225,7 @@ export default function ReviewPage() {
         <div className="mt-6 lg:mt-0">
           {selected ? (
             <BookPane
-              key={selected.groupId}
+              key={`${selected.groupId}-${paneVersion}`}
               book={selected}
               backHref={{ search: searchFor(stage, null) }}
               onChanged={() => void reload()}

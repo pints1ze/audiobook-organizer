@@ -127,7 +127,7 @@ public class CandidateSearchWorkerTests : IDisposable
         });
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await setup.PostAsync($"/api/groups/{ids[1]}/candidates", null)).StatusCode);
-        Assert.Equal(1, _audible.Requests.Count);
+        Assert.Single(_audible.Requests);
 
         // A host with the worker: its startup pass searches only the third book.
         var client = Host(0).CreateClient();
