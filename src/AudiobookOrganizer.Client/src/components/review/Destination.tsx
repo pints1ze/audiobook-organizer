@@ -115,7 +115,7 @@ function DestinationContent({ preview }: { preview: BookPreview }) {
         </ul>
       )}
       <details className="mt-2">
-        <summary className="cursor-pointer">Show all {files.length} files</summary>
+        <summary className="cursor-pointer">{files.length === 1 ? 'Show the file' : `Show all ${files.length} files`}</summary>
         <ul className="mt-2 space-y-1 text-sm">
           {files.map((file) => (
             <li key={file.fileId} className="break-all">

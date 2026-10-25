@@ -4,6 +4,7 @@ import { CircleAlert } from 'lucide-react'
 import CatalogSearch, { CandidateCover, CandidateDetails } from '../book/CatalogSearch'
 import CoverPicker from '../book/CoverPicker'
 import MetadataEditor from '../book/MetadataEditor'
+import ApproveAction from './ApproveAction'
 import { BookCover, StageChip, bookTitle } from './BookList'
 import Destination from './Destination'
 import { getMatch } from '../../services/api'
@@ -16,15 +17,20 @@ type MatchState = { kind: 'loading' } | { kind: 'loaded'; match: BookMatch | nul
 /**
  * The chosen book's detail pane. Render it keyed by the book so a new book starts fresh.
  * `onChanged` runs after a pick, a cover save or a metadata save, so the list can follow; each also reloads Destination.
+ * `onApproved` runs once Approve & next has queued the book. `focusTitle` focuses the title heading on mount.
  */
 export default function BookPane({
   book,
   backHref,
   onChanged,
+  onApproved,
+  focusTitle = false,
 }: {
   book: ReviewBook
   backHref: To
   onChanged: () => void
+  onApproved: () => void
+  focusTitle?: boolean
 }) {
   const [matchState, setMatchState] = useState<MatchState>({ kind: 'loading' })
   const [savedMessage, setSavedMessage] = useState('')
@@ -32,8 +38,13 @@ export default function BookPane({
   // Separate from reloadKey: reloading Cover or Metadata after their own save would clear their status lines.
   const [destinationKey, setDestinationKey] = useState(0)
   const matchHeading = useRef<HTMLHeadingElement>(null)
+  const titleHeading = useRef<HTMLHeadingElement>(null)
   const headingId = `review-book-${book.groupId}`
   const matchHeadingId = `review-match-${book.groupId}`
+
+  useEffect(() => {
+    if (focusTitle) titleHeading.current?.focus()
+  }, [focusTitle])
 
   useEffect(() => {
     let current = true
@@ -74,7 +85,7 @@ export default function BookPane({
       <div className="flex flex-wrap gap-6">
         <BookCover book={book} size={160} />
         <div className="min-w-0">
-          <h2 id={headingId} className="text-xl font-semibold">
+          <h2 id={headingId} ref={titleHeading} tabIndex={-1} className="rounded text-xl font-semibold">
             {bookTitle(book)}
           </h2>
           {book.author && <p>{book.author}</p>}
@@ -90,6 +101,7 @@ export default function BookPane({
           </p>
         </div>
       </div>
+      <ApproveAction book={book} headingId={headingId} onApproved={onApproved} />
       <section aria-labelledby={matchHeadingId} className="mt-6">
         <h2 id={matchHeadingId} ref={matchHeading} tabIndex={-1} className="rounded text-xl font-semibold">
           Match

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  approveBook,
   chooseCover,
   chosenCoverUrl,
   fileCoverUrl,
@@ -22,6 +23,7 @@ import ReviewPage from './ReviewPage'
 
 vi.mock('../services/api', () => ({
   getReview: vi.fn(),
+  approveBook: vi.fn(),
   getMatch: vi.fn(),
   searchMetadata: vi.fn(),
   pickMatch: vi.fn(),
@@ -44,6 +46,7 @@ const chooseCoverMock = vi.mocked(chooseCover)
 const getMetadataMock = vi.mocked(getMetadata)
 const saveMetadataMock = vi.mocked(saveMetadata)
 const getBookPreviewMock = vi.mocked(getBookPreview)
+const approveMock = vi.mocked(approveBook)
 
 /** A book preview whose files go under /lib/<folder>/ with the given problems on each file. */
 function previewFor(groupId: number, folder: string, files: Partial<FilePreview>[] = [{}]): BookPreview {
@@ -203,6 +206,7 @@ describe('ReviewPage', () => {
     saveMetadataMock.mockReset()
     getBookPreviewMock.mockReset()
     getBookPreviewMock.mockImplementation(async (groupId) => previewFor(groupId, `Book ${groupId}`))
+    approveMock.mockReset()
   })
 
   it('lists the books with title, author, narrator, runtime, stage and cover', async () => {
@@ -600,5 +604,131 @@ describe('ReviewPage', () => {
 
     const destination = await screen.findByRole('region', { name: 'Destination' })
     expect(await within(destination).findByRole('alert')).toHaveTextContent("The destination couldn't be loaded.")
+  })
+
+  it('says "Show the file" for a one-file book', async () => {
+    getReviewMock.mockResolvedValue(review)
+    renderAt('/?book=2')
+
+    const destination = await screen.findByRole('region', { name: 'Destination' })
+    expect(await within(destination).findByText('Show the file')).toBeInTheDocument()
+    expect(destination).toHaveTextContent('1 file')
+    expect(destination).not.toHaveTextContent('Show all')
+  })
+
+  describe('Approve & next', () => {
+    const queuedJob = { ok: true as const, job: {} as never }
+    const ready = (b: ReviewBook) => ({ ...b, stage: 'Ready' as const })
+    const allReady: ReviewList = {
+      books: [hobbit, ready(dune), ready(lostWorld)],
+      counts: { needsMatch: 0, needsReview: 0, ready: 3, queued: 0, failed: 0 },
+    }
+
+    it('shows the filled button for a Ready book, described by its title', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?book=1')
+
+      const pane = await screen.findByRole('region', { name: 'The Hobbit' })
+      const button = within(pane).getByRole('button', { name: 'Approve & next' })
+      expect(button).toHaveClass('bg-foreground')
+      expect(button).toHaveAccessibleDescription('The Hobbit')
+    })
+
+    it.each([
+      ['NeedsReview', 'Fix the problems under Destination to approve.', false],
+      ['NeedsMatch', 'Pick a match or enter the metadata to approve.', false],
+      ['Queued', 'Queued for processing.', true],
+      ['Failed', 'Processing failed.', true],
+    ] as const)('shows the %s line and no button', async (stage, line, jobsLink) => {
+      getReviewMock.mockResolvedValue({ ...review, books: [{ ...hobbit, stage }, dune, lostWorld] })
+      renderAt('/?book=1')
+
+      const pane = await screen.findByRole('region', { name: 'The Hobbit' })
+      expect(within(pane).getByText(line)).toBeInTheDocument()
+      expect(within(pane).queryByRole('button', { name: 'Approve & next' })).not.toBeInTheDocument()
+      if (jobsLink) expect(within(pane).getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs')
+      else expect(within(pane).queryByRole('link', { name: 'Jobs' })).not.toBeInTheDocument()
+    })
+
+    it('queues the book, selects the next one, announces it, focuses its title and reloads the list', async () => {
+      getReviewMock.mockResolvedValueOnce(allReady).mockResolvedValueOnce({
+        books: [{ ...hobbit, stage: 'Queued' }, ready(dune), ready(lostWorld)],
+        counts: { ...allReady.counts, ready: 2, queued: 1 },
+      })
+      approveMock.mockResolvedValue(queuedJob)
+      renderAt('/?book=1')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve & next' }))
+
+      const next = await screen.findByRole('region', { name: 'Dune' })
+      expect(approveMock).toHaveBeenCalledWith(1)
+      expect(search().get('book')).toBe('2')
+      expect(screen.getByText('Queued The Hobbit.')).toHaveAttribute('role', 'status')
+      expect(within(next).getByRole('heading', { level: 2, name: 'Dune' })).toHaveFocus()
+      await waitFor(() => expect(within(bookList()).getAllByRole('listitem')[0]).toHaveTextContent('Queued'))
+      expect(getReviewMock).toHaveBeenCalledTimes(2)
+      expect(screen.getByRole('button', { name: 'Queued 1' })).toBeInTheDocument()
+
+      // Choosing another book, even the approved one, clears the status line.
+      fireEvent.click(bookLink(/The Hobbit/))
+      expect(screen.queryByText('Queued The Hobbit.')).not.toBeInTheDocument()
+    })
+
+    it('under a stage filter, approving the last shown book selects the one before it', async () => {
+      getReviewMock.mockResolvedValue(allReady)
+      approveMock.mockResolvedValue(queuedJob)
+      renderAt('/?stage=Ready&book=3')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve & next' }))
+
+      const next = await screen.findByRole('region', { name: 'Dune' })
+      expect(search().get('book')).toBe('2')
+      expect(search().get('stage')).toBe('Ready')
+      expect(within(next).getByRole('heading', { level: 2, name: 'Dune' })).toHaveFocus()
+    })
+
+    it('approving the only shown book clears the selection and focuses the status line', async () => {
+      getReviewMock.mockResolvedValue(review)
+      approveMock.mockResolvedValue(queuedJob)
+      renderAt('/?stage=Ready&book=1')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve & next' }))
+
+      const status = await screen.findByText('Queued The Hobbit.')
+      expect(search().get('book')).toBeNull()
+      expect(search().get('stage')).toBe('Ready')
+      expect(screen.getByText('Choose a book from the list.')).toBeInTheDocument()
+      await waitFor(() => expect(status).toHaveFocus())
+    })
+
+    it('shows "Approving…" while pending and a refusal as an alert, keeping the book selected', async () => {
+      getReviewMock.mockResolvedValue(review)
+      let resolveApprove: (result: Awaited<ReturnType<typeof approveBook>>) => void = () => {}
+      approveMock.mockReturnValue(new Promise((resolve) => (resolveApprove = resolve)))
+      renderAt('/?book=1')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve & next' }))
+      expect(screen.getByRole('button', { name: 'Approving…' })).toBeDisabled()
+
+      resolveApprove({ ok: false, message: 'This book was already processed.' })
+
+      const pane = screen.getByRole('region', { name: 'The Hobbit' })
+      expect(await within(pane).findByRole('alert')).toHaveTextContent('This book was already processed.')
+      expect(within(pane).getByRole('button', { name: 'Approve & next' })).toBeEnabled()
+      expect(search().get('book')).toBe('1')
+      expect(getReviewMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('shows an alert when the approval request fails', async () => {
+      getReviewMock.mockResolvedValue(review)
+      approveMock.mockRejectedValue(new Error('network'))
+      renderAt('/?book=1')
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Approve & next' }))
+
+      const pane = screen.getByRole('region', { name: 'The Hobbit' })
+      expect(await within(pane).findByRole('alert')).toHaveTextContent("The book couldn't be approved.")
+      expect(search().get('book')).toBe('1')
+    })
   })
 })
