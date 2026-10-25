@@ -46,3 +46,29 @@
 - The 500-id cap is a trust-boundary limit, not a feature.
 - Files touched: `ReviewDtos.cs`, `ReviewService.cs`, `ReviewController.cs`, `CandidateService.cs`, `CandidateRepository.cs`, `ReviewControllerTests.cs`, `ReviewAcceptSuggestedControllerTests.cs` (new): 7.
 - Later slices for this phase: the Review list's selection and "Accept suggested match" bar; select Ready books and approve them in one action.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API 0 warnings. The test project has 1 warning, xUnit2013 at `CandidateSearchWorkerTests.cs:130`, from slice 88 (not this slice); `-p:OutDir=<scratchpad>` because the dev API locks `bin/Debug` |
+| Typecheck | Passed | |
+| Backend tests | 437 passed, 0 failed | |
+| Frontend tests | 359 passed, 0 failed | 21 files |
+| New tests | 4 of 4 present, passing | `ReviewControllerTests` suggestedScore test; `ReviewAcceptSuggestedControllerTests`: two accepted; mixed request in order; missing/empty/501 ids 400 (theory, 3 cases) |
+| Manual: accept two background-searched books on the dev API | Not run | needs the dev API restarted (`scripts/start.ps1`) |
+
+## Outcome (2026-10-25, commit 37c9954)
+
+**Status:** Implemented
+**Summary:** `GET /api/review` gives each book a `suggestedScore` (its best stored candidate's score, from one query), and `POST /api/review/accept-suggested` picks each listed book's best stored candidate through `PickMatch`, skipping unknown, already-matched and unsearched books with an error, in request order; 1–500 distinct ids.
+**Changed:** 7 code files (`ReviewDtos.cs`, `ReviewService.cs`, `ReviewController.cs`, `CandidateService.cs`, `CandidateRepository.cs`, `ReviewControllerTests.cs`, `ReviewAcceptSuggestedControllerTests.cs` new)
+**Done when:** all 5 met; manual check not run.
+**Deviations:**
+- Tests store candidates through `CandidateRepository.Replace` rather than faked provider HTTP: fine.
+- The 400 message is "Choose between 1 and 500 books.": fine.
+- The slice 88 test file left an xUnit2013 warning (missed in slice 88's review, which only built the API project): debt, fix in the next slice.
+**Follow-ups:**
+- Fix the xUnit2013 warning at `CandidateSearchWorkerTests.cs:130` (`Assert.Single`).
