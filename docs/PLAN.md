@@ -61,7 +61,7 @@ Each phase gets its own `phase/N-short-name` branch and one PR to `main`.
 ### 10. Review workspace (not started)
 **Goal:** finalize and approve books from one list-plus-detail screen.
 **Done when:** the home page lists every unprocessed book with cover, title, author and stage, filterable by stage; selecting a book shows match search, cover, changed metadata, destination and Approve & next in a detail pane without leaving the page; `j`/`k`/`Enter`/`a` work and the screen meets WCAG 2.1 AA.
-**Slices:** none yet. UI rules: `docs/UIUX.md`.
+**Slices:** 76 (written). UI rules: `docs/UIUX.md`.
 
 ### 11. Parallel identification (not started)
 **Goal:** books arrive with suggested matches, so identifying takes a glance.

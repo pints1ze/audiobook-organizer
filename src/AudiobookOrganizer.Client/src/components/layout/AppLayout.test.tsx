@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../App'
@@ -74,41 +74,76 @@ describe('AppLayout', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
   })
 
-  it('marks the Settings nav link as the current page on /settings', async () => {
-    renderAt('/settings')
-
-    const nav = screen.getByRole('navigation', { name: 'Main' })
-    expect(nav).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
-    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument()
-  })
-
-  it('marks the Incoming nav link as the current page on /incoming', async () => {
+  it('lists Dashboard, Incoming, Preview and Jobs in the Main nav, with the rest under More', async () => {
     renderAt('/incoming')
 
-    const incoming = screen.getByRole('link', { name: 'Incoming' })
-    expect(incoming).toHaveAttribute('aria-current', 'page')
+    const nav = screen.getByRole('navigation', { name: 'Main' })
+    const navLinks = screen.getAllByRole('link').filter((l) => nav.contains(l))
+    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'Preview', 'Jobs'])
+    expect(screen.queryByRole('link', { name: 'People' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Genres' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-haspopup', 'menu')
+    expect(screen.getByRole('link', { name: 'Incoming' })).toHaveAttribute('aria-current', 'page')
     expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current')
-    const navLinks = screen.getAllByRole('link').filter((l) => l.closest('nav'))
-    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'People', 'Genres', 'Preview', 'Jobs', 'Settings'])
+    expect(screen.getByRole('button', { name: 'More' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
   })
 
-  it('marks the People nav link as the current page on /people', async () => {
-    renderAt('/people')
+  it('opens More with Enter, and choosing Settings goes to the Settings page', async () => {
+    renderAt('/')
 
-    expect(screen.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Genres' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('heading', { level: 1, name: 'People' })).toBeInTheDocument()
-    expect(await screen.findByText('No people yet.')).toBeInTheDocument()
+    const more = screen.getByRole('button', { name: 'More' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    more.focus()
+    fireEvent.keyDown(more, { key: 'Enter' })
+
+    const menu = await screen.findByRole('menu')
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    const items = screen.getAllByRole('menuitem')
+    expect(items.map((i) => i.textContent)).toEqual(['People', 'Genres', 'Settings'])
+    expect(menu).toContainElement(items[2])
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-current', 'true')
   })
 
-  it('marks the Genres nav link as the current page on /genres', async () => {
+  it('closes the More menu with Escape and returns focus to More', async () => {
+    renderAt('/')
+
+    const more = screen.getByRole('button', { name: 'More' })
+    more.focus()
+    fireEvent.keyDown(more, { key: 'Enter' })
+    const menu = await screen.findByRole('menu')
+
+    fireEvent.keyDown(menu, { key: 'Escape' })
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    expect(more).toHaveFocus()
+  })
+
+  it('marks More as current on /people, and People inside its menu', async () => {
+    renderAt('/people')
+
+    const more = screen.getByRole('button', { name: 'More' })
+    expect(more).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('heading', { level: 1, name: 'People' })).toBeInTheDocument()
+    expect(await screen.findByText('No people yet.')).toBeInTheDocument()
+
+    fireEvent.keyDown(more, { key: 'Enter' })
+    expect(await screen.findByRole('menuitem', { name: 'People' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('menuitem', { name: 'Genres' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('shows the Genres page on /genres with More marked current', async () => {
     renderAt('/genres')
 
-    expect(screen.getByRole('link', { name: 'Genres' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-current', 'true')
     expect(screen.getByRole('heading', { level: 1, name: 'Genres' })).toBeInTheDocument()
     expect(await screen.findByText('No genres yet.')).toBeInTheDocument()
   })
