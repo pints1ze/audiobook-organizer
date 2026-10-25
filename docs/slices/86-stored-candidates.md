@@ -47,3 +47,30 @@
 - The scoring weights are a first guess; the pane slice may tune them with real results.
 - Files touched: `DatabaseInitializer.cs`, `CandidateRepository.cs` (new), `CandidateService.cs` (new), `MetadataDtos.cs`, `GroupsController.cs`, `Program.cs`, `CandidateServiceTests.cs` (new), `GroupCandidatesControllerTests.cs` (new): 8.
 - Later slices for this phase: background search after a scan, throttled (needs the throttle answer); candidates side by side in the pane; select books and "Accept suggested match"; select Ready books and approve.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings; built with `-p:OutDir=<scratchpad>` because the running dev API locks `bin/Debug` |
+| Typecheck | Passed | |
+| Backend tests | 427 passed, 0 failed | same `OutDir` workaround |
+| Frontend tests | 349 passed, 0 failed | 20 files |
+| New tests | 4 of 4 present, passing | `CandidateServiceTests` (6 tests: score 100, runtime off/missing, no duration, unrelated title, title share, case/punctuation/`Last, First`); `GroupCandidatesControllerTests` (204 then POST top 5 best first and GET; unknown group 404; failed search stored then replaced; rescan removes candidates) |
+| Manual: POST candidates against the real Audible API | Not run | the running dev API (started before this slice) doesn't serve the new endpoint; restart it with `scripts/start.ps1 api`, then `POST /api/groups/{id}/candidates` for a scanned book |
+
+## Outcome (2026-10-25, commit ec56cfb)
+
+**Status:** Implemented
+**Summary:** `POST /api/groups/{id}/candidates` searches the providers with the book's title and first author, scores each candidate (title words up to 50, author 25, runtime within 3%/10% 25/12) and stores the top 5 with the search time and provider errors in `CandidateSearch` and `MetadataCandidate`; `GET` reads them (204 when never searched). A failed search is stored as an error, and both tables cascade from `FileGroup`.
+**Changed:** 9 code files (`Services/CandidateService.cs` and `Data/CandidateRepository.cs` new, `DatabaseInitializer.cs`, `MetadataDtos.cs`, `Models/Local/Audiobook.cs`, `GroupsController.cs`, `Program.cs`, two new test files)
+**Done when:** all 5 met; the merge cascade isn't tested on its own (same `DELETE FROM FileGroup` as the rescan test).
+**Deviations:**
+- Entity classes `CandidateSearch` and `MetadataCandidate` added to `Models/Local/Audiobook.cs` (9 files, not 8): fine, follows the layout rule.
+- Title words split on punctuation ("hail-mary" → "hail", "mary") and drop apostrophes: fine, a reading of "punctuation dropped".
+- Built and tested with `-p:OutDir=<scratchpad>` because the running dev API locks `bin/Debug`: fine, no code change.
+**Follow-ups:**
+- Manual check against the real Audible API not run (the dev API predates the slice); do it at phase verification.
+- Background search after a scan needs the throttle answer and a definition of "new book" (uncorrected groups get new ids on every rescan).
