@@ -46,3 +46,28 @@
 - Conflict check: "Ready" doesn't change approval; `POST /api/jobs` still refuses a book whose preview isn't clean (slice 54), so the rule mirrors it. A user-completed book with no match counts as identified (developer, 2026-10-19: manual completion needs no separate state).
 - "User-entered metadata value" means any `AudiobookField` with origin `user` (slice 32); the file fallback doesn't count.
 - About 5 new files plus `Program.cs`, under the cap.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 414 passed, 0 failed | |
+| Frontend tests | 277 passed, 0 failed | 17 files |
+| New tests | 3 of 3 present, passing | `ReviewStageTests` (7 cases); `ReviewControllerTests` (5 cases: scan → NeedsMatch with counts, match + cover → Ready/NeedsReview with `chosen`, succeeded job not listed, embedded cover) |
+| Manual: `curl /api/review` on the dev data | Passed | 200 in 0.12 s; 26 books: 25 NeedsMatch, 1 NeedsReview ("Don't Let Him In": metadata title, narrator, chosen cover) |
+
+## Outcome (2026-10-25, commit e197d23)
+
+**Status:** Implemented
+**Summary:** `GET /api/review` lists every unprocessed book with metadata title, first author and narrator, runtime, file count, cover source and a stage (Queued, Failed, NeedsMatch, Ready, NeedsReview, first rule wins), plus counts per stage. The rule is `ReviewService.Stage`, a static method.
+**Changed:** 8 files: `Models/Api/ReviewDtos.cs`, `Services/ReviewService.cs`, `Controllers/ReviewController.cs`, `Program.cs`, `Services/ReviewStageTests.cs`, `Controllers/ReviewControllerTests.cs`, this slice file, `docs/PLAN.md`.
+**Deviations:**
+- `author` is the first author, like `narrator`: *fine*; the list shows one name.
+- Controller tests were written after the service, so they weren't seen failing first (the stage tests were): *fine*.
+- `ReviewService` is transient because `CoverService` is: *fine*.
+**Follow-ups:**
+- Next: slice 78, the workspace list at `/` with covers and the stage filter (client types and `getReview` in `services/api.ts`).
