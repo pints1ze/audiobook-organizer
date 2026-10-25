@@ -47,3 +47,31 @@
 - Slice 83 decided "one tab stop per book" for the list. A checkbox per row adds a second; that's the usual pattern for selectable lists, and `j`/`k` still give fast movement between books. Recorded as a deliberate change to that decision.
 - Files touched: `types/review.ts`, `services/api.ts`, `components/review/BookList.tsx`, `components/review/SelectionBar.tsx` (new), `pages/ReviewPage.tsx`, `pages/ReviewPage.test.tsx`, `CandidateSearchWorkerTests.cs`: 7.
 - Later slice for this phase: select Ready books and approve them in one action (an "Approve selected" button on this bar with an inline confirmation).
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API and test project 0 warnings (the slice 88 xUnit2013 warning is gone); `-p:OutDir=<scratchpad>` because the dev API locks `bin/Debug` |
+| Typecheck | Passed | |
+| Backend tests | 437 passed, 0 failed | |
+| Frontend tests | 365 passed, 0 failed | 21 files |
+| New tests | 3 of 3 present, passing | `ReviewPage.test.tsx` "selection bar" block, 6 tests: count and select all shown with mixed state; accept summary, skipped book, reload and remaining selection; failure alert keeps selection; "Suggestion 87"; plus pruning after a reload |
+| Manual: batch accept three background-searched books on the dev API | Not run | needs the dev API restarted (`scripts/start.ps1`) |
+| Manual: keyboard Tab/Space/`j`/`k` | Not run | same |
+
+## Outcome (2026-10-25, commit c203386)
+
+**Status:** Implemented
+**Summary:** Review rows have a "Select <title>" checkbox and Needs match books show "Suggestion N". A Selected books bar above the list has Select all shown (with a mixed state), the count, Accept suggested match and Clear selection; accepting posts the selected ids, shows the summary and each skipped book's error, reloads, keeps only unaccepted ids and remounts the pane.
+**Changed:** 7 code files (`components/review/SelectionBar.tsx` new, `BookList.tsx`, `ReviewPage.tsx`, `ReviewPage.test.tsx`, `services/api.ts`, `types/review.ts`, `CandidateSearchWorkerTests.cs`)
+**Done when:** all 5 met; manual checks not run.
+**Deviations:**
+- Accept suggested match uses `aria-disabled` instead of `disabled`, keeping focus on it while it runs: improvement, as `ScanControl` does.
+- The pane remounts after the reload finishes, so it gets the new stage too: improvement.
+- An extra test for pruning the selection after a reload: improvement.
+- The selection is passed to the bar as an ordered array, so requests follow list order: fine.
+- The list now has two tab stops per book (checkbox and link), changing slice 83's one-per-book decision as the slice planned: fine, recorded in Decisions.
+**Follow-ups:** batch approve reuses this bar (next slice).
