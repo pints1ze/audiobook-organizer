@@ -6,7 +6,7 @@
 ## Done when
 - [x] `GET /api/groups/{id}/cover` returns `provider.isChosen`: `true` only when the chosen cover's source is `provider` and it was chosen at or after the current match's `PickedAtUtc`; `false` otherwise (no chosen cover, an embedded or uploaded one, or a provider cover chosen before the match was picked again).
 - [x] The `PUT .../cover` responses carry the same flag (they return the same `BookCoverDto`).
-- [ ] On the book page's Cover section, after picking a new match, the match's option shows its "Use the match's cover" button again, even though the chosen cover still came from the old match; the chosen-cover image and its "From the match (…)" text stay as they are.
+- [x] On the book page's Cover section, after picking a new match, the match's option shows its "Use the match's cover" button again, even though the chosen cover still came from the old match; the chosen-cover image and its "From the match (…)" text stay as they are.
 - [x] All four checks pass: build, backend tests, typecheck, frontend tests.
 
 ## Read first
@@ -44,3 +44,28 @@
 - Conflict check: matches CURRENT-STATE.md's cover decisions (slices 34, 35: covers download only from the stored match's URL; one chosen cover per book). No new packages; API change is additive.
 - Files: 2 backend, 1 backend test, 1 type file, `CoverPicker.tsx`, up to 3 client test files = about 8, at the cap.
 - This is the last carried-in phase 9 item; after its review the phase's done-when lines are met and `/itc-next` opens the phase PR.
+
+## Test results (2026-10-24)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 401 passed, 0 failed | trx logger; the accepted intermittent failure didn't occur |
+| Frontend tests | 275 passed, 0 failed | 16 files |
+| New tests | 2 of 2 present, passing | `GroupCoverControllerTests.Provider_is_chosen_only_while_the_chosen_cover_came_from_the_current_match` (covers the re-pick, PUT response and embedded cases); `CoverPicker.test.tsx` button vs "Current cover" by `isChosen` |
+| Manual: pick a match, use its cover, pick another match, button offered again | Not run | app not running; start with `scripts/start.ps1` |
+
+## Outcome (2026-10-24, commit 4eeac97)
+
+**Status:** Implemented
+**Summary:** `ProviderCoverDto` gains `IsChosen`, true only when the chosen cover's source is `provider` and it was chosen at or after the current match's `PickedAtUtc`. The cover picker marks the match's option "Current cover" from that flag, so after a new match it offers "Use the match's cover" again.
+**Changed:** 10 files: `Services/CoverService.cs`, `Models/Api/MetadataDtos.cs`, `GroupCoverControllerTests.cs`, `types/metadata.ts`, `components/book/CoverPicker.tsx` and its test, the `BookPage.test.tsx` and `api.test.ts` fixtures, this slice file and `docs/PLAN.md`.
+**Deviations:**
+- A private `ParseUtc` helper in `CoverService`, also used by its `ToDto`: *fine*.
+- Done-when item 3 is ticked from the backend re-pick test plus the CoverPicker test; the browser check is the developer's: *fine*.
+**Follow-ups:**
+- Manual (developer): the cover re-pick check above, at phase verification.
+- Phase 9's done-when lines are met; open the phase PR.
