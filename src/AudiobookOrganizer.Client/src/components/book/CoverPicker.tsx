@@ -27,9 +27,9 @@ function sourceText(covers: BookCovers) {
   return file ? `From ${file.relativePath}` : 'From a file of this book'
 }
 
-type Props = { groupId: number; reloadKey: number }
+type Props = { groupId: number; reloadKey: number; onSaved?: () => void }
 
-export default function CoverPicker({ groupId, reloadKey }: Props) {
+export default function CoverPicker({ groupId, reloadKey, onSaved }: Props) {
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<SaveError | null>(null)
@@ -90,6 +90,7 @@ export default function CoverPicker({ groupId, reloadKey }: Props) {
     if (!saved) return false
     setState({ kind: 'loaded', covers: saved })
     setSavedMessage('Cover saved.')
+    onSaved?.()
     return true
   }
 

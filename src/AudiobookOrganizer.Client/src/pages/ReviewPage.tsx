@@ -94,7 +94,7 @@ export default function ReviewPage() {
               key={selected.groupId}
               book={selected}
               backHref={{ search: searchFor(stage, null) }}
-              onMatchSaved={() => void reload()}
+              onChanged={() => void reload()}
             />
           ) : (
             state.kind === 'loaded' && <p className="text-muted">Choose a book from the list.</p>

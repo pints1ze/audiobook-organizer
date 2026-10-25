@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, type To } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import CatalogSearch, { CandidateCover, CandidateDetails } from '../book/CatalogSearch'
+import CoverPicker from '../book/CoverPicker'
+import MetadataEditor from '../book/MetadataEditor'
 import { BookCover, StageChip, bookTitle } from './BookList'
 import { getMatch } from '../../services/api'
 import type { BookMatch } from '../../types/metadata'
@@ -10,18 +12,22 @@ import { formatDuration } from '../../utils/formatDuration'
 
 type MatchState = { kind: 'loading' } | { kind: 'loaded'; match: BookMatch | null } | { kind: 'failed' }
 
-/** The chosen book's detail pane. Render it keyed by the book so a new book starts fresh. */
+/**
+ * The chosen book's detail pane. Render it keyed by the book so a new book starts fresh.
+ * `onChanged` runs after a pick, a cover save or a metadata save, so the list can follow.
+ */
 export default function BookPane({
   book,
   backHref,
-  onMatchSaved,
+  onChanged,
 }: {
   book: ReviewBook
   backHref: To
-  onMatchSaved: () => void
+  onChanged: () => void
 }) {
   const [matchState, setMatchState] = useState<MatchState>({ kind: 'loading' })
   const [savedMessage, setSavedMessage] = useState('')
+  const [reloadKey, setReloadKey] = useState(0)
   const matchHeading = useRef<HTMLHeadingElement>(null)
   const headingId = `review-book-${book.groupId}`
   const matchHeadingId = `review-match-${book.groupId}`
@@ -43,8 +49,9 @@ export default function BookPane({
   function handlePicked(match: BookMatch) {
     setMatchState({ kind: 'loaded', match })
     setSavedMessage(`Match saved: ${match.match.title ?? 'Untitled'}`)
+    setReloadKey((key) => key + 1)
     matchHeading.current?.focus()
-    onMatchSaved()
+    onChanged()
   }
 
   const currentMatch = matchState.kind === 'loaded' ? (matchState.match?.match ?? null) : null
@@ -76,9 +83,9 @@ export default function BookPane({
         </div>
       </div>
       <section aria-labelledby={matchHeadingId} className="mt-6">
-        <h3 id={matchHeadingId} ref={matchHeading} tabIndex={-1} className="rounded text-lg font-semibold">
+        <h2 id={matchHeadingId} ref={matchHeading} tabIndex={-1} className="rounded text-xl font-semibold">
           Match
-        </h3>
+        </h2>
         <p role="status" className="mt-2">
           {savedMessage}
         </p>
@@ -107,6 +114,8 @@ export default function BookPane({
           onPicked={handlePicked}
         />
       </section>
+      <CoverPicker groupId={book.groupId} reloadKey={reloadKey} onSaved={onChanged} />
+      <MetadataEditor groupId={book.groupId} match={currentMatch} reloadKey={reloadKey} onSaved={onChanged} />
     </section>
   )
 }

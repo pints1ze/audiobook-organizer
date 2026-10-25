@@ -1,8 +1,19 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { chosenCoverUrl, fileCoverUrl, getMatch, getReview, pickMatch, searchMetadata } from '../services/api'
-import type { MetadataCandidate } from '../types/metadata'
+import {
+  chooseCover,
+  chosenCoverUrl,
+  fileCoverUrl,
+  getCovers,
+  getMatch,
+  getMetadata,
+  getReview,
+  pickMatch,
+  saveMetadata,
+  searchMetadata,
+} from '../services/api'
+import type { BookCovers, BookMetadata, MetadataCandidate } from '../types/metadata'
 import type { ReviewBook, ReviewList } from '../types/review'
 import { formatDuration } from '../utils/formatDuration'
 import ReviewPage from './ReviewPage'
@@ -12,6 +23,11 @@ vi.mock('../services/api', () => ({
   getMatch: vi.fn(),
   searchMetadata: vi.fn(),
   pickMatch: vi.fn(),
+  getCovers: vi.fn(),
+  chooseCover: vi.fn(),
+  uploadCover: vi.fn(),
+  getMetadata: vi.fn(),
+  saveMetadata: vi.fn(),
   chosenCoverUrl: (groupId: number) => `/api/groups/${groupId}/cover/image`,
   fileCoverUrl: (groupId: number, fileId: number) => `/api/groups/${groupId}/files/${fileId}/cover`,
 }))
@@ -20,6 +36,38 @@ const getReviewMock = vi.mocked(getReview)
 const getMatchMock = vi.mocked(getMatch)
 const searchMock = vi.mocked(searchMetadata)
 const pickMock = vi.mocked(pickMatch)
+const getCoversMock = vi.mocked(getCovers)
+const chooseCoverMock = vi.mocked(chooseCover)
+const getMetadataMock = vi.mocked(getMetadata)
+const saveMetadataMock = vi.mocked(saveMetadata)
+
+function noCovers(groupId: number): BookCovers {
+  return { groupId, chosen: null, embedded: [], provider: null }
+}
+
+/** A book's metadata with only a file-origin title. */
+function metadataFor(groupId: number, title: string | null, origin: 'file' | 'user' = 'file'): BookMetadata {
+  const empty = { value: null, origin: null, provider: null }
+  const emptyList = { value: [], origin: null, provider: null }
+  return {
+    groupId,
+    fields: {
+      title: { value: title, origin: title ? origin : null, provider: null },
+      subtitle: empty,
+      authors: emptyList,
+      narrators: emptyList,
+      genres: emptyList,
+      series: empty,
+      seriesPart: empty,
+      publisher: empty,
+      releaseDate: empty,
+      language: empty,
+      format: empty,
+      asin: empty,
+      isbn: empty,
+    },
+  }
+}
 
 function book(overrides: Partial<ReviewBook> & { groupId: number }): ReviewBook {
   return {
@@ -120,6 +168,12 @@ describe('ReviewPage', () => {
     getMatchMock.mockResolvedValue(null)
     searchMock.mockReset()
     pickMock.mockReset()
+    getCoversMock.mockReset()
+    getCoversMock.mockImplementation(async (groupId) => noCovers(groupId))
+    chooseCoverMock.mockReset()
+    getMetadataMock.mockReset()
+    getMetadataMock.mockImplementation(async (groupId) => metadataFor(groupId, null))
+    saveMetadataMock.mockReset()
   })
 
   it('lists the books with title, author, narrator, runtime, stage and cover', async () => {
@@ -297,7 +351,7 @@ describe('ReviewPage', () => {
 
     expect(await within(match).findByText('Match saved: Dune')).toHaveAttribute('role', 'status')
     expect(pickMock).toHaveBeenCalledWith(2, duneCandidate)
-    expect(within(match).getByRole('heading', { level: 3, name: 'Match' })).toHaveFocus()
+    expect(within(match).getByRole('heading', { level: 2, name: 'Match' })).toHaveFocus()
     expect(within(match).getByText('Current match')).toBeInTheDocument()
 
     await waitFor(() => expect(within(bookList()).getAllByRole('listitem')[1]).toHaveTextContent('Ready'))
@@ -349,5 +403,86 @@ describe('ReviewPage', () => {
     expect(screen.queryByText('1 match found.')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Use this match/ })).not.toBeInTheDocument()
     expect(getMatchMock).toHaveBeenLastCalledWith(3)
+  })
+  it('shows the Cover and Metadata sections; a chosen cover reloads the list and becomes its thumbnail', async () => {
+    const duneCovers: BookCovers = { groupId: 2, chosen: null, embedded: [{ fileId: 20, relativePath: 'Dune/01.mp3' }], provider: null }
+    getCoversMock.mockResolvedValue(duneCovers)
+    getReviewMock
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce({ ...review, books: [hobbit, { ...dune, coverSource: 'chosen', coverFileId: null }, lostWorld] })
+    chooseCoverMock.mockResolvedValue({
+      ok: true,
+      cover: { ...duneCovers, chosen: { source: 'embedded', fileId: 20, mimeType: 'image/jpeg', chosenAtUtc: '2026-10-25T10:00:00Z' } },
+    })
+    renderAt('/?book=2')
+
+    const cover = await screen.findByRole('region', { name: 'Cover' })
+    expect(screen.getByRole('region', { name: 'Metadata' })).toBeInTheDocument()
+    expect(getCoversMock).toHaveBeenCalledWith(2)
+    expect(getMetadataMock).toHaveBeenCalledWith(2)
+
+    fireEvent.click(await within(cover).findByRole('button', { name: 'Use this cover: Dune/01.mp3' }))
+
+    expect(await within(cover).findByText('Cover saved.')).toBeInTheDocument()
+    await waitFor(() => expect(getReviewMock).toHaveBeenCalledTimes(2))
+    await waitFor(() =>
+      expect(within(bookList()).getAllByRole('listitem')[1].querySelector('img')).toHaveAttribute('src', chosenCoverUrl(2)),
+    )
+    expect(screen.getByRole('region', { name: 'Dune' }).querySelector('img')).toHaveAttribute('src', chosenCoverUrl(2))
+  })
+
+  it('saving metadata for a Needs match book reloads the list and its chip shows the new stage', async () => {
+    getReviewMock
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce({ ...review, books: [hobbit, dune, { ...lostWorld, stage: 'Ready' }] })
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata: metadataFor(3, 'The Lost World', 'user') })
+    renderAt('/?book=3')
+
+    const metadata = await screen.findByRole('region', { name: 'Metadata' })
+    fireEvent.click(await within(metadata).findByRole('button', { name: 'Edit metadata' }))
+    fireEvent.change(within(metadata).getByLabelText('Title'), { target: { value: 'The Lost World' } })
+    fireEvent.click(within(metadata).getByRole('button', { name: 'Save' }))
+
+    expect(await within(metadata).findByText('Metadata saved.')).toBeInTheDocument()
+    expect(saveMetadataMock).toHaveBeenCalledWith(3, { title: 'The Lost World' })
+    await waitFor(() => expect(within(bookList()).getAllByRole('listitem')[2]).toHaveTextContent('Ready'))
+    expect(getReviewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it("picking a match reloads the covers and metadata, and the editor shows the match's proposed values", async () => {
+    getReviewMock.mockResolvedValueOnce(review).mockResolvedValueOnce(reviewAfterPick)
+    renderAt('/?book=2')
+    const metadata = await screen.findByRole('region', { name: 'Metadata' })
+    await within(metadata).findByRole('button', { name: 'Edit metadata' })
+    expect(metadata).not.toHaveTextContent('Match: Scott Brick')
+
+    await searchAndPick()
+
+    await waitFor(() => expect(getCoversMock).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(getMetadataMock).toHaveBeenCalledTimes(2))
+    expect(await within(metadata).findByText('Match: Scott Brick')).toBeInTheDocument()
+  })
+
+  it('gives the pane title and its sections h2 headings with nothing deeper than h3', async () => {
+    getReviewMock.mockResolvedValue(review)
+    searchMock.mockResolvedValue({ ok: true, result: { candidates: [duneCandidate], providerErrors: [] } })
+    renderAt('/?book=2')
+    const pane = await screen.findByRole('region', { name: 'Dune' })
+    await within(pane).findByRole('button', { name: 'Edit metadata' })
+    fireEvent.click(within(pane).getByRole('button', { name: 'Search' }))
+    await within(pane).findByRole('button', { name: 'Use this match: Dune, result 1 of 1' })
+
+    const headings = within(pane)
+      .getAllByRole('heading')
+      .map((h) => ({ level: Number(h.tagName.slice(1)), name: h.textContent }))
+    expect(headings.filter((h) => h.level === 2).map((h) => h.name)).toEqual([
+      'Dune',
+      'Match',
+      'Catalog search',
+      'Cover',
+      'Metadata',
+    ])
+    expect(headings[1].level).toBe(2)
+    expect(headings.every((h) => h.level === 2 || h.level === 3)).toBe(true)
   })
 })
