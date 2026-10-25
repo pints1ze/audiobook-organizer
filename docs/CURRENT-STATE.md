@@ -3,7 +3,7 @@
 _Updated: slice 85 review, 2026-10-25, commit 1fa6eca_
 
 ## Branch
-`phase/10-review-workspace` (off `main` after the phase 9 merge, PR #9)
+`phase/11-parallel-identification` (off `main` after the phase 10 merge, PR #10)
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 and the React client on 5173 (`scripts/start.ps1`, default `both`) with SQLite at `<repo>/data/audiobooks.db`. The client shows the API and database status.

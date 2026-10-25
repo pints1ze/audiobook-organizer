@@ -49,3 +49,21 @@ public class AudiobookCover
     public byte[] Image { get; set; } = [];
     public string ChosenAtUtc { get; set; } = "";
 }
+
+/// <summary>A group's last catalog search. ErrorsJson is the provider errors as a JSON string array.</summary>
+public class CandidateSearch
+{
+    public long GroupId { get; set; }
+    public string SearchedAtUtc { get; set; } = "";
+    public string ErrorsJson { get; set; } = "[]";
+}
+
+/// <summary>One stored candidate of a search, rank 0 the best. CandidateJson is the candidate as received.</summary>
+public class MetadataCandidate
+{
+    public long GroupId { get; set; }
+    public int Rank { get; set; }
+    public string Provider { get; set; } = "";
+    public string CandidateJson { get; set; } = "";
+    public int Score { get; set; }
+}

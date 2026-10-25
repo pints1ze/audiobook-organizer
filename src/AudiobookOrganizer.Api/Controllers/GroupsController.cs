@@ -8,7 +8,7 @@ namespace AudiobookOrganizer.Api.Controllers;
 [ApiController]
 [Route("api/groups")]
 public class GroupsController(GroupingService grouping, AudiobookService audiobooks, CoverService covers,
-    NamingPreviewService previews, ILogger<GroupsController> logger) : ControllerBase
+    NamingPreviewService previews, CandidateService candidates, ILogger<GroupsController> logger) : ControllerBase
 {
     [HttpGet("{id:long}/preview")]
     public ActionResult<BookPreviewDto> GetPreview(long id) => previews.Preview(id) is { } preview ? preview : NotFound();
@@ -79,6 +79,18 @@ public class GroupsController(GroupingService grouping, AudiobookService audiobo
         if (result.Match is not null) return result.Match;
         return result.Errors.Count == 0 ? NotFound() : Invalid(result.Errors);
     }
+
+    [HttpGet("{id:long}/candidates")]
+    public ActionResult<BookCandidatesDto> GetCandidates(long id)
+    {
+        if (!candidates.GroupExists(id)) return NotFound();
+        return candidates.Get(id) is { } stored ? stored : NoContent();
+    }
+
+    /// <summary>Searches the providers for the book and stores its top candidates; 200 also when the search failed.</summary>
+    [HttpPost("{id:long}/candidates")]
+    public async Task<ActionResult<BookCandidatesDto>> PostCandidates(long id, CancellationToken ct) =>
+        await candidates.RefreshAsync(id, ct) is { } stored ? stored : NotFound();
 
     [HttpGet("{id:long}/metadata")]
     public ActionResult<BookMetadataDto> GetMetadata(long id) =>

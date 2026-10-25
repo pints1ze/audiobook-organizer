@@ -182,6 +182,25 @@ public class DatabaseInitializer(SqliteConnectionFactory connections)
                 Error TEXT,
                 PRIMARY KEY (JobId, Position))
             """);
+        // A book's last catalog search: when it ran, the provider errors (a JSON string array) and its top candidates
+        // by score, rank 0 first. Both go with the group; a new search replaces them.
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS CandidateSearch (
+                GroupId INTEGER PRIMARY KEY REFERENCES FileGroup (Id) ON DELETE CASCADE,
+                SearchedAtUtc TEXT NOT NULL,
+                ErrorsJson TEXT NOT NULL)
+            """);
+        connection.Execute(
+            """
+            CREATE TABLE IF NOT EXISTS MetadataCandidate (
+                GroupId INTEGER NOT NULL REFERENCES CandidateSearch (GroupId) ON DELETE CASCADE,
+                Rank INTEGER NOT NULL,
+                Provider TEXT NOT NULL,
+                CandidateJson TEXT NOT NULL,
+                Score INTEGER NOT NULL,
+                PRIMARY KEY (GroupId, Rank))
+            """);
     }
 
     // AUTOINCREMENT keeps SQLite from reusing the id of a deleted group, so a page holding an old id gets a 404

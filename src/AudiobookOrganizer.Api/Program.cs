@@ -83,6 +83,8 @@ builder.Services.AddHttpClient<CoverDownloadClient>(http =>
 builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<AudibleClient>());
 builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<OpenLibraryClient>());
 builder.Services.AddTransient<MetadataSearchService>();
+builder.Services.AddSingleton<CandidateRepository>();
+builder.Services.AddTransient<CandidateService>();
 
 builder.Services.AddControllers();
 
