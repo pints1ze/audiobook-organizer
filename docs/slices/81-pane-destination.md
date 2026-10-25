@@ -46,3 +46,35 @@
 - Conflict check: `GET /api/groups/{id}/preview` is the library-wide preview filtered to one book (`NamingPreviewService.Preview`), so its duplicate and existing flags match the Preview page and `POST /api/jobs`'s check (slice 54). UIUX.md: facts that identify the book first; long file lists don't crowd the pane, but problems are always visible.
 - Split: PLAN.md's "destination and Approve & next (81)" came to about 10 files with the shared problem helpers, over the cap. This slice is the destination; **82** is Approve & next (button for Ready books, queue, select and focus the next book, announce it); shortcuts move to **83**, scan in the header to **84**.
 - Files: `services/api.ts`, `services/api.test.ts`, `utils/previewProblems.ts`, `utils/previewProblems.test.ts`, `pages/PreviewPage.tsx`, `components/review/Destination.tsx`, `components/review/BookPane.tsx`, `pages/ReviewPage.test.tsx`. 8 files, 4 tasks.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--artifacts-path`; the dev API locks `bin/`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 415 passed, 0 failed | |
+| Frontend tests | 309 passed, 0 failed | 19 files; 3 full runs, all green |
+| New tests | 4 of 4 present, passing | `previewProblems.test.ts`; `api.test.ts` `getBookPreview`; `ReviewPage.test.tsx` folder/count/ready + missing token outside the list; metadata save re-fetches + load error |
+| Manual: Shroud (236) folder matches the preview | Passed | `Y:\audiobooks\Adrian Tchaikovsky\Shroud`, 1 file, "Ready to approve." = `GET /api/groups/236/preview`. Summary reads "Show all 1 files" (wording bug) |
+| Manual: edit the title, folder follows | Not run | would change dev data; covered by the `ReviewPage` metadata-save test |
+| Manual: multi-file book | Passed | book 260 "How to be a Pirate 2": "16 files", "Show all 16 files" opens a 16-item list |
+| Manual: problem shown without expanding | Passed | book 65 "Don't Let Him In": "Dont Let Him In - Lisa Jewell.m4b: Already exists" outside the closed `<details>` |
+
+Console errors on these pages are only the known embedded-cover 404s (moved files; initials shown).
+
+## Outcome (2026-10-25, commit 57cbd3e)
+
+**Status:** Implemented
+**Summary:** The review pane has a Destination section: the book's library folder, file count, every blocking problem listed visibly and the full file list behind "Show all", reloading after a pick, cover or metadata save. `getBookPreview` was added and the Preview page's problem helpers moved to `utils/previewProblems.ts`.
+**Changed:** 8 code files (key: `components/review/Destination.tsx`, `components/review/BookPane.tsx`, `utils/previewProblems.ts`, `services/api.ts`, with tests)
+**Done when:** all 5 met.
+**Deviations:**
+- Destination reloads on its own `destinationKey` so Cover and Metadata keep their status lines: fine, the slice allowed it.
+- The folder is the first file's `destinationPath` minus its name, not `relativePath` joined to the library path: improvement, same result without guessing the separator.
+- With no library path, each file's "no library" error repeats once per file: debt, minor; leave until it bothers someone.
+- "Show all 1 files" for one-file books: bug, wording; fix in 82 (it touches the pane).
+- No test for the library-not-set message: debt, minor.
+**Follow-ups:** singular "Show the file" / "1 file" wording (82).
