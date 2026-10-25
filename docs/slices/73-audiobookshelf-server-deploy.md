@@ -40,3 +40,29 @@
 - Conflict check: AGENTS.md says not to change the volume layout without asking; the developer chose local bind mounts on 2026-10-23, and that is the OK for this change to AGENTS.md and PLAN.md (gate 4 already cleared).
 - `/incoming` and `/library` are on the same `D:` disk now, but the code still copies, never renames, across them, so nothing depends on that.
 - Remaining phase 9 slices after this: re-focusing the Jobs status line on a repeated announcement (59), focusing the Incoming load error when a failed save also fails the reload (26), and the cover picker's "Current cover" after a match change (37).
+
+## Test results (2026-10-24)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 400 passed, 0 failed | |
+| Frontend tests | 271 passed, 0 failed | 16 files |
+| New tests | None planned | docs and sample compose only |
+| `docker compose -f docs/deploy/compose.yaml --env-file docs/deploy/.env.example config` | Passed | `/data` volume `audiobook-data`; `/incoming` bind `D:\audiobooks_incoming`; `/library` bind `D:\audiobooks` |
+| No CIFS/SMB/`cookserv` left in DEPLOY.md, deploy files, AGENTS.md, PRD | Passed | search found none |
+| Manual: deploy from the new DEPLOY.md on the Audiobookshelf server | Not run | developer's, on the server |
+
+## Outcome (2026-10-24, commit dbd2039)
+
+**Status:** Implemented
+**Summary:** The deploy target is now the Audiobookshelf server: Windows with Docker Desktop, image built from `D:\workspace\audiobook-organizer`, run from `C:\docker\audiobook-organizer\`. `docs/deploy/compose.yaml` bind-mounts `/incoming` and `/library` from `.env` paths (`D:\audiobooks_incoming`, `D:\audiobooks`), and `/data` stays a named volume. DEPLOY.md, AGENTS.md, the PRD and PLAN.md no longer mention CIFS or SMB.
+**Changed:** 8 files: `docs/deploy/compose.yaml`, `docs/deploy/.env.example`, `docs/DEPLOY.md`, `AGENTS.md`, `docs/PRD.md`, `docs/PLAN.md`, `docs/CURRENT-STATE.md` (writer's edits), the slice file.
+**Deviations:**
+- "Changing a share or the credentials" became "Changing a folder" (edit `.env`, then `docker compose up -d`): *fine*, as the slice asked.
+**Follow-ups:**
+- Manual (developer): redeploy from the new DEPLOY.md on the Audiobookshelf server and see a processed book appear in Audiobookshelf.
+- Next phase 9 slices: the Jobs status re-focus (59), the Incoming load-error focus (26), the cover picker "Current cover" (37).
