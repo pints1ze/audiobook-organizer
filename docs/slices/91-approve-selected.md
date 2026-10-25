@@ -45,3 +45,31 @@
 - Only Ready books are sent: Ready means a clean preview (slice 77), which `POST /api/jobs` also requires; a book that changed in between is refused by the server and reported.
 - With this slice every Done when line of phase 11 has an implementation; the phase's manual checks go to the developer's verification.
 - Files touched: `components/review/ApproveConfirm.tsx` (new), `components/review/SelectionBar.tsx`, `pages/ReviewPage.tsx`, `pages/ReviewPage.test.tsx`: 4.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API and test project 0 warnings; `-p:OutDir=<scratchpad>` because the dev API locks `bin/Debug` |
+| Typecheck | Passed | |
+| Backend tests | 437 passed, 0 failed | |
+| Frontend tests | 369 passed, 0 failed | 21 files |
+| New tests | 3 of 3 present, passing | `ReviewPage.test.tsx` "selection bar > approve selected", 4 tests: Ready count and disabled reason; confirmation focus and `Esc`; confirm sends only Ready ids with summary, reload and remaining selection; a thrown error reported per book |
+| Manual: approve selected Ready books on the dev API | Not run | needs the dev API restarted (`scripts/start.ps1`) |
+| Manual: keyboard through the confirmation | Not run | same |
+
+## Outcome (2026-10-25, commit 22bf847)
+
+**Status:** Implemented
+**Summary:** The Selected books bar has "Approve N Ready books" (disabled with a visible reason when none are Ready), which opens an inline "Confirm approval" group; confirming queues each selected Ready book through `POST /api/jobs` in turn, reports queued and refused books, reloads the list, drops the queued ids and remounts the pane.
+**Changed:** 4 code files (`components/review/ApproveConfirm.tsx` new, `SelectionBar.tsx`, `ReviewPage.tsx`, `ReviewPage.test.tsx`)
+**Done when:** all 5 met; manual checks not run.
+**Deviations:**
+- Slice 90's accept handler and the new approve handler folded into one `afterBatch(doneIds)` in `ReviewPage.tsx`: improvement, same behaviour.
+- The bar's outcome kind renamed `accepted` → `done` to share the status line: fine.
+- `ApproveSelectedResult` exported from `SelectionBar.tsx`: fine.
+- An extra test for the thrown-error case: improvement.
+- The confirmation snapshots the Ready ids it counted: improvement.
+**Follow-ups:** none.
