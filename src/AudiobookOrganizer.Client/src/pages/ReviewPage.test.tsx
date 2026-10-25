@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   approveBook,
   chooseCover,
@@ -8,16 +8,21 @@ import {
   fileCoverUrl,
   getBookPreview,
   getCovers,
+  getLatestScan,
   getMatch,
   getMetadata,
   getReview,
+  getSettings,
   pickMatch,
   saveMetadata,
   searchMetadata,
+  startScan,
 } from '../services/api'
+import type { ScanRun } from '../types/dashboard'
 import type { BookCovers, BookMetadata, MetadataCandidate } from '../types/metadata'
 import type { BookPreview, FilePreview } from '../types/preview'
 import type { ReviewBook, ReviewList } from '../types/review'
+import { formatDateTime } from '../utils/formatDateTime'
 import { formatDuration } from '../utils/formatDuration'
 import ReviewPage from './ReviewPage'
 
@@ -33,6 +38,9 @@ vi.mock('../services/api', () => ({
   getMetadata: vi.fn(),
   saveMetadata: vi.fn(),
   getBookPreview: vi.fn(),
+  getLatestScan: vi.fn(),
+  startScan: vi.fn(),
+  getSettings: vi.fn(),
   chosenCoverUrl: (groupId: number) => `/api/groups/${groupId}/cover/image`,
   fileCoverUrl: (groupId: number, fileId: number) => `/api/groups/${groupId}/files/${fileId}/cover`,
 }))
@@ -47,6 +55,41 @@ const getMetadataMock = vi.mocked(getMetadata)
 const saveMetadataMock = vi.mocked(saveMetadata)
 const getBookPreviewMock = vi.mocked(getBookPreview)
 const approveMock = vi.mocked(approveBook)
+const getLatestScanMock = vi.mocked(getLatestScan)
+const startScanMock = vi.mocked(startScan)
+const getSettingsMock = vi.mocked(getSettings)
+
+const completedScan: ScanRun = {
+  id: 1,
+  startedAt: '2026-10-25T10:00:00Z',
+  finishedAt: '2026-10-25T10:01:00Z',
+  status: 'Completed',
+  filesFound: 12,
+  filesAdded: 3,
+  filesUpdated: 0,
+  filesUnchanged: 9,
+  filesMissing: 0,
+  filesFailed: 0,
+  error: null,
+}
+
+const runningScan: ScanRun = {
+  ...completedScan,
+  id: 2,
+  finishedAt: null,
+  status: 'Running',
+  filesFound: 5,
+  filesAdded: 0,
+  filesUnchanged: 0,
+}
+
+const settings = {
+  incomingPath: '/incoming',
+  libraryPath: '/library',
+  directoryTemplate: '%album%',
+  fileTemplate: '%title%',
+  keepSourceFiles: false,
+}
 
 /** A book preview whose files go under /lib/<folder>/ with the given problems on each file. */
 function previewFor(groupId: number, folder: string, files: Partial<FilePreview>[] = [{}]): BookPreview {
@@ -207,6 +250,11 @@ describe('ReviewPage', () => {
     getBookPreviewMock.mockReset()
     getBookPreviewMock.mockImplementation(async (groupId) => previewFor(groupId, `Book ${groupId}`))
     approveMock.mockReset()
+    getLatestScanMock.mockReset()
+    getLatestScanMock.mockResolvedValue(null)
+    startScanMock.mockReset()
+    getSettingsMock.mockReset()
+    getSettingsMock.mockResolvedValue(settings)
   })
 
   it('lists the books with title, author, narrator, runtime, stage and cover', async () => {
@@ -214,7 +262,7 @@ describe('ReviewPage', () => {
     renderAt()
 
     expect(screen.getByRole('heading', { level: 1, name: 'Review' })).toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Loading books…')
+    expect(screen.getByText('Loading books…')).toHaveAttribute('role', 'status')
 
     const items = await within(await screen.findByRole('list', { name: 'Books' })).findAllByRole('listitem')
     expect(items).toHaveLength(3)
@@ -896,6 +944,169 @@ describe('ReviewPage', () => {
       expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
       fireEvent.keyDown(document.body, { key: '?' })
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+  })
+  describe('scan in the header', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    /** Settles pending promises and runs timers due within `ms`, under fake timers. */
+    async function advance(ms = 0) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(ms)
+      })
+    }
+
+    function scanStatus() {
+      return screen.getByTestId('scan-status')
+    }
+
+    it('shows the last completed scan, or "No scans yet."', async () => {
+      getReviewMock.mockResolvedValue(review)
+      getLatestScanMock.mockResolvedValue(completedScan)
+      const { unmount } = renderAt()
+
+      await waitFor(() =>
+        expect(scanStatus()).toHaveTextContent(`Last scan ${formatDateTime(completedScan.finishedAt)}: 3 files added`),
+      )
+      expect(scanStatus()).toHaveAttribute('role', 'status')
+      unmount()
+
+      getLatestScanMock.mockResolvedValue(null)
+      renderAt()
+      await waitFor(() => expect(scanStatus()).toHaveTextContent('No scans yet.'))
+      expect(screen.getByRole('button', { name: 'Scan incoming' })).not.toHaveAttribute('aria-disabled')
+    })
+
+    it('starts a scan, shows progress, then announces completion and reloads the list keeping the selection', async () => {
+      vi.useFakeTimers()
+      getReviewMock.mockResolvedValue(review)
+      getLatestScanMock
+        .mockResolvedValueOnce(completedScan)
+        .mockResolvedValueOnce({ ...runningScan, filesFound: 2 })
+        .mockResolvedValueOnce({ ...completedScan, id: 2, filesAdded: 4 })
+      startScanMock.mockResolvedValue({ started: true, run: { ...runningScan, filesFound: 0 } })
+
+      renderAt('/?stage=NeedsMatch&book=2')
+      await advance()
+      expect(getReviewMock).toHaveBeenCalledTimes(1)
+
+      const button = screen.getByRole('button', { name: 'Scan incoming' })
+      button.focus()
+      fireEvent.click(button)
+      await advance()
+      expect(startScanMock).toHaveBeenCalledTimes(1)
+      expect(button).toHaveAttribute('aria-disabled', 'true')
+      expect(button).not.toBeDisabled()
+      expect(button).toHaveFocus()
+
+      await advance(1000)
+      expect(scanStatus()).toHaveTextContent('Scanning… 2 files found')
+
+      fireEvent.click(button)
+      await advance()
+      expect(startScanMock).toHaveBeenCalledTimes(1)
+
+      await advance(1000)
+      expect(scanStatus()).toHaveTextContent('Scan completed')
+      expect(scanStatus()).toHaveTextContent(': 4 files added')
+      expect(button).not.toHaveAttribute('aria-disabled')
+      expect(getReviewMock).toHaveBeenCalledTimes(2)
+      expect(search().get('book')).toBe('2')
+      expect(search().get('stage')).toBe('NeedsMatch')
+      expect(screen.getByRole('region', { name: 'Dune' })).toBeInTheDocument()
+
+      await advance(5000)
+      expect(getLatestScanMock).toHaveBeenCalledTimes(3)
+    })
+
+    it('shows the message when a scan is already running (409)', async () => {
+      getReviewMock.mockResolvedValue(review)
+      startScanMock.mockResolvedValue({ started: false, message: 'A scan is already running.' })
+      renderAt()
+      await waitFor(() => expect(scanStatus()).toHaveTextContent('No scans yet.'))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scan incoming' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('A scan is already running.')
+    })
+
+    it('shows an alert when the scan request fails', async () => {
+      getReviewMock.mockResolvedValue(review)
+      startScanMock.mockRejectedValue(new Error('boom'))
+      renderAt()
+      await waitFor(() => expect(scanStatus()).toHaveTextContent('No scans yet.'))
+
+      fireEvent.click(screen.getByRole('button', { name: 'Scan incoming' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent("The scan couldn't be started.")
+    })
+
+    it('resumes polling a scan already running on load, and reloads the list when it completes', async () => {
+      vi.useFakeTimers()
+      getReviewMock.mockResolvedValue(review)
+      getLatestScanMock.mockResolvedValueOnce(runningScan).mockResolvedValueOnce(completedScan)
+
+      renderAt('/?book=1')
+      await advance()
+      expect(screen.getByRole('button', { name: 'Scan incoming' })).toHaveAttribute('aria-disabled', 'true')
+      expect(scanStatus()).toHaveTextContent('Scanning… 5 files found')
+      expect(getReviewMock).toHaveBeenCalledTimes(1)
+
+      await advance(1000)
+      expect(scanStatus()).toHaveTextContent('Scan completed')
+      expect(getReviewMock).toHaveBeenCalledTimes(2)
+      expect(search().get('book')).toBe('1')
+    })
+
+    it('announces a failed scan with its error', async () => {
+      vi.useFakeTimers()
+      getReviewMock.mockResolvedValue(review)
+      startScanMock.mockResolvedValue({ started: true, run: runningScan })
+      getLatestScanMock
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ ...runningScan, status: 'Failed', error: 'Disk gone.' })
+
+      renderAt()
+      await advance()
+      fireEvent.click(screen.getByRole('button', { name: 'Scan incoming' }))
+      await advance()
+      await advance(1000)
+
+      expect(scanStatus()).toHaveTextContent('Scan failed: Disk gone.')
+      expect(screen.getByRole('button', { name: 'Scan incoming' })).not.toHaveAttribute('aria-disabled')
+    })
+
+    it('shows the last failed scan on load', async () => {
+      getReviewMock.mockResolvedValue(review)
+      getLatestScanMock.mockResolvedValue({ ...completedScan, status: 'Failed', error: 'Disk gone.' })
+      renderAt()
+
+      await waitFor(() => expect(scanStatus()).toHaveTextContent('Last scan failed: Disk gone.'))
+    })
+
+    it('links to Settings instead of the button when no incoming folder is set', async () => {
+      getReviewMock.mockResolvedValue(review)
+      getSettingsMock.mockResolvedValue({ ...settings, incomingPath: null })
+      renderAt()
+
+      const link = await screen.findByRole('link', { name: 'Set the incoming folder in Settings' })
+      expect(link).toHaveAttribute('href', '/settings')
+      expect(screen.queryByRole('button', { name: 'Scan incoming' })).not.toBeInTheDocument()
+    })
+
+    it('stops polling on unmount', async () => {
+      vi.useFakeTimers()
+      getReviewMock.mockResolvedValue(review)
+      getLatestScanMock.mockResolvedValue(runningScan)
+
+      const { unmount } = renderAt()
+      await advance()
+      unmount()
+      await advance(5000)
+
+      expect(getLatestScanMock).toHaveBeenCalledTimes(1)
     })
   })
 })

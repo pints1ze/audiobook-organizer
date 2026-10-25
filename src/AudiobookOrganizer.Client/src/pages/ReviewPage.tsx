@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import BookList, { bookTitle, stages } from '../components/review/BookList'
 import BookPane from '../components/review/BookPane'
+import ScanControl from '../components/review/ScanControl'
 import ShortcutsHelp from '../components/review/ShortcutsHelp'
 import { getReview } from '../services/api'
 import type { ReviewBook, ReviewList, ReviewStage } from '../types/review'
@@ -141,7 +142,10 @@ export default function ReviewPage() {
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Review</h1>
-        <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
+        <div className="flex flex-wrap items-center gap-3">
+          <ScanControl onCompleted={() => void reload()} />
+          <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
+        </div>
       </div>
       {state.kind === 'loaded' && (
         <p ref={statusLine} role="status" tabIndex={-1} className="mt-2 rounded">

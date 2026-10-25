@@ -36,6 +36,7 @@ Phase 10, Review workspace, is in progress: shadcn and the new header (76), `GET
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-25 (developer, slice 85): the top bar is Review, Jobs, More; Incoming, Preview and Dashboard move under More (pages kept). The Review header gets a Scan incoming button with the last scan's status.
 - 2026-10-25 (slice 83): the review list stays a list of links, one tab stop per book, not a `role="listbox"`; `j`/`k` give fast movement.
 - 2026-10-25 (developer, slice 78): the app is used on desktop browsers; the narrow (<1024px) layout isn't a target, so slice 78's "Back to list" check was waived.
 - 2026-10-25 (developer, slice 78): the intermittent `JobsPage.test.tsx` same-title re-focus failure (slice 74's test, 2 of 12 runs) and one unnamed `BookPage.test.tsx` failure (1 run) are accepted as flakes; name the `BookPage` test if it fails again.

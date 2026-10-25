@@ -8,6 +8,7 @@ import {
   getGroups,
   getHealth,
   getJobs,
+  getLatestScan,
   getPreview,
   getReview,
   getSettings,
@@ -72,6 +73,7 @@ describe('AppLayout', () => {
       counts: { files: 0, missing: 0, errors: 0, duplicates: 0, existing: 0 },
     })
     vi.mocked(getJobs).mockResolvedValue([])
+    vi.mocked(getLatestScan).mockResolvedValue(null)
     vi.mocked(getReview).mockResolvedValue({
       books: [],
       counts: { needsMatch: 0, needsReview: 0, ready: 0, queued: 0, failed: 0 },
@@ -91,30 +93,51 @@ describe('AppLayout', () => {
     expect(await screen.findByText('No books to review yet.', { exact: false })).toBeInTheDocument()
   })
 
-  it('shows the Dashboard on /dashboard', async () => {
+  it('shows the Dashboard on /dashboard with More marked current', async () => {
     renderAt('/dashboard')
 
-    const link = screen.getByRole('link', { name: 'Dashboard' })
-    expect(link).toHaveAttribute('href', '/dashboard')
-    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-current', 'true')
     expect(screen.getByRole('link', { name: 'Review' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
   })
 
-  it('lists Review, Dashboard, Incoming, Preview and Jobs in the Main nav, with the rest under More', async () => {
+  it('lists only Review and Jobs in the Main nav, with the rest under More', async () => {
     renderAt('/incoming')
 
     const nav = screen.getByRole('navigation', { name: 'Main' })
     const navLinks = screen.getAllByRole('link').filter((l) => nav.contains(l))
-    expect(navLinks.map((l) => l.textContent)).toEqual(['Review', 'Dashboard', 'Incoming', 'Preview', 'Jobs'])
+    expect(navLinks.map((l) => l.textContent)).toEqual(['Review', 'Jobs'])
     expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/')
-    expect(screen.queryByRole('link', { name: 'People' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Genres' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Jobs' })).toHaveAttribute('href', '/jobs')
+    for (const name of ['Incoming', 'Preview', 'Dashboard', 'People', 'Genres', 'Settings']) {
+      expect(screen.queryByRole('link', { name })).not.toBeInTheDocument()
+    }
     expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-haspopup', 'menu')
-    expect(screen.getByRole('link', { name: 'Incoming' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-current', 'true')
     expect(screen.getByRole('link', { name: 'Review' })).not.toHaveAttribute('aria-current')
-    expect(screen.getByRole('button', { name: 'More' })).not.toHaveAttribute('aria-current')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
+  })
+
+  it('lists Incoming, Preview, Dashboard, People, Genres and Settings under More, as links to their routes', async () => {
+    renderAt('/')
+
+    const more = screen.getByRole('button', { name: 'More' })
+    more.focus()
+    fireEvent.keyDown(more, { key: 'Enter' })
+
+    await screen.findByRole('menu')
+    const items = screen.getAllByRole('menuitem')
+    expect(items.map((i) => [i.textContent, i.getAttribute('href')])).toEqual([
+      ['Incoming', '/incoming'],
+      ['Preview', '/preview'],
+      ['Dashboard', '/dashboard'],
+      ['People', '/people'],
+      ['Genres', '/genres'],
+      ['Settings', '/settings'],
+    ])
+    expect(items.every((i) => i.tagName === 'A')).toBe(true)
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Incoming' }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
   })
 
@@ -129,8 +152,7 @@ describe('AppLayout', () => {
     const menu = await screen.findByRole('menu')
     expect(more).toHaveAttribute('aria-expanded', 'true')
     const items = screen.getAllByRole('menuitem')
-    expect(items.map((i) => i.textContent)).toEqual(['People', 'Genres', 'Settings'])
-    expect(menu).toContainElement(items[2])
+    expect(menu).toContainElement(items[items.length - 1])
 
     fireEvent.click(screen.getByRole('menuitem', { name: 'Settings' }))
 
@@ -159,7 +181,7 @@ describe('AppLayout', () => {
 
     const more = screen.getByRole('button', { name: 'More' })
     expect(more).toHaveAttribute('aria-current', 'true')
-    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: 'Jobs' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('heading', { level: 1, name: 'People' })).toBeInTheDocument()
     expect(await screen.findByText('No people yet.')).toBeInTheDocument()
 
@@ -176,14 +198,16 @@ describe('AppLayout', () => {
     expect(await screen.findByText('No genres yet.')).toBeInTheDocument()
   })
 
-  it('marks the Preview nav link as the current page on /preview', async () => {
+  it('shows the Preview page on /preview with More marked current, and Preview inside its menu', async () => {
     renderAt('/preview')
 
-    const link = screen.getByRole('link', { name: 'Preview' })
-    expect(link).toHaveAttribute('href', '/preview')
-    expect(link).toHaveAttribute('aria-current', 'page')
+    const more = screen.getByRole('button', { name: 'More' })
+    expect(more).toHaveAttribute('aria-current', 'true')
     expect(screen.getByRole('heading', { level: 1, name: 'Preview' })).toBeInTheDocument()
     expect(await screen.findByText('No books to preview yet.')).toBeInTheDocument()
+
+    fireEvent.keyDown(more, { key: 'Enter' })
+    expect(await screen.findByRole('menuitem', { name: 'Preview' })).toHaveAttribute('aria-current', 'page')
   })
 
   it('marks the Jobs nav link as the current page on /jobs', async () => {
@@ -192,7 +216,7 @@ describe('AppLayout', () => {
     const link = screen.getByRole('link', { name: 'Jobs' })
     expect(link).toHaveAttribute('href', '/jobs')
     expect(link).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Preview' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('button', { name: 'More' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('heading', { level: 1, name: 'Jobs' })).toBeInTheDocument()
     expect(await screen.findByText(/No jobs yet\./)).toBeInTheDocument()
   })

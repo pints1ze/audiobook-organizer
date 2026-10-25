@@ -10,13 +10,13 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) => `${linkClass} ${is
 
 const mainLinks = [
   { to: '/', label: 'Review' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/incoming', label: 'Incoming' },
-  { to: '/preview', label: 'Preview' },
   { to: '/jobs', label: 'Jobs' },
 ]
 
 const moreLinks = [
+  { to: '/incoming', label: 'Incoming' },
+  { to: '/preview', label: 'Preview' },
+  { to: '/dashboard', label: 'Dashboard' },
   { to: '/people', label: 'People' },
   { to: '/genres', label: 'Genres' },
   { to: '/settings', label: 'Settings' },
