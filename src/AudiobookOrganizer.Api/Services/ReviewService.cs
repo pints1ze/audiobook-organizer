@@ -36,7 +36,7 @@ public class ReviewService(
             return new ReviewBookDto(group.Id, fields?.Title.Value ?? group.Title,
                 fields is null ? group.Author : fields.Authors.Value.FirstOrDefault(),
                 fields?.Narrators.Value.FirstOrDefault(), group.TotalDurationMs, group.FileCount, stage,
-                coverSource, coverFileId);
+                coverSource, coverFileId, cover?.Chosen?.ChosenAtUtc);
         }).ToList();
 
         int Count(string stage) => books.Count(b => b.Stage == stage);

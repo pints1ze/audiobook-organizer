@@ -4,11 +4,12 @@ namespace AudiobookOrganizer.Api.Models.Api;
 /// One unprocessed book in the review list. Title, Author (first author) and Narrator (first narrator) are the book's
 /// metadata values, file fallback included. Stage is "NeedsMatch", "NeedsReview", "Ready", "Queued" or "Failed".
 /// CoverSource is "chosen", "embedded" or null; CoverFileId is the first file with an embedded cover when it is
-/// "embedded", else null.
+/// "embedded", else null. CoverChosenAtUtc is when the chosen cover was chosen (null unless "chosen"); the client
+/// versions the cover image URL with it so a changed cover isn't served from the browser cache.
 /// </summary>
 public record ReviewBookDto(
     long GroupId, string? Title, string? Author, string? Narrator, long DurationMs, int FileCount, string Stage,
-    string? CoverSource, long? CoverFileId);
+    string? CoverSource, long? CoverFileId, DateTimeOffset? CoverChosenAtUtc);
 
 /// <summary>How many listed books are in each stage.</summary>
 public record ReviewCountsDto(int NeedsMatch, int NeedsReview, int Ready, int Queued, int Failed);

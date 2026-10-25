@@ -48,3 +48,25 @@
 - Split: PLAN.md's "cover, metadata, destination and Approve & next (80)" was over the cap (5 tasks / ~8 files) once the per-book destination preview client and Approve were counted. This slice keeps cover and metadata; **81** is the destination (per-book preview from slice 51, needs a `services/api.ts` function) and **Approve & next** (`approveBook`, then select the next book in the list and focus it); shortcuts move to **82**, scan in the header to **83**.
 - Risk: `chosenCoverUrl` is the same URL before and after a cover change, so the browser may show the old image. If the manual check shows that, a follow-up adds a version to the URL; not fixed speculatively here.
 - Files: `CoverPicker.tsx`, `CoverPicker.test.tsx`, `BookPane.tsx`, `ReviewPage.tsx`, `ReviewPage.test.tsx`. 5 files, 4 tasks.
+
+## Test results (2026-10-25)
+
+**Regressions:** none in the suites. **Done when item 3 fails manually** (below): after a second cover change, the list thumbnail and pane cover keep the old image.
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--artifacts-path`; the dev API locks `bin/`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 414 passed, 0 failed | |
+| Frontend tests | 298 passed, 0 failed | 18 files; 3 full runs, all green |
+| New tests | 5 of 5 present, passing | `CoverPicker.test.tsx` onSaved; `ReviewPage.test.tsx` sections + cover → list thumbnail, metadata save → stage, pick reloads covers/metadata, heading levels |
+| Manual: pane headings | Passed | `/?book=236`: h2 Shroud, Match, Catalog search, Cover, Metadata |
+| Manual: choose a cover (none → match cover) | Passed | "Cover saved.", focus on Cover heading; list thumbnail and pane cover load (500×500) |
+| Manual: change the cover again (match → file cover) | **Failed** | list thumbnail and pane cover still show the Audible image. Both use `chosenCoverUrl` (`/api/groups/236/cover/image`, no version), so the browser serves its cached copy; a fresh request (`?nocache=`) returns the file cover. `CoverPicker`'s own "Current cover" uses `?v=<chosen time>` and updates correctly |
+| Manual: edit a metadata field on Shroud and save | Not run | would change the developer's dev data; covered by the `ReviewPage` metadata-save test |
+| Manual: hand-entered title on a Needs match book | Not run | same reason |
+| Manual: keyboard through Cover and Metadata | Passed (partial) | every control (2 cover buttons, file input, Upload, Edit metadata) has `tabIndex` 0 and an accessible name; focus ring not inspected visually |
+
+**Dev data changed:** book 236 "Shroud" now has a chosen cover (the embedded file cover, after the match cover). Left in place.
+
+**Fix after testing (2026-10-25, developer's OK):** `GET /api/review` books carry `coverChosenAtUtc` (`ReviewBookDto`, `ReviewService`), and `BookCover` (`components/review/BookList.tsx`) loads a chosen cover as `/api/groups/{id}/cover/image?v=<chosen time>`, as `CoverPicker` already did, so a changed cover isn't served from the browser cache. New tests, both seen failing before the fix: `ReviewControllerTests` "A chosen cover carries its chosen time which changes when the cover is chosen again" and `ReviewPage.test.tsx` "a second cover change shows the new image in the list and pane, not the cached one" (the two existing chosen-cover `src` assertions now expect the `?v=`). Build 0 warnings; typecheck clean; backend 415 passed in 3 of 4 full runs: the 4th had 1 failure, identified while looping as `PreviewControllerTests.Counts_missing_tokens_and_errors_per_file_and_e…` (1 of 10 filtered runs, 0 of 15 after; file untouched; likely the accepted unidentified intermittent backend failure). Frontend 299 passed in 2 of 3 runs; the 3rd failed only the accepted `JobsPage` "offers Retry only on a book's newest failed job" flake. The manual re-check (second cover change on book 236) is **Not run**: the dev API on 5070 still runs the old build; restart it (`scripts/start.ps1 api`) and change Shroud's cover twice.

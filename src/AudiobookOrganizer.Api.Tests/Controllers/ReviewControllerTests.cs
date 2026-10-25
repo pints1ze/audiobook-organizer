@@ -200,6 +200,27 @@ public class ReviewControllerTests : IDisposable
         Assert.Equal(coverFileId, alpha.GetProperty("coverFileId").GetInt64());
         var other = review.GetProperty("books").EnumerateArray().Single(b => b.GetProperty("groupId").GetInt64() != alphaId);
         Assert.Equal(JsonValueKind.Null, other.GetProperty("coverSource").ValueKind);
+        Assert.Equal(JsonValueKind.Null, alpha.GetProperty("coverChosenAtUtc").ValueKind);
+    }
+
+    [Fact]
+    public async Task A_chosen_cover_carries_its_chosen_time_which_changes_when_the_cover_is_chosen_again()
+    {
+        var client = _factory.CreateClient();
+        var groups = await ScanTwoBooks(client);
+        var id = groups[0].GetProperty("id").GetInt64();
+        await UploadCover(client, id);
+
+        var first = Book(await Review(client), id).GetProperty("coverChosenAtUtc").GetDateTimeOffset();
+        var chosen = (await client.GetFromJsonAsync<JsonElement>($"/api/groups/{id}/cover"))
+            .GetProperty("chosen").GetProperty("chosenAtUtc").GetDateTimeOffset();
+        Assert.Equal(chosen, first);
+
+        await Task.Delay(20);
+        await UploadCover(client, id);
+
+        var second = Book(await Review(client), id).GetProperty("coverChosenAtUtc").GetDateTimeOffset();
+        Assert.True(second > first);
     }
 
     public void Dispose()

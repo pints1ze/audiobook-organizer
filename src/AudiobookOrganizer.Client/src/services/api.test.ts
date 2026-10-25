@@ -828,6 +828,7 @@ describe('getReview', () => {
           stage: 'NeedsMatch',
           coverSource: null,
           coverFileId: null,
+          coverChosenAtUtc: null,
         },
       ],
       counts: { needsMatch: 1, needsReview: 0, ready: 0, queued: 0, failed: 0 },

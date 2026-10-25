@@ -79,6 +79,7 @@ function book(overrides: Partial<ReviewBook> & { groupId: number }): ReviewBook 
     stage: 'NeedsMatch',
     coverSource: null,
     coverFileId: null,
+    coverChosenAtUtc: null,
     ...overrides,
   }
 }
@@ -91,6 +92,7 @@ const hobbit = book({
   durationMs: 37_800_000,
   stage: 'Ready',
   coverSource: 'chosen',
+  coverChosenAtUtc: '2026-10-20T08:00:00Z',
 })
 const dune = book({
   groupId: 2,
@@ -192,7 +194,7 @@ describe('ReviewPage', () => {
     expect(items[0]).toHaveTextContent(formatDuration(hobbit.durationMs))
     expect(items[0]).toHaveTextContent('Ready')
     const hobbitCover = items[0].querySelector('img')!
-    expect(hobbitCover).toHaveAttribute('src', chosenCoverUrl(1))
+    expect(hobbitCover).toHaveAttribute('src', `${chosenCoverUrl(1)}?v=2026-10-20T08%3A00%3A00Z`)
     expect(hobbitCover).toHaveAttribute('alt', '')
 
     expect(items[1]).toHaveTextContent('Dune')
@@ -409,12 +411,13 @@ describe('ReviewPage', () => {
     getCoversMock.mockResolvedValue(duneCovers)
     getReviewMock
       .mockResolvedValueOnce(review)
-      .mockResolvedValueOnce({ ...review, books: [hobbit, { ...dune, coverSource: 'chosen', coverFileId: null }, lostWorld] })
+      .mockResolvedValueOnce({ ...review, books: [hobbit, { ...dune, coverSource: 'chosen', coverFileId: null, coverChosenAtUtc: '2026-10-25T10:00:00Z' }, lostWorld] })
     chooseCoverMock.mockResolvedValue({
       ok: true,
       cover: { ...duneCovers, chosen: { source: 'embedded', fileId: 20, mimeType: 'image/jpeg', chosenAtUtc: '2026-10-25T10:00:00Z' } },
     })
     renderAt('/?book=2')
+    const duneChosen = `${chosenCoverUrl(2)}?v=2026-10-25T10%3A00%3A00Z`
 
     const cover = await screen.findByRole('region', { name: 'Cover' })
     expect(screen.getByRole('region', { name: 'Metadata' })).toBeInTheDocument()
@@ -426,9 +429,37 @@ describe('ReviewPage', () => {
     expect(await within(cover).findByText('Cover saved.')).toBeInTheDocument()
     await waitFor(() => expect(getReviewMock).toHaveBeenCalledTimes(2))
     await waitFor(() =>
-      expect(within(bookList()).getAllByRole('listitem')[1].querySelector('img')).toHaveAttribute('src', chosenCoverUrl(2)),
+      expect(within(bookList()).getAllByRole('listitem')[1].querySelector('img')).toHaveAttribute('src', duneChosen),
     )
-    expect(screen.getByRole('region', { name: 'Dune' }).querySelector('img')).toHaveAttribute('src', chosenCoverUrl(2))
+    expect(screen.getByRole('region', { name: 'Dune' }).querySelector('img')).toHaveAttribute('src', duneChosen)
+  })
+
+  it('a second cover change shows the new image in the list and pane, not the cached one', async () => {
+    const at = (time: string) => ({ ...dune, coverSource: 'chosen' as const, coverFileId: null, coverChosenAtUtc: time })
+    const duneCovers: BookCovers = {
+      groupId: 2,
+      chosen: { source: 'embedded', fileId: 20, mimeType: 'image/jpeg', chosenAtUtc: '2026-10-25T10:00:00Z' },
+      embedded: [{ fileId: 20, relativePath: 'Dune/01.mp3' }],
+      provider: null,
+    }
+    getCoversMock.mockResolvedValue({ ...duneCovers, embedded: [...duneCovers.embedded, { fileId: 21, relativePath: 'Dune/02.mp3' }] })
+    getReviewMock
+      .mockResolvedValueOnce({ ...review, books: [hobbit, at('2026-10-25T10:00:00Z'), lostWorld] })
+      .mockResolvedValueOnce({ ...review, books: [hobbit, at('2026-10-25T11:00:00Z'), lostWorld] })
+    chooseCoverMock.mockResolvedValue({
+      ok: true,
+      cover: { ...duneCovers, chosen: { source: 'embedded', fileId: 21, mimeType: 'image/jpeg', chosenAtUtc: '2026-10-25T11:00:00Z' } },
+    })
+    renderAt('/?book=2')
+
+    const pane = await screen.findByRole('region', { name: 'Dune' })
+    const before = pane.querySelector('img')!.getAttribute('src')
+    fireEvent.click(await within(await screen.findByRole('region', { name: 'Cover' })).findByRole('button', { name: 'Use this cover: Dune/02.mp3' }))
+
+    const after = `${chosenCoverUrl(2)}?v=2026-10-25T11%3A00%3A00Z`
+    await waitFor(() => expect(within(bookList()).getAllByRole('listitem')[1].querySelector('img')).toHaveAttribute('src', after))
+    expect(screen.getByRole('region', { name: 'Dune' }).querySelector('img')).toHaveAttribute('src', after)
+    expect(after).not.toBe(before)
   })
 
   it('saving metadata for a Needs match book reloads the list and its chip shows the new stage', async () => {

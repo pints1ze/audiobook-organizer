@@ -12,6 +12,8 @@ export interface ReviewBook {
   stage: ReviewStage
   coverSource: 'chosen' | 'embedded' | null
   coverFileId: number | null
+  /** When the chosen cover was chosen; null unless coverSource is "chosen". Versions the cover URL. */
+  coverChosenAtUtc: string | null
 }
 
 export interface ReviewCounts {

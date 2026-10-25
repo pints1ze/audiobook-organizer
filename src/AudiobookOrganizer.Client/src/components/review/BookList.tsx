@@ -33,7 +33,8 @@ export function BookCover({ book, size }: { book: ReviewBook; size: 48 | 160 }) 
   const box = size === 48 ? 'size-12 text-sm' : 'size-40 text-4xl'
   const src =
     book.coverSource === 'chosen'
-      ? chosenCoverUrl(book.groupId)
+      ? // The URL doesn't change with the cover, so its chosen time versions it past the browser cache.
+        `${chosenCoverUrl(book.groupId)}?v=${encodeURIComponent(book.coverChosenAtUtc ?? '')}`
       : book.coverSource === 'embedded' && book.coverFileId !== null
         ? fileCoverUrl(book.groupId, book.coverFileId)
         : null
