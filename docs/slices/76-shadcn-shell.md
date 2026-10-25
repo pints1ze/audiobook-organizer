@@ -43,3 +43,31 @@
 ## Notes
 - Conflict check: the four packages are listed in AGENTS.md's Stack and were approved for this slice (CURRENT-STATE.md, 2026-10-25). `--muted` is kept as a text colour because existing pages use `text-muted`; shadcn's `muted` background token is not added, to avoid two meanings.
 - Remaining phase 10 slices, roughly: the review list API with stages (77); the workspace list with covers and stage filter at `/` (78); the detail pane's match search and accept (79); cover, changed metadata, destination and Approve & next (80); keyboard shortcuts and help popover (81); the scan header and retiring Dashboard/Incoming/Preview from the nav (82).
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (dev API stopped first; it locks `bin/`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 401 passed, 0 failed | |
+| Frontend tests | 277 passed, 0 failed | 17 files |
+| New tests | 4 of 4 present, passing | `cn` merge; flat nav without People/Genres/Settings; More opens with Enter and navigates to Settings; Escape returns focus to More |
+| Manual: More by mouse, then ArrowDown ×2 + Enter | Passed | lands on `/genres`; More shows as current with the focus ring back on it |
+| Manual: header at 1440px and 768px | Passed | full width at 1440; at 768 the links and More fit on one row beside the name |
+
+## Outcome (2026-10-25, commit 8a4d2ae)
+
+**Status:** Implemented
+**Summary:** The client has shadcn's packages, `cn`, neutral theme tokens and a trimmed dropdown menu. The header is full width with Dashboard, Incoming, Preview and Jobs, and a More menu for People, Genres and Settings; `<main>` widens to `max-w-7xl`.
+**Changed:** 10 files: `package.json`, `package-lock.json`, `utils/cn.ts` and its test, `index.css`, `components/ui/dropdown-menu.tsx`, `AppLayout.tsx` and its test, this slice file, `docs/PLAN.md`.
+**Deviations:**
+- Dropdown animation classes dropped (they need `tw-animate-css`, not approved): *fine*.
+- Menu items keep the global focus outline instead of shadcn's `outline-hidden`, because `bg-accent` alone is ~1.07:1: *improvement*.
+- More carries `aria-current="true"` when one of its pages is open: *fine*.
+- `--foreground` and `--destructive` take shadcn's values (19.8:1 and 4.8:1, both AA): *fine*.
+**Follow-ups:**
+- The Vite dev server kept a stale `AppLayout` module after the commit until restarted; restart the client after pulling big layout changes.
+- Next: slice 77, the review list API with stages.
