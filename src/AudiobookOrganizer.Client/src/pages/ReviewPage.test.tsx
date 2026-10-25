@@ -7,6 +7,7 @@ import {
   chosenCoverUrl,
   fileCoverUrl,
   getBookPreview,
+  getCandidates,
   getCovers,
   getLatestScan,
   getMatch,
@@ -30,6 +31,8 @@ vi.mock('../services/api', () => ({
   getReview: vi.fn(),
   approveBook: vi.fn(),
   getMatch: vi.fn(),
+  getCandidates: vi.fn(),
+  findCandidates: vi.fn(),
   searchMetadata: vi.fn(),
   pickMatch: vi.fn(),
   getCovers: vi.fn(),
@@ -47,6 +50,7 @@ vi.mock('../services/api', () => ({
 
 const getReviewMock = vi.mocked(getReview)
 const getMatchMock = vi.mocked(getMatch)
+const getCandidatesMock = vi.mocked(getCandidates)
 const searchMock = vi.mocked(searchMetadata)
 const pickMock = vi.mocked(pickMatch)
 const getCoversMock = vi.mocked(getCovers)
@@ -239,6 +243,8 @@ describe('ReviewPage', () => {
     getReviewMock.mockReset()
     getMatchMock.mockReset()
     getMatchMock.mockResolvedValue(null)
+    getCandidatesMock.mockReset()
+    getCandidatesMock.mockResolvedValue(null)
     searchMock.mockReset()
     pickMock.mockReset()
     getCoversMock.mockReset()
@@ -403,6 +409,22 @@ describe('ReviewPage', () => {
     expect(await within(match).findByText('The Hobbit')).toBeInTheDocument()
     expect(match).toHaveTextContent('Andy Serkis')
     expect(screen.queryByText('No match chosen yet.')).not.toBeInTheDocument()
+  })
+
+  it("shows the selected book's stored suggestions under Match", async () => {
+    getReviewMock.mockResolvedValue(review)
+    getCandidatesMock.mockResolvedValue({
+      groupId: 2,
+      searchedAtUtc: '2026-10-25T10:00:00Z',
+      candidates: [{ candidate: candidate({ title: 'Dune', authors: ['Frank Herbert'] }), score: 92 }],
+      errors: [],
+    })
+    renderAt('/?book=2')
+
+    const suggestions = await screen.findByRole('region', { name: 'Suggested matches' })
+    expect(within(screen.getByRole('region', { name: 'Match' })).getByRole('region', { name: 'Suggested matches' })).toBe(suggestions)
+    expect(await within(suggestions).findByRole('button', { name: 'Accept match: Dune, score 92 of 100' })).toBeInTheDocument()
+    expect(getCandidatesMock).toHaveBeenCalledWith(2)
   })
 
   it('shows an error line when the match fails to load', async () => {

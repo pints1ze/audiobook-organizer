@@ -15,6 +15,7 @@ import type {
 import type { HealthResponse } from '../types/health'
 import type { ApproveBookResult, ProcessingJob } from '../types/jobs'
 import type {
+  BookCandidates,
   BookCovers,
   BookMatch,
   BookMetadata,
@@ -315,6 +316,23 @@ export async function pickMatch(groupId: number, candidate: MetadataCandidate): 
     return { ok: false, notFound: true }
   }
   throw new Error(`Saving the match failed with status ${response.status}`)
+}
+
+export async function getCandidates(groupId: number): Promise<BookCandidates | null> {
+  const response = await fetch(`/api/groups/${groupId}/candidates`)
+  if (response.status === 204) return null
+  if (response.status !== 200) {
+    throw new Error(`Loading the suggested matches failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookCandidates
+}
+
+export async function findCandidates(groupId: number): Promise<BookCandidates> {
+  const response = await fetch(`/api/groups/${groupId}/candidates`, { method: 'POST' })
+  if (response.status !== 200) {
+    throw new Error(`Finding suggested matches failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookCandidates
 }
 
 export async function getMetadata(groupId: number): Promise<BookMetadata> {
