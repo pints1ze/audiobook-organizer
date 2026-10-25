@@ -223,6 +223,21 @@ public class ReviewControllerTests : IDisposable
         Assert.True(second > first);
     }
 
+    [Fact]
+    public async Task A_searched_book_lists_its_best_candidate_score_and_an_unsearched_book_lists_null()
+    {
+        var client = _factory.CreateClient();
+        var groups = await ScanTwoBooks(client);
+        var searched = groups[0].GetProperty("id").GetInt64();
+        ReviewAcceptSuggestedControllerTests.SeedCandidates(_factory, searched, ("Best", 81), ("Second", 40));
+
+        var review = await Review(client);
+
+        Assert.Equal(81, Book(review, searched).GetProperty("suggestedScore").GetInt32());
+        Assert.Equal(JsonValueKind.Null,
+            Book(review, groups[1].GetProperty("id").GetInt64()).GetProperty("suggestedScore").ValueKind);
+    }
+
     public void Dispose()
     {
         _factory.Dispose();

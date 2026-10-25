@@ -44,6 +44,14 @@ public class CandidateRepository(SqliteConnectionFactory connections)
             """).ToList();
     }
 
+    /// <summary>Each searched group's best (rank 0) candidate score, by group id; groups with no candidate are absent.</summary>
+    public IReadOnlyDictionary<long, int> GetBestScores()
+    {
+        using var connection = connections.Open();
+        return connection.Query<(long GroupId, int Score)>("SELECT GroupId, Score FROM MetadataCandidate WHERE Rank = 0")
+            .ToDictionary(r => r.GroupId, r => r.Score);
+    }
+
     /// <summary>The group's last search and its candidates by rank; null when the group was never searched.</summary>
     public (CandidateSearch Search, IReadOnlyList<MetadataCandidate> Candidates)? Get(long groupId)
     {

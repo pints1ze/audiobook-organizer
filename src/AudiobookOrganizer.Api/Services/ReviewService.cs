@@ -1,3 +1,4 @@
+using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Api;
 using AudiobookOrganizer.Api.Models.Local;
 using AudiobookOrganizer.Api.Services.Grouping;
@@ -7,7 +8,7 @@ namespace AudiobookOrganizer.Api.Services;
 /// <summary>Builds the review workspace's book list: every unprocessed book with its stage. Read-only.</summary>
 public class ReviewService(
     GroupingService grouping, AudiobookService audiobooks, NamingPreviewService previews, ProcessingService processing,
-    CoverService covers)
+    CoverService covers, CandidateRepository candidates)
 {
     public const string NeedsMatch = "NeedsMatch", NeedsReview = "NeedsReview", Ready = "Ready", Queued = "Queued",
         Failed = "Failed";
@@ -18,6 +19,7 @@ public class ReviewService(
         var jobsByGroup = processing.GetJobs()
             .Where(j => j.GroupId is not null)
             .ToLookup(j => j.GroupId!.Value, j => (j.Id, j.Status));
+        var bestScores = candidates.GetBestScores();
 
         // shortcut: one metadata and cover read per book — revisit when the list is slow (hundreds of books)
         var books = grouping.List().Groups.Select(group =>
@@ -36,7 +38,8 @@ public class ReviewService(
             return new ReviewBookDto(group.Id, fields?.Title.Value ?? group.Title,
                 fields is null ? group.Author : fields.Authors.Value.FirstOrDefault(),
                 fields?.Narrators.Value.FirstOrDefault(), group.TotalDurationMs, group.FileCount, stage,
-                coverSource, coverFileId, cover?.Chosen?.ChosenAtUtc);
+                coverSource, coverFileId, cover?.Chosen?.ChosenAtUtc,
+                bestScores.TryGetValue(group.Id, out var score) ? score : null);
         }).ToList();
 
         int Count(string stage) => books.Count(b => b.Stage == stage);

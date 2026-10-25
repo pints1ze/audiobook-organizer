@@ -12,6 +12,8 @@ public class CandidateService(GroupRepository groups, AudiobookService audiobook
 {
     public const int MaxStored = 5;
     public const string NothingToSearchFor = "No title or author to search for.";
+    public const string NoSuchBook = "This book no longer exists.", AlreadyMatched = "This book already has a match.",
+        NoSuggestion = "No suggested match.";
 
     /// <summary>The group's last search; null when it was never searched. Check the group exists first.</summary>
     public BookCandidatesDto? Get(long groupId) => candidates.Get(groupId) is { } stored ? ToDto(stored) : null;
@@ -62,6 +64,28 @@ public class CandidateService(GroupRepository groups, AudiobookService audiobook
         candidates.Replace(groupId, DateTimeOffset.UtcNow.ToString("O"), JsonSerializer.Serialize(errors), top);
         return Get(groupId);
     }
+
+    /// <summary>
+    /// For each distinct id in order, picks the book's best stored candidate through <see cref="AudiobookService.PickMatch"/>.
+    /// A book that is unknown, already has a match or has no stored candidate is skipped with an error and left unchanged;
+    /// a PickMatch validation error becomes that book's error (its first message).
+    /// </summary>
+    public IReadOnlyList<AcceptSuggestedResultDto> AcceptSuggested(IReadOnlyList<long> groupIds) =>
+        groupIds.Distinct().Select(groupId =>
+        {
+            var match = audiobooks.GetMatch(groupId);
+            if (!match.GroupFound) return Skipped(groupId, NoSuchBook);
+            if (match.Match is not null) return Skipped(groupId, AlreadyMatched);
+            if (candidates.Get(groupId) is not { Candidates: [var best, ..] }) return Skipped(groupId, NoSuggestion);
+
+            var picked = audiobooks.PickMatch(groupId,
+                JsonSerializer.Deserialize<MetadataCandidateDto>(best.CandidateJson, JsonSerializerOptions.Web)!);
+            return picked.Match is not null
+                ? new AcceptSuggestedResultDto(groupId, true, null)
+                : Skipped(groupId, picked.Errors.Values.SelectMany(e => e).FirstOrDefault() ?? NoSuchBook);
+        }).ToList();
+
+    private static AcceptSuggestedResultDto Skipped(long groupId, string error) => new(groupId, false, error);
 
     /// <summary>
     /// 0–100: title up to 50 (the share of the book's title words in the candidate's title), author 25 (any author
