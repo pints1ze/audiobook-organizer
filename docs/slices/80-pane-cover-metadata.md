@@ -70,3 +70,15 @@
 **Dev data changed:** book 236 "Shroud" now has a chosen cover (the embedded file cover, after the match cover). Left in place.
 
 **Fix after testing (2026-10-25, developer's OK):** `GET /api/review` books carry `coverChosenAtUtc` (`ReviewBookDto`, `ReviewService`), and `BookCover` (`components/review/BookList.tsx`) loads a chosen cover as `/api/groups/{id}/cover/image?v=<chosen time>`, as `CoverPicker` already did, so a changed cover isn't served from the browser cache. New tests, both seen failing before the fix: `ReviewControllerTests` "A chosen cover carries its chosen time which changes when the cover is chosen again" and `ReviewPage.test.tsx` "a second cover change shows the new image in the list and pane, not the cached one" (the two existing chosen-cover `src` assertions now expect the `?v=`). Build 0 warnings; typecheck clean; backend 415 passed in 3 of 4 full runs: the 4th had 1 failure, identified while looping as `PreviewControllerTests.Counts_missing_tokens_and_errors_per_file_and_e…` (1 of 10 filtered runs, 0 of 15 after; file untouched; likely the accepted unidentified intermittent backend failure). Frontend 299 passed in 2 of 3 runs; the 3rd failed only the accepted `JobsPage` "offers Retry only on a book's newest failed job" flake. The manual re-check (second cover change on book 236) is **Not run**: the dev API on 5070 still runs the old build; restart it (`scripts/start.ps1 api`) and change Shroud's cover twice.
+
+## Outcome (2026-10-25, commit d1981e0; fix 1acb00e)
+
+**Status:** Implemented
+**Summary:** The review pane now has the Book page's Cover and Metadata sections below Match. A pick reloads both. A cover or metadata save reloads the list, so thumbnails and stages follow. The pane's section headings are all `h2`. A follow-up fix versions the chosen-cover URL in the list and pane with the cover's chosen time, so a changed cover isn't served from the browser cache.
+**Changed:** 5 code files in the feat commit (`CoverPicker.tsx` and its test, `BookPane.tsx`, `ReviewPage.tsx`, `ReviewPage.test.tsx`); 7 in the fix (`ReviewDtos.cs`, `ReviewService.cs`, `ReviewControllerTests.cs`, `types/review.ts`, `BookList.tsx`, `ReviewPage.test.tsx`, `api.test.ts`)
+**Done when:** all 5 met; item 3's second-cover case is met by the fix and its tests, and the manual re-check waits for a dev API restart.
+**Deviations:**
+- Stale cover after a second change (manual check): bug, fixed in `fix: slice 80` with the developer's OK; touches the backend (`GET /api/review` gains `coverChosenAtUtc`), outside the slice's client-only file list.
+- The fix commit also carries this slice's test results: fine, docs only.
+- An intermittent `PreviewControllerTests.Counts_missing_tokens_and_errors_per_file…` failure (2 of ~30 runs, file untouched): likely the accepted unidentified backend flake (slice 49), now named; for the developer to confirm.
+**Follow-ups:** re-run the second-cover change and the two metadata manual checks at the phase 10 verification, after restarting the dev API.
