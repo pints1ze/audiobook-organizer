@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams, type To } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
-import BookList, { BookCover, StageChip, bookTitle, stages } from '../components/review/BookList'
+import BookList, { stages } from '../components/review/BookList'
+import BookPane from '../components/review/BookPane'
 import { getReview } from '../services/api'
-import type { ReviewBook, ReviewList, ReviewStage } from '../types/review'
-import { formatDuration } from '../utils/formatDuration'
+import type { ReviewList, ReviewStage } from '../types/review'
 
 type ReviewState = { kind: 'loading' } | { kind: 'loaded'; review: ReviewList } | { kind: 'error' }
 
@@ -33,6 +33,16 @@ export default function ReviewPage() {
       if (mounted.current) setState({ kind: 'loaded', review })
     } catch {
       if (mounted.current) setState({ kind: 'error' })
+    }
+  }, [])
+
+  /** Re-fetches the list without the skeleton; a failure keeps the list on screen. */
+  const reload = useCallback(async () => {
+    try {
+      const review = await getReview()
+      if (mounted.current) setState({ kind: 'loaded', review })
+    } catch {
+      // Keep the current list; the next reload or page visit refreshes it.
     }
   }, [])
 
@@ -80,46 +90,18 @@ export default function ReviewPage() {
         </div>
         <div className="mt-6 lg:mt-0">
           {selected ? (
-            <BookPane book={selected} backHref={{ search: searchFor(stage, null) }} />
+            <BookPane
+              key={selected.groupId}
+              book={selected}
+              backHref={{ search: searchFor(stage, null) }}
+              onMatchSaved={() => void reload()}
+            />
           ) : (
             state.kind === 'loaded' && <p className="text-muted">Choose a book from the list.</p>
           )}
         </div>
       </div>
     </>
-  )
-}
-
-/** Placeholder detail pane: match, cover, metadata and approval arrive in later slices. */
-function BookPane({ book, backHref }: { book: ReviewBook; backHref: To }) {
-  const headingId = `review-book-${book.groupId}`
-  return (
-    <section aria-labelledby={headingId}>
-      <p className="mb-4 lg:hidden">
-        <Link to={backHref} className="underline underline-offset-4">
-          Back to list
-        </Link>
-      </p>
-      <div className="flex flex-wrap gap-6">
-        <BookCover book={book} size={160} />
-        <div className="min-w-0">
-          <h2 id={headingId} className="text-xl font-semibold">
-            {bookTitle(book)}
-          </h2>
-          {book.author && <p>{book.author}</p>}
-          {book.narrator && <p className="text-muted">Narrated by {book.narrator}</p>}
-          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-            <StageChip stage={book.stage} />
-            <span className="tabular-nums">{formatDuration(book.durationMs)}</span>
-          </p>
-          <p className="mt-4">
-            <Link to={`/books/${book.groupId}`} className="underline underline-offset-4">
-              Open book page
-            </Link>
-          </p>
-        </div>
-      </div>
-    </section>
   )
 }
 

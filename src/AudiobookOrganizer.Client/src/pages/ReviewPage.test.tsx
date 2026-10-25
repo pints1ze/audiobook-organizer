@@ -1,18 +1,25 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { chosenCoverUrl, fileCoverUrl, getReview } from '../services/api'
+import { chosenCoverUrl, fileCoverUrl, getMatch, getReview, pickMatch, searchMetadata } from '../services/api'
+import type { MetadataCandidate } from '../types/metadata'
 import type { ReviewBook, ReviewList } from '../types/review'
 import { formatDuration } from '../utils/formatDuration'
 import ReviewPage from './ReviewPage'
 
 vi.mock('../services/api', () => ({
   getReview: vi.fn(),
+  getMatch: vi.fn(),
+  searchMetadata: vi.fn(),
+  pickMatch: vi.fn(),
   chosenCoverUrl: (groupId: number) => `/api/groups/${groupId}/cover/image`,
   fileCoverUrl: (groupId: number, fileId: number) => `/api/groups/${groupId}/files/${fileId}/cover`,
 }))
 
 const getReviewMock = vi.mocked(getReview)
+const getMatchMock = vi.mocked(getMatch)
+const searchMock = vi.mocked(searchMetadata)
+const pickMock = vi.mocked(pickMatch)
 
 function book(overrides: Partial<ReviewBook> & { groupId: number }): ReviewBook {
   return {
@@ -52,6 +59,34 @@ const review: ReviewList = {
   counts: { needsMatch: 2, needsReview: 0, ready: 1, queued: 0, failed: 0 },
 }
 
+function candidate(overrides: Partial<MetadataCandidate>): MetadataCandidate {
+  return {
+    provider: 'audible',
+    asin: 'B002V1OF70',
+    title: 'Dune',
+    subtitle: null,
+    authors: ['Frank Herbert'],
+    narrators: ['Scott Brick'],
+    series: null,
+    publisher: null,
+    releaseDate: '2007-01-01',
+    language: 'english',
+    runtimeMinutes: 1263,
+    format: 'unabridged',
+    coverUrl: null,
+    isbn: null,
+    ...overrides,
+  }
+}
+
+const duneCandidate = candidate({})
+
+/** The review list after Dune's match was picked: Dune is Ready. */
+const reviewAfterPick: ReviewList = {
+  books: [hobbit, { ...dune, stage: 'Ready' }, lostWorld],
+  counts: { needsMatch: 1, needsReview: 0, ready: 2, queued: 0, failed: 0 },
+}
+
 function LocationDisplay() {
   const location = useLocation()
   return <div data-testid="location">{location.pathname + location.search}</div>
@@ -81,6 +116,10 @@ function search() {
 describe('ReviewPage', () => {
   beforeEach(() => {
     getReviewMock.mockReset()
+    getMatchMock.mockReset()
+    getMatchMock.mockResolvedValue(null)
+    searchMock.mockReset()
+    pickMock.mockReset()
   })
 
   it('lists the books with title, author, narrator, runtime, stage and cover', async () => {
@@ -204,5 +243,111 @@ describe('ReviewPage', () => {
     expect(await screen.findByRole('list', { name: 'Books' })).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(getReviewMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows the match section with no match yet and the search prefilled with title and author', async () => {
+    getReviewMock.mockResolvedValue(review)
+    renderAt('/?book=2')
+
+    const match = await screen.findByRole('region', { name: 'Match' })
+    expect(await within(match).findByText('No match chosen yet.')).toBeInTheDocument()
+    expect(getMatchMock).toHaveBeenCalledWith(2)
+    expect(within(match).getByRole('searchbox', { name: 'Keywords' })).toHaveValue('Dune Frank Herbert')
+  })
+
+  it("shows the book's stored match under Match", async () => {
+    getReviewMock.mockResolvedValue(review)
+    getMatchMock.mockResolvedValue({
+      groupId: 1,
+      match: candidate({ title: 'The Hobbit', authors: ['J.R.R. Tolkien'], narrators: ['Andy Serkis'] }),
+      pickedAtUtc: '2026-10-19T10:00:00Z',
+    })
+    renderAt('/?book=1')
+
+    const match = await screen.findByRole('region', { name: 'Match' })
+    expect(await within(match).findByText('The Hobbit')).toBeInTheDocument()
+    expect(match).toHaveTextContent('Andy Serkis')
+    expect(screen.queryByText('No match chosen yet.')).not.toBeInTheDocument()
+  })
+
+  it('shows an error line when the match fails to load', async () => {
+    getReviewMock.mockResolvedValue(review)
+    getMatchMock.mockRejectedValue(new Error('boom'))
+    renderAt('/?book=2')
+
+    const match = await screen.findByRole('region', { name: 'Match' })
+    expect(await within(match).findByText("The chosen match couldn't be loaded.")).toBeInTheDocument()
+  })
+
+  async function searchAndPick() {
+    searchMock.mockResolvedValue({ ok: true, result: { candidates: [duneCandidate], providerErrors: [] } })
+    pickMock.mockResolvedValue({ ok: true, match: { groupId: 2, match: duneCandidate, pickedAtUtc: '2026-10-25T10:00:00Z' } })
+    const match = await screen.findByRole('region', { name: 'Match' })
+    await within(match).findByText('No match chosen yet.')
+    fireEvent.click(within(match).getByRole('button', { name: 'Search' }))
+    fireEvent.click(await within(match).findByRole('button', { name: 'Use this match: Dune, result 1 of 1' }))
+    return match
+  }
+
+  it('saves a picked match, focuses the Match heading and reloads the list in the background', async () => {
+    getReviewMock.mockResolvedValueOnce(review).mockResolvedValueOnce(reviewAfterPick)
+    renderAt('/?book=2')
+
+    const match = await searchAndPick()
+
+    expect(await within(match).findByText('Match saved: Dune')).toHaveAttribute('role', 'status')
+    expect(pickMock).toHaveBeenCalledWith(2, duneCandidate)
+    expect(within(match).getByRole('heading', { level: 3, name: 'Match' })).toHaveFocus()
+    expect(within(match).getByText('Current match')).toBeInTheDocument()
+
+    await waitFor(() => expect(within(bookList()).getAllByRole('listitem')[1]).toHaveTextContent('Ready'))
+    expect(getReviewMock).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Needs match 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ready 2' })).toBeInTheDocument()
+    expect(screen.queryByText('Loading books…')).not.toBeInTheDocument()
+  })
+
+  it('keeps the pane open when the picked book leaves the stage filter', async () => {
+    getReviewMock.mockResolvedValueOnce(review).mockResolvedValueOnce(reviewAfterPick)
+    renderAt('/?stage=NeedsMatch&book=2')
+
+    await searchAndPick()
+
+    await waitFor(() => expect(within(bookList()).queryByRole('link', { name: /Dune/ })).not.toBeInTheDocument())
+    expect(screen.getByRole('region', { name: 'Dune' })).toBeInTheDocument()
+    expect(screen.getByText('Match saved: Dune')).toBeInTheDocument()
+    expect(search().get('book')).toBe('2')
+  })
+
+  it('keeps the list and the pane when the background reload fails', async () => {
+    getReviewMock.mockResolvedValueOnce(review).mockRejectedValueOnce(new Error('boom'))
+    renderAt('/?book=2')
+
+    await searchAndPick()
+
+    expect(await screen.findByText('Match saved: Dune')).toBeInTheDocument()
+    await waitFor(() => expect(getReviewMock).toHaveBeenCalledTimes(2))
+    expect(within(bookList()).getAllByRole('listitem')).toHaveLength(3)
+    expect(screen.queryByText("The books couldn't be loaded.")).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Dune' })).toBeInTheDocument()
+  })
+
+  it('resets the pane when another book is chosen', async () => {
+    getReviewMock.mockResolvedValue(review)
+    searchMock.mockResolvedValue({ ok: true, result: { candidates: [duneCandidate], providerErrors: [] } })
+    renderAt('/?book=2')
+
+    const match = await screen.findByRole('region', { name: 'Match' })
+    fireEvent.change(within(match).getByRole('searchbox', { name: 'Keywords' }), { target: { value: 'dune herbert' } })
+    fireEvent.click(within(match).getByRole('button', { name: 'Search' }))
+    expect(await within(match).findByText('1 match found.')).toBeInTheDocument()
+
+    fireEvent.click(bookLink(/The Lost World/))
+
+    const next = await screen.findByRole('region', { name: 'Match' })
+    expect(within(next).getByRole('searchbox', { name: 'Keywords' })).toHaveValue('The Lost World Arthur Conan Doyle')
+    expect(screen.queryByText('1 match found.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Use this match/ })).not.toBeInTheDocument()
+    expect(getMatchMock).toHaveBeenLastCalledWith(3)
   })
 })
