@@ -5,6 +5,7 @@ import {
   chooseCover,
   chosenCoverUrl,
   fileCoverUrl,
+  getBookPreview,
   getCovers,
   getMatch,
   getMetadata,
@@ -14,6 +15,7 @@ import {
   searchMetadata,
 } from '../services/api'
 import type { BookCovers, BookMetadata, MetadataCandidate } from '../types/metadata'
+import type { BookPreview, FilePreview } from '../types/preview'
 import type { ReviewBook, ReviewList } from '../types/review'
 import { formatDuration } from '../utils/formatDuration'
 import ReviewPage from './ReviewPage'
@@ -28,6 +30,7 @@ vi.mock('../services/api', () => ({
   uploadCover: vi.fn(),
   getMetadata: vi.fn(),
   saveMetadata: vi.fn(),
+  getBookPreview: vi.fn(),
   chosenCoverUrl: (groupId: number) => `/api/groups/${groupId}/cover/image`,
   fileCoverUrl: (groupId: number, fileId: number) => `/api/groups/${groupId}/files/${fileId}/cover`,
 }))
@@ -40,6 +43,28 @@ const getCoversMock = vi.mocked(getCovers)
 const chooseCoverMock = vi.mocked(chooseCover)
 const getMetadataMock = vi.mocked(getMetadata)
 const saveMetadataMock = vi.mocked(saveMetadata)
+const getBookPreviewMock = vi.mocked(getBookPreview)
+
+/** A book preview whose files go under /lib/<folder>/ with the given problems on each file. */
+function previewFor(groupId: number, folder: string, files: Partial<FilePreview>[] = [{}]): BookPreview {
+  return {
+    groupId,
+    libraryPath: '/lib',
+    title: null,
+    author: null,
+    files: files.map((overrides, index) => ({
+      fileId: groupId * 10 + index,
+      sourcePath: `/incoming/${groupId}/${String(index + 1).padStart(2, '0')}.mp3`,
+      relativePath: `${folder}/${index + 1}.mp3`,
+      destinationPath: `/lib/${folder}/${index + 1}.mp3`,
+      missing: [],
+      error: null,
+      duplicate: false,
+      exists: false,
+      ...overrides,
+    })),
+  }
+}
 
 function noCovers(groupId: number): BookCovers {
   return { groupId, chosen: null, embedded: [], provider: null }
@@ -176,6 +201,8 @@ describe('ReviewPage', () => {
     getMetadataMock.mockReset()
     getMetadataMock.mockImplementation(async (groupId) => metadataFor(groupId, null))
     saveMetadataMock.mockReset()
+    getBookPreviewMock.mockReset()
+    getBookPreviewMock.mockImplementation(async (groupId) => previewFor(groupId, `Book ${groupId}`))
   })
 
   it('lists the books with title, author, narrator, runtime, stage and cover', async () => {
@@ -512,8 +539,66 @@ describe('ReviewPage', () => {
       'Catalog search',
       'Cover',
       'Metadata',
+      'Destination',
     ])
     expect(headings[1].level).toBe(2)
     expect(headings.every((h) => h.level === 2 || h.level === 3)).toBe(true)
+  })
+  it('shows the destination folder, the file count and "Ready to approve." for a clean book', async () => {
+    getReviewMock.mockResolvedValue(review)
+    let resolvePreview: (preview: BookPreview) => void = () => {}
+    getBookPreviewMock.mockReturnValue(new Promise((resolve) => (resolvePreview = resolve)))
+    renderAt('/?book=1')
+
+    const destination = await screen.findByRole('region', { name: 'Destination' })
+    expect(within(destination).getByRole('status')).toHaveTextContent('Loading the destination…')
+    resolvePreview(previewFor(1, 'J.R.R. Tolkien/The Hobbit', [{}, {}]))
+    expect(await within(destination).findByText('Ready to approve.')).toBeInTheDocument()
+    expect(getBookPreviewMock).toHaveBeenCalledWith(1)
+    expect(destination).toHaveTextContent('/lib/J.R.R. Tolkien/The Hobbit')
+    expect(destination).toHaveTextContent('2 files')
+    expect(within(destination).getByText('Show all 2 files')).toBeInTheDocument()
+    expect(within(destination).getByText('J.R.R. Tolkien/The Hobbit/2.mp3')).toBeInTheDocument()
+  })
+
+  it('lists a missing token with its file name outside the collapsed file list', async () => {
+    getReviewMock.mockResolvedValue(review)
+    getBookPreviewMock.mockResolvedValue(previewFor(2, 'Frank Herbert/Dune', [{}, { missing: ['Series'] }]))
+    renderAt('/?book=2')
+
+    const destination = await screen.findByRole('region', { name: 'Destination' })
+    const problem = await within(destination).findByText('02.mp3: Missing: Series')
+    expect(problem.closest('details')).toBeNull()
+    expect(destination).not.toHaveTextContent('Ready to approve.')
+  })
+
+  it('reloads the destination after a metadata save and shows the new folder', async () => {
+    getReviewMock.mockResolvedValue(review)
+    getBookPreviewMock
+      .mockResolvedValueOnce(previewFor(3, 'Arthur Conan Doyle/Lost World'))
+      .mockResolvedValueOnce(previewFor(3, 'Arthur Conan Doyle/The Lost World'))
+    saveMetadataMock.mockResolvedValue({ ok: true, metadata: metadataFor(3, 'The Lost World', 'user') })
+    renderAt('/?book=3')
+
+    const destination = await screen.findByRole('region', { name: 'Destination' })
+    expect(await within(destination).findByText('/lib/Arthur Conan Doyle/Lost World')).toBeInTheDocument()
+
+    const metadata = screen.getByRole('region', { name: 'Metadata' })
+    fireEvent.click(await within(metadata).findByRole('button', { name: 'Edit metadata' }))
+    fireEvent.change(within(metadata).getByLabelText('Title'), { target: { value: 'The Lost World' } })
+    fireEvent.click(within(metadata).getByRole('button', { name: 'Save' }))
+
+    expect(await within(destination).findByText('/lib/Arthur Conan Doyle/The Lost World')).toBeInTheDocument()
+    expect(getBookPreviewMock).toHaveBeenCalledTimes(2)
+    expect(await within(metadata).findByText('Metadata saved.')).toBeInTheDocument()
+  })
+
+  it('shows an inline alert when the destination fails to load', async () => {
+    getReviewMock.mockResolvedValue(review)
+    getBookPreviewMock.mockRejectedValue(new Error('boom'))
+    renderAt('/?book=2')
+
+    const destination = await screen.findByRole('region', { name: 'Destination' })
+    expect(await within(destination).findByRole('alert')).toHaveTextContent("The destination couldn't be loaded.")
   })
 })

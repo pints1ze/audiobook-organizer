@@ -8,6 +8,7 @@ import {
   getCovers,
   excludeFiles,
   getDashboard,
+  getBookPreview,
   getPreview,
   getReview,
   getGroup,
@@ -720,6 +721,25 @@ describe('getPreview', () => {
   it('throws on any other status', async () => {
     mockFetch(500, { title: 'Server error' })
     await expect(getPreview()).rejects.toThrow()
+  })
+})
+
+describe('getBookPreview', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns the parsed body on a 200', async () => {
+    const preview = { groupId: 7, libraryPath: '/lib', title: 'Dune', author: 'Frank Herbert', files: [] }
+    const fetchMock = mockFetch(200, preview)
+
+    await expect(getBookPreview(7)).resolves.toEqual(preview)
+    expect(fetchMock).toHaveBeenCalledWith('/api/groups/7/preview')
+  })
+
+  it('throws on a 404', async () => {
+    mockFetch(404, { title: 'Not found' })
+    await expect(getBookPreview(7)).rejects.toThrow()
   })
 })
 

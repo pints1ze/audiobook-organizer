@@ -5,6 +5,7 @@ import CatalogSearch, { CandidateCover, CandidateDetails } from '../book/Catalog
 import CoverPicker from '../book/CoverPicker'
 import MetadataEditor from '../book/MetadataEditor'
 import { BookCover, StageChip, bookTitle } from './BookList'
+import Destination from './Destination'
 import { getMatch } from '../../services/api'
 import type { BookMatch } from '../../types/metadata'
 import type { ReviewBook } from '../../types/review'
@@ -14,7 +15,7 @@ type MatchState = { kind: 'loading' } | { kind: 'loaded'; match: BookMatch | nul
 
 /**
  * The chosen book's detail pane. Render it keyed by the book so a new book starts fresh.
- * `onChanged` runs after a pick, a cover save or a metadata save, so the list can follow.
+ * `onChanged` runs after a pick, a cover save or a metadata save, so the list can follow; each also reloads Destination.
  */
 export default function BookPane({
   book,
@@ -28,6 +29,8 @@ export default function BookPane({
   const [matchState, setMatchState] = useState<MatchState>({ kind: 'loading' })
   const [savedMessage, setSavedMessage] = useState('')
   const [reloadKey, setReloadKey] = useState(0)
+  // Separate from reloadKey: reloading Cover or Metadata after their own save would clear their status lines.
+  const [destinationKey, setDestinationKey] = useState(0)
   const matchHeading = useRef<HTMLHeadingElement>(null)
   const headingId = `review-book-${book.groupId}`
   const matchHeadingId = `review-match-${book.groupId}`
@@ -51,6 +54,11 @@ export default function BookPane({
     setSavedMessage(`Match saved: ${match.match.title ?? 'Untitled'}`)
     setReloadKey((key) => key + 1)
     matchHeading.current?.focus()
+    handleChanged()
+  }
+
+  function handleChanged() {
+    setDestinationKey((key) => key + 1)
     onChanged()
   }
 
@@ -114,8 +122,9 @@ export default function BookPane({
           onPicked={handlePicked}
         />
       </section>
-      <CoverPicker groupId={book.groupId} reloadKey={reloadKey} onSaved={onChanged} />
-      <MetadataEditor groupId={book.groupId} match={currentMatch} reloadKey={reloadKey} onSaved={onChanged} />
+      <CoverPicker groupId={book.groupId} reloadKey={reloadKey} onSaved={handleChanged} />
+      <MetadataEditor groupId={book.groupId} match={currentMatch} reloadKey={reloadKey} onSaved={handleChanged} />
+      <Destination groupId={book.groupId} reloadKey={destinationKey} />
     </section>
   )
 }

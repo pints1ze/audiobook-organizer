@@ -3,24 +3,12 @@ import { Link } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import { approveBook, getPreview } from '../services/api'
 import type { BookPreview, FilePreview, LibraryPreview } from '../types/preview'
+import { fileProblems, hasProblems } from '../utils/previewProblems'
 
 type PreviewState =
   | { kind: 'loading' }
   | { kind: 'loaded'; preview: LibraryPreview }
   | { kind: 'error' }
-
-function fileProblems(file: FilePreview): string[] {
-  const problems: string[] = []
-  if (file.missing.length > 0) problems.push(`Missing: ${file.missing.join(', ')}`)
-  if (file.error) problems.push(file.error)
-  if (file.duplicate) problems.push('Duplicate target')
-  if (file.exists) problems.push('Already exists')
-  return problems
-}
-
-function hasProblems(book: BookPreview) {
-  return book.files.some((file) => fileProblems(file).length > 0)
-}
 
 export default function PreviewPage() {
   const [state, setState] = useState<PreviewState>({ kind: 'loading' })
