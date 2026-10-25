@@ -51,3 +51,33 @@
 - Conflict check: matches UIUX.md: one filled primary action per pane state, focus to the next book after Approve & next, `role="status"`/`role="alert"` beside the control. `POST /api/jobs` still refuses a book whose preview isn't clean (slice 54), so a stale Ready chip can't queue a bad book; the alert covers it.
 - "Next" is taken from the shown list before the reload, so the approved book (now Queued) dropping out of a `Ready` filter doesn't change which book comes next.
 - Files: `components/review/ApproveAction.tsx` (new), `BookPane.tsx`, `Destination.tsx`, `pages/ReviewPage.tsx`, `pages/ReviewPage.test.tsx`. 5 files, 4 tasks.
+
+**Fix (2026-10-25, developer's choice "Outline them"):** Search (`CatalogSearch`), Upload (`CoverPicker`) and Save (`MetadataEditor`) are outline buttons, on the pane and the Book page, so Approve & next is the pane's only filled button (UIUX: others are outline or ghost). New test, seen failing first with "Search", "Upload", "Save": `ReviewPage.test.tsx` "is the only filled button in the pane, also while the metadata is being edited". Commit 1a3bf42.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--artifacts-path`; the dev API locks `bin/`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 415 passed, 0 failed | |
+| Frontend tests | 321 passed, 0 failed | 19 files; 3 full runs after the fix, all green |
+| New tests | 5 of 5 present, passing | 12 new cases in `ReviewPage.test.tsx` (11 in the feat commit, 1 in the fix): per-stage lines, approve → next/announce/focus/re-fetch, last/only book under `?stage=Ready`, refusal + "Approving…", "Show the file", only filled button |
+| Manual: keyboard Approve & next on Shroud (236), developer approved | Passed | Enter on the focused button: URL → `?book=340`, focus on `h2` "Sigra's Roost (Unabridged)", status "Queued Shroud.", Shroud's chip Queued, counts Ready 1 → 0, Queued 0 → 1; the job reached `Succeeded` and Shroud left the list. The pane's only filled button was Approve & next; one-file summary read "Show the file" |
+| Manual: refusal message from the real API | Passed | `POST /api/jobs {groupId: 65}` → 400, detail "A file is already at Lisa Jewell/Don't Let Him In/001. Don't Let Him In (Lisa Jewell).m4b." — `approveBook` shows the detail; nothing queued. Not clicked in the pane (65 is Needs review, so it has no button) |
+
+**Dev data changed:** Shroud (236) was processed into the library (`Y:\audiobooks\Adrian Tchaikovsky\Shroud`) and, per the keep-source setting, its source handled by the worker.
+
+## Outcome (2026-10-25, commit 1ebee42; fix 1a3bf42)
+
+**Status:** Implemented
+**Summary:** The review pane has a per-stage action line under its header. For Ready books it is the filled **Approve & next** button, which queues the book, moves to the next book in the shown list, announces it and focuses the next title. The Destination summary reads "Show the file" for one-file books, and the shared Search, Upload and Save buttons are now outline buttons.
+**Changed:** 5 code files in the feat commit (`components/review/ApproveAction.tsx` new, `BookPane.tsx`, `Destination.tsx`, `pages/ReviewPage.tsx`, `ReviewPage.test.tsx`); 4 in the fix (`CatalogSearch.tsx`, `CoverPicker.tsx`, `MetadataEditor.tsx`, `ReviewPage.test.tsx`)
+**Done when:** all 5 met (item 1's "only filled button" by the fix).
+**Deviations:**
+- Search, Upload and Save restyled outside the slice's files, also on the Book page: fine, the developer chose it.
+- `ApproveAction` also takes `headingId` for `aria-describedby`: fine.
+- The page status line renders only once the list has loaded, and remembers both the approved and the next book so the URL change doesn't clear it: fine, implementation detail.
+**Follow-ups:** none new.
