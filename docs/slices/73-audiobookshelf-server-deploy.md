@@ -58,7 +58,7 @@
 
 ## Outcome (2026-10-24, commit dbd2039)
 
-**Status:** Implemented
+**Status:** Verified (developer, 2026-10-24)
 **Summary:** The deploy target is now the Audiobookshelf server: Windows with Docker Desktop, image built from `D:\workspace\audiobook-organizer`, run from `C:\docker\audiobook-organizer\`. `docs/deploy/compose.yaml` bind-mounts `/incoming` and `/library` from `.env` paths (`D:\audiobooks_incoming`, `D:\audiobooks`), and `/data` stays a named volume. DEPLOY.md, AGENTS.md, the PRD and PLAN.md no longer mention CIFS or SMB.
 **Changed:** 8 files: `docs/deploy/compose.yaml`, `docs/deploy/.env.example`, `docs/DEPLOY.md`, `AGENTS.md`, `docs/PRD.md`, `docs/PLAN.md`, `docs/CURRENT-STATE.md` (writer's edits), the slice file.
 **Deviations:**

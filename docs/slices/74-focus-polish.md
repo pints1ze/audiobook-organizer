@@ -56,7 +56,7 @@
 
 ## Outcome (2026-10-24, commit 9006e6d)
 
-**Status:** Implemented
+**Status:** Verified (developer, 2026-10-24)
 **Summary:** The Jobs status line takes focus on every announcement, including a repeat of the same text, because each one is stored as a new object. The Incoming load error takes focus (`tabIndex={-1}`) when a reload fails after the page has loaded once, but not when the first load fails.
 **Changed:** 6 files: `pages/JobsPage.tsx`, `pages/IncomingPage.tsx` and their two test files, plus this slice file and `docs/PLAN.md` (the writer's edits, in the feat commit as in slice 73).
 **Deviations:**

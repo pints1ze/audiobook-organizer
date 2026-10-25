@@ -1,9 +1,9 @@
 # Current state: AudiobookOrganizer
 
-_Updated: slice 75 review, 2026-10-24, commit 4eeac97_
+_Updated: phase 9 verified, 2026-10-24_
 
 ## Branch
-`phase/9-hardening-release` (off `main` after the phase 8 merge, PR #8)
+`main` (phase 9 merged in PR #9); no phase branch open
 
 ## Where things stand
 - **Locally:** the API runs on port 5070 and the React client on 5173 (`scripts/start.ps1`, default `both`) with SQLite at `<repo>/data/audiobooks.db`. The client shows the API and database status.
@@ -20,11 +20,11 @@ _Updated: slice 75 review, 2026-10-24, commit 4eeac97_
 - **Tests:** both test projects exist and all four checks pass.
 
 ## Phase
-Phase 9, Hardening & release, is done (PR to `main` pending the developer's verification and merge): M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69), the deploy docs (70, 71) and log files (72) are done; the developer's container run works. The deploy docs now describe the Audiobookshelf server (73). The Jobs and Incoming focus fixes (74) and the cover picker's "Current cover" after a match change (75) are in. Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
+Phase 9, Hardening & release, is done, verified by the developer and merged in PR #9: M4B copies without chapters (63), the backend suite in Docker (64), interrupted-job cleanup (65), the scan → process → rescan tests (66), hiding processed books (67) and removing their rows and emptied incoming folders (68) finishing a cut-off job's source deletions at startup (69), the deploy docs (70, 71) and log files (72) are done; the developer's container run works. The deploy docs now describe the Audiobookshelf server (73). The Jobs and Incoming focus fixes (74) and the cover picker's "Current cover" after a match change (75) are in. Phase 8 was merged in PR #8. Excluded files never get an `Audiobook` or a job.
 
 ## Last slice / next slice
-- Last: 75 current-provider-cover, Implemented
-- Next: none. Phase 9 is done; the developer verifies it (manual checks in slices 73–75) and merges the PR. No phase after 9 is planned in PLAN.md.
+- Last: 75 current-provider-cover, Verified
+- Next: none. All phases in PLAN.md are done and its Finished-when lines are met; new work starts with `/itc-plan-project`.
 
 ## Open questions
 - Audible catalog API rate limits and terms (phase 5)
@@ -33,6 +33,7 @@ Phase 9, Hardening & release, is done (PR to `main` pending the developer's veri
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-24 (developer): phase 9 verified (slices 73–75 manual checks pass, deploy works on the Audiobookshelf server); v1 is finished.
 - 2026-10-24 (developer): an unidentified backend test that failed once in 10 runs during slice 74's tests is accepted for now (gate 2); name it if it fails again.
 - 2026-10-23 (developer): the host is the Audiobookshelf server: Windows with Docker Desktop, image built there from the repo, `/incoming` and `/library` bind-mounted from local disks (`D:\audiobooks_incoming`, `D:\audiobooks`), replacing slice 71's CIFS setup; the repo is at `D:\workspace\audiobook-organizer` there. AGENTS.md, the PRD, PLAN.md and DEPLOY.md updated in slice 73.
 - 2026-10-23 (slice 72): `AddSerilog(..., preserveStaticLogger: true)`, so each host disposes its own logger and parallel test hosts don't leave log files open.

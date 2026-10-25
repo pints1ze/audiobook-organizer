@@ -4,9 +4,9 @@
 **Sources:** docs/PRD.md; overview.md (original v0.1 requirements draft).
 
 ## Finished when
-- [ ] all v1 workflows work end to end
+- [x] all v1 workflows work end to end
 - [x] full automated suite passes
-- [ ] Docker image runs in Docker Desktop on the Audiobookshelf server (Windows) with incoming and library bind-mounted from its local disks
+- [x] Docker image runs in Docker Desktop on the Audiobookshelf server (Windows) with incoming and library bind-mounted from its local disks
 
 ## Phases
 

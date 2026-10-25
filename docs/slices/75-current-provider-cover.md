@@ -60,7 +60,7 @@
 
 ## Outcome (2026-10-24, commit 4eeac97)
 
-**Status:** Implemented
+**Status:** Verified (developer, 2026-10-24)
 **Summary:** `ProviderCoverDto` gains `IsChosen`, true only when the chosen cover's source is `provider` and it was chosen at or after the current match's `PickedAtUtc`. The cover picker marks the match's option "Current cover" from that flag, so after a new match it offers "Use the match's cover" again.
 **Changed:** 10 files: `Services/CoverService.cs`, `Models/Api/MetadataDtos.cs`, `GroupCoverControllerTests.cs`, `types/metadata.ts`, `components/book/CoverPicker.tsx` and its test, the `BookPage.test.tsx` and `api.test.ts` fixtures, this slice file and `docs/PLAN.md`.
 **Deviations:**
