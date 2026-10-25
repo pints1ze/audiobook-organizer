@@ -6,7 +6,7 @@ const shortcuts: { keys: string[]; action: string }[] = [
   { keys: ['k'], action: 'Previous book' },
   { keys: ['a'], action: 'Approve & next (Ready books)' },
   { keys: ['/'], action: 'Search the catalog' },
-  { keys: ['Enter'], action: 'Submit a form or press the focused button' },
+  { keys: ['Enter'], action: 'Accept the highlighted match (in the search results)' },
   { keys: ['?'], action: 'Show or hide these shortcuts' },
 ]
 

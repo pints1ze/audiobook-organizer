@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import { providerNames } from './MetadataEditor'
@@ -36,7 +36,10 @@ export default function CatalogSearch({ initialKeywords, groupId, currentMatch, 
   const [keywordErrors, setKeywordErrors] = useState<string[]>([])
   const [picking, setPicking] = useState(false)
   const [pickError, setPickError] = useState<{ index: number; error: PickError } | null>(null)
+  const [highlighted, setHighlighted] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  const buttonRefs = useRef<(HTMLButtonElement | null)[]>([])
+  const focusResult = useRef(false)
   const mounted = useRef(false)
 
   useEffect(() => {
@@ -45,6 +48,13 @@ export default function CatalogSearch({ initialKeywords, groupId, currentMatch, 
       mounted.current = false
     }
   }, [])
+
+  // After a search with results, move focus to the highlighted result's Accept match button.
+  useEffect(() => {
+    if (!focusResult.current) return
+    focusResult.current = false
+    buttonRefs.current[highlighted]?.focus()
+  }, [outcome, highlighted])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -60,6 +70,9 @@ export default function CatalogSearch({ initialKeywords, groupId, currentMatch, 
       next = { kind: 'failed', message: "The search couldn't be run. Check the connection and try again." }
     }
     if (!mounted.current) return
+    const first = next.kind === 'done' ? next.result.candidates.findIndex((c) => !isSameCandidate(c, currentMatch)) : -1
+    setHighlighted(Math.max(first, 0))
+    focusResult.current = first >= 0
     setOutcome(next)
     setKeywordErrors(errors)
     setPickError(null)
@@ -89,6 +102,25 @@ export default function CatalogSearch({ initialKeywords, groupId, currentMatch, 
   const hasErrors = keywordErrors.length > 0
   const candidates = outcome.kind === 'done' ? outcome.result.candidates : []
   const providerErrors = outcome.kind === 'done' ? outcome.result.providerErrors : []
+  const acceptable = candidates.map((candidate) => !isSameCandidate(candidate, currentMatch))
+  // The stored highlight can land on the current match after a pick; fall back to the first acceptable result.
+  const shownHighlight = acceptable[highlighted] ? highlighted : acceptable.indexOf(true)
+
+  /** ArrowDown/ArrowUp on a result button move focus (and so the highlight) to the next/previous acceptable result. */
+  function handleResultsKeyDown(event: KeyboardEvent<HTMLUListElement>) {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    const from = buttonRefs.current.indexOf(event.target as HTMLButtonElement)
+    if (from < 0) return
+    event.preventDefault()
+    const step = event.key === 'ArrowDown' ? 1 : -1
+    for (let i = from + step; i >= 0 && i < candidates.length; i += step) {
+      if (acceptable[i]) {
+        buttonRefs.current[i]?.focus()
+        return
+      }
+    }
+  }
+
   let statusText = ''
   if (searching) statusText = 'Searching…'
   else if (outcome.kind === 'done')
@@ -155,14 +187,19 @@ export default function CatalogSearch({ initialKeywords, groupId, currentMatch, 
         {statusText}
       </p>
       {candidates.length > 0 && (
-        <ul className="mt-2 space-y-4">
+        <ul className="mt-2 space-y-4" onKeyDown={handleResultsKeyDown}>
           {candidates.map((candidate, index) => (
             <CandidateItem
               key={`${candidate.provider}-${candidate.asin ?? candidate.isbn ?? ''}-${index}`}
               candidate={candidate}
               position={index + 1}
               count={candidates.length}
-              isCurrent={isSameCandidate(candidate, currentMatch)}
+              isCurrent={!acceptable[index]}
+              highlighted={index === shownHighlight}
+              buttonRef={(button) => {
+                buttonRefs.current[index] = button
+              }}
+              onFocus={() => setHighlighted(index)}
               picking={picking}
               error={pickError?.index === index ? pickError.error : null}
               onPick={() => handlePick(candidate, index)}
@@ -179,15 +216,32 @@ type CandidateItemProps = {
   position: number
   count: number
   isCurrent: boolean
+  highlighted: boolean
+  buttonRef: (button: HTMLButtonElement | null) => void
+  onFocus: () => void
   picking: boolean
   error: PickError | null
   onPick: () => void
 }
 
-function CandidateItem({ candidate, position, count, isCurrent, picking, error, onPick }: CandidateItemProps) {
+function CandidateItem({
+  candidate,
+  position,
+  count,
+  isCurrent,
+  highlighted,
+  buttonRef,
+  onFocus,
+  picking,
+  error,
+  onPick,
+}: CandidateItemProps) {
   const title = candidate.title ?? 'Untitled'
   return (
-    <li className="flex gap-4 border-b border-muted/30 pb-4">
+    <li
+      data-highlighted={highlighted || undefined}
+      className={`flex gap-4 rounded border-2 p-3 ${highlighted ? 'border-foreground bg-accent' : 'border-muted/30'}`}
+    >
       <CandidateCover candidate={candidate} />
       <div className="min-w-0">
         <h3 className="font-semibold">{title}</h3>
@@ -197,13 +251,17 @@ function CandidateItem({ candidate, position, count, isCurrent, picking, error, 
           <p className="mt-2 text-sm font-medium">Current match</p>
         ) : (
           <button
+            ref={buttonRef}
             type="button"
             onClick={onPick}
+            onFocus={onFocus}
             disabled={picking}
-            aria-label={`Use this match: ${title}, result ${position} of ${count}`}
-            className="mt-2 rounded border border-foreground px-3 py-1 text-sm font-medium disabled:opacity-60"
+            aria-label={`Accept match: ${title}, result ${position} of ${count}`}
+            className={`mt-2 rounded border border-foreground px-3 py-1 text-sm font-medium disabled:opacity-60 ${
+              highlighted ? 'bg-foreground text-background' : ''
+            }`}
           >
-            Use this match
+            Accept match
           </button>
         )}
         {error && (

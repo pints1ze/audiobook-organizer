@@ -372,7 +372,7 @@ describe('ReviewPage', () => {
     const match = await screen.findByRole('region', { name: 'Match' })
     await within(match).findByText('No match chosen yet.')
     fireEvent.click(within(match).getByRole('button', { name: 'Search' }))
-    fireEvent.click(await within(match).findByRole('button', { name: 'Use this match: Dune, result 1 of 1' }))
+    fireEvent.click(await within(match).findByRole('button', { name: 'Accept match: Dune, result 1 of 1' }))
     return match
   }
 
@@ -434,7 +434,7 @@ describe('ReviewPage', () => {
     const next = await screen.findByRole('region', { name: 'Match' })
     expect(within(next).getByRole('searchbox', { name: 'Keywords' })).toHaveValue('The Lost World Arthur Conan Doyle')
     expect(screen.queryByText('1 match found.')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Use this match/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Accept match/ })).not.toBeInTheDocument()
     expect(getMatchMock).toHaveBeenLastCalledWith(3)
   })
   it('shows the Cover and Metadata sections; a chosen cover reloads the list and becomes its thumbnail', async () => {
@@ -532,7 +532,7 @@ describe('ReviewPage', () => {
     const pane = await screen.findByRole('region', { name: 'Dune' })
     await within(pane).findByRole('button', { name: 'Edit metadata' })
     fireEvent.click(within(pane).getByRole('button', { name: 'Search' }))
-    await within(pane).findByRole('button', { name: 'Use this match: Dune, result 1 of 1' })
+    await within(pane).findByRole('button', { name: 'Accept match: Dune, result 1 of 1' })
 
     const headings = within(pane)
       .getAllByRole('heading')
@@ -853,6 +853,29 @@ describe('ReviewPage', () => {
       expect(keywords).toHaveValue(before)
     })
 
+    it('/, type, search, then pressing the focused Accept match saves it and focuses the Match heading', async () => {
+      getReviewMock.mockResolvedValueOnce(review).mockResolvedValueOnce(reviewAfterPick)
+      searchMock.mockResolvedValue({ ok: true, result: { candidates: [duneCandidate], providerErrors: [] } })
+      pickMock.mockResolvedValue({ ok: true, match: { groupId: 2, match: duneCandidate, pickedAtUtc: '2026-10-25T10:00:00Z' } })
+      renderAt('/?book=2')
+      const match = await screen.findByRole('region', { name: 'Match' })
+      await within(match).findByText('No match chosen yet.')
+
+      fireEvent.keyDown(document.body, { key: '/' })
+      const keywords = within(match).getByRole('searchbox', { name: 'Keywords' })
+      expect(keywords).toHaveFocus()
+      fireEvent.change(keywords, { target: { value: 'dune herbert' } })
+      fireEvent.submit(keywords.closest('form')!)
+
+      const accept = await within(match).findByRole('button', { name: 'Accept match: Dune, result 1 of 1' })
+      await waitFor(() => expect(accept).toHaveFocus())
+      fireEvent.click(document.activeElement!)
+
+      expect(await within(match).findByText('Match saved: Dune')).toBeInTheDocument()
+      expect(pickMock).toHaveBeenCalledWith(2, duneCandidate)
+      expect(within(match).getByRole('heading', { level: 2, name: 'Match' })).toHaveFocus()
+    })
+
     it('? toggles the shortcuts popover, which lists every key; Esc closes it and returns focus', async () => {
       getReviewMock.mockResolvedValue(review)
       renderAt()
@@ -863,7 +886,7 @@ describe('ReviewPage', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
       const keys = Array.from(dialog.querySelectorAll('dt kbd')).map((k) => k.textContent)
       expect(keys).toEqual(['j', 'k', 'a', '/', 'Enter', '?'])
-      expect(dialog).toHaveTextContent('Submit a form or press the focused button')
+      expect(dialog).toHaveTextContent('Accept the highlighted match (in the search results)')
 
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
