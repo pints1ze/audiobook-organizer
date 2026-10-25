@@ -48,3 +48,33 @@
 - "Use this match" stays an outline button for now so `BookPage.test.tsx` doesn't change; UIUX's filled "Accept match" lands with the highlight in 81.
 - The pane's own `getMatch` duplicates a few lines of `BookContent`'s; extracting a shared Chosen match component isn't worth it for two callers with different headings and layouts.
 - Files: `components/book/CatalogSearch.tsx` (new), `pages/BookPage.tsx`, `components/review/BookPane.tsx` (new), `pages/ReviewPage.tsx`, `pages/ReviewPage.test.tsx`. 5 files, 4 tasks, under the cap.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--artifacts-path` to a temp folder: the running dev API locks `bin/`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 414 passed, 0 failed | |
+| Frontend tests | 293 passed, 0 failed | 18 files; 3 full runs, all green (accepted `JobsPage`/`BookPage` flakes didn't appear) |
+| New tests | 4 of 4 present, passing | as 7 cases in `ReviewPage.test.tsx`: Match section + prefill; stored match; match load error; pick → status, focus, list reload; pane stays when the book leaves the filter; failed reload keeps list and pane; reset on another book. `BookPage.test.tsx` 22 of 22 unchanged |
+| Manual: dev data, select Needs match book, search, pick | Passed | `/?stage=NeedsMatch&book=236` "Shroud": keywords "Shroud Adrian Tchaikovsky", 16 matches; picked result 1 (Audible B0DKGCTXSP, 14:37:00 vs 14:36:43). Pane chip → Ready, counts Needs match 125 → 124 and Ready 0 → 1, book left the filtered list, pane stayed open |
+| Manual: reload keeps selection and match | Passed | `/?book=236` shows Shroud with its match under Match and Ready in the list |
+| Manual: keyboard only | Passed | focus in Keywords, Enter searched; Tab from Search reached "Use this match: Shroud, result 1 of 16"; Enter saved; focus on the `h3` Match; `role="status"` reads "Match saved: Shroud". No screen reader run (DOM/accessibility tree only) |
+| Manual: slice 78 covers re-check | Passed | 106–108 `img`s on the page, 0 broken; the 404ing embedded covers (e.g. groups 259–264) show initials |
+
+**Dev data changed:** book 236 "Shroud" now has a chosen match (Audible B0DKGCTXSP, the correct book). Left in place; it's the match a user would pick.
+
+## Outcome (2026-10-25, commit 447f2cf)
+
+**Status:** Implemented
+**Summary:** The Book page's catalog search moved unchanged into `components/book/CatalogSearch.tsx`. The Review workspace's pane (`components/review/BookPane.tsx`) now shows the book's chosen match and that search, prefilled with title and author. Picking a result saves it, announces it, focuses the Match heading and reloads the list in the background, so the stage chip and counts update.
+**Changed:** 5 code files plus the slice and PLAN docs (key: `components/book/CatalogSearch.tsx`, `components/review/BookPane.tsx`, `pages/ReviewPage.tsx`, `pages/BookPage.tsx`, `pages/ReviewPage.test.tsx`)
+**Done when:** all 5 met.
+**Deviations:**
+- The moved search keeps its `h2` "Catalog search" inside the pane's `h3` Match section, so the heading order skips back a level: debt (not an AA failure). Recommend a heading-level prop or restructuring the pane headings in 80, where the pane gets its Cover/Metadata/Destination sections.
+- The chosen match's title in the pane is a bold `<p>`, not a heading as on the Book page: fine, it avoids a second `h3` beside Match.
+- Build and tests ran with `--artifacts-path` because the running dev API locks `bin/`: fine, already noted under Verification.
+**Follow-ups:** pane heading levels (80); filled "Accept match" with a highlighted result and `Enter` (81).
