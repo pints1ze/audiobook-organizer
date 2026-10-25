@@ -746,4 +746,120 @@ describe('ReviewPage', () => {
       expect(search().get('book')).toBe('1')
     })
   })
+
+  describe('keyboard shortcuts', () => {
+    const key = (k: string, init: KeyboardEventInit = {}) => fireEvent.keyDown(document.activeElement ?? document.body, { key: k, ...init })
+
+    it('j selects the first book, then the next, focusing its link; k goes back', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt()
+      await screen.findByRole('list', { name: 'Books' })
+
+      key('j')
+      expect(search().get('book')).toBe('1')
+      await waitFor(() => expect(bookLink(/The Hobbit/)).toHaveFocus())
+
+      key('j')
+      expect(search().get('book')).toBe('2')
+      await waitFor(() => expect(bookLink(/Dune/)).toHaveFocus())
+      expect(await screen.findByRole('region', { name: 'Dune' })).toBeInTheDocument()
+
+      key('k')
+      expect(search().get('book')).toBe('1')
+      await waitFor(() => expect(bookLink(/The Hobbit/)).toHaveFocus())
+    })
+
+    it('k with no book selects the last; j on the last shown book stays put and keeps the stage', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?stage=NeedsMatch')
+      await screen.findByRole('list', { name: 'Books' })
+
+      key('k')
+      expect(search().get('book')).toBe('3')
+      expect(search().get('stage')).toBe('NeedsMatch')
+
+      key('j')
+      expect(search().get('book')).toBe('3')
+
+      key('k')
+      expect(search().get('book')).toBe('2')
+      key('k')
+      expect(search().get('book')).toBe('2')
+      expect(search().get('stage')).toBe('NeedsMatch')
+    })
+
+    it('ignores keys typed in the Keywords field and keys with Ctrl, Alt or Meta', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?book=2')
+      const keywords = await screen.findByLabelText('Keywords')
+
+      fireEvent.keyDown(keywords, { key: 'j' })
+      expect(search().get('book')).toBe('2')
+
+      fireEvent.keyDown(document.body, { key: 'j', ctrlKey: true })
+      fireEvent.keyDown(document.body, { key: 'j', altKey: true })
+      fireEvent.keyDown(document.body, { key: 'j', metaKey: true })
+      expect(search().get('book')).toBe('2')
+    })
+
+    it('a approves a Ready book and moves on; Ctrl+a does not', async () => {
+      getReviewMock.mockResolvedValue(review)
+      approveMock.mockResolvedValue({ ok: true as const, job: {} as never })
+      renderAt('/?book=1')
+      await screen.findByRole('button', { name: 'Approve & next' })
+
+      fireEvent.keyDown(document.body, { key: 'a', ctrlKey: true })
+      expect(approveMock).not.toHaveBeenCalled()
+
+      fireEvent.keyDown(document.body, { key: 'a' })
+      const next = await screen.findByRole('region', { name: 'Dune' })
+      expect(approveMock).toHaveBeenCalledWith(1)
+      expect(search().get('book')).toBe('2')
+      expect(within(next).getByRole('heading', { level: 2, name: 'Dune' })).toHaveFocus()
+    })
+
+    it('a does nothing on a Needs match book', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?book=2')
+      await screen.findByText('Pick a match or enter the metadata to approve.')
+
+      fireEvent.keyDown(document.body, { key: 'a' })
+      expect(approveMock).not.toHaveBeenCalled()
+      expect(search().get('book')).toBe('2')
+    })
+
+    it('/ focuses the Keywords field without typing a slash', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?book=2')
+      const keywords = await screen.findByLabelText('Keywords')
+      const before = (keywords as HTMLInputElement).value
+
+      const notPrevented = fireEvent.keyDown(document.body, { key: '/' })
+      expect(notPrevented).toBe(false)
+      expect(keywords).toHaveFocus()
+      expect(keywords).toHaveValue(before)
+    })
+
+    it('? toggles the shortcuts popover, which lists every key; Esc closes it and returns focus', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt()
+      await screen.findByRole('list', { name: 'Books' })
+      const trigger = screen.getByRole('button', { name: 'Keyboard shortcuts' })
+
+      fireEvent.keyDown(document.body, { key: '?' })
+      const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })
+      const keys = Array.from(dialog.querySelectorAll('dt kbd')).map((k) => k.textContent)
+      expect(keys).toEqual(['j', 'k', 'a', '/', 'Enter', '?'])
+      expect(dialog).toHaveTextContent('Submit a form or press the focused button')
+
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(trigger).toHaveFocus()
+
+      fireEvent.click(trigger)
+      expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
+      fireEvent.keyDown(document.body, { key: '?' })
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    })
+  })
 })

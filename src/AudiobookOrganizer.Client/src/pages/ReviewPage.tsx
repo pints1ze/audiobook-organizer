@@ -3,8 +3,10 @@ import { useSearchParams } from 'react-router-dom'
 import { CircleAlert } from 'lucide-react'
 import BookList, { bookTitle, stages } from '../components/review/BookList'
 import BookPane from '../components/review/BookPane'
+import ShortcutsHelp from '../components/review/ShortcutsHelp'
 import { getReview } from '../services/api'
 import type { ReviewBook, ReviewList, ReviewStage } from '../types/review'
+import { isTypingTarget } from '../utils/isTypingTarget'
 
 type ReviewState = { kind: 'loading' } | { kind: 'loaded'; review: ReviewList } | { kind: 'error' }
 
@@ -29,6 +31,7 @@ export default function ReviewPage() {
   const mounted = useRef(false)
   const statusLine = useRef<HTMLParagraphElement>(null)
   const [approved, setApproved] = useState<Approved | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const stageParam = searchParams.get('stage')
   const stage = stages.some((s) => s.stage === stageParam) ? (stageParam as ReviewStage) : null
@@ -85,9 +88,52 @@ export default function ReviewPage() {
     void reload()
   }
 
+  // Single-key shortcuts (UIUX "Actions and keyboard"); each matches a visible control, and none fires while typing.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.ctrlKey || event.altKey || event.metaKey || isTypingTarget(event.target)) return
+      switch (event.key) {
+        case 'j':
+        case 'k': {
+          if (state.kind !== 'loaded') return
+          const shown = stage ? state.review.books.filter((b) => b.stage === stage) : state.review.books
+          if (shown.length === 0) return
+          const index = shown.findIndex((b) => b.groupId === selectedId)
+          const target =
+            index < 0
+              ? event.key === 'j' ? shown[0] : shown[shown.length - 1]
+              : shown[Math.min(Math.max(index + (event.key === 'j' ? 1 : -1), 0), shown.length - 1)]
+          if (target.groupId !== selectedId) setSearchParams(searchFor(stage, target.groupId))
+          // Focus scrolls the link into view inside the list.
+          document.querySelector<HTMLElement>(`[data-group-id="${target.groupId}"]`)?.focus()
+          return
+        }
+        case 'a':
+          document.querySelector<HTMLButtonElement>('#approve-next:not(:disabled)')?.click()
+          return
+        case '/': {
+          const keywords = document.querySelector<HTMLInputElement>('#book-keywords')
+          if (!keywords) return
+          event.preventDefault()
+          keywords.focus()
+          return
+        }
+        case '?':
+          event.preventDefault()
+          setHelpOpen((open) => !open)
+          return
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [state, stage, selectedId, setSearchParams])
+
   return (
     <>
-      <h1 className="text-2xl font-semibold">Review</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Review</h1>
+        <ShortcutsHelp open={helpOpen} onOpenChange={setHelpOpen} />
+      </div>
       {state.kind === 'loaded' && (
         <p ref={statusLine} role="status" tabIndex={-1} className="mt-2 rounded">
           {approved?.message}

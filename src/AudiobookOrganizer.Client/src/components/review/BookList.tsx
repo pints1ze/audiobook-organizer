@@ -117,6 +117,7 @@ export default function BookList({
             <li key={book.groupId}>
               <Link
                 to={bookHref(book.groupId)}
+                data-group-id={book.groupId}
                 aria-current={selected ? 'true' : undefined}
                 className={cn(
                   'flex gap-3 rounded border-l-4 p-2',

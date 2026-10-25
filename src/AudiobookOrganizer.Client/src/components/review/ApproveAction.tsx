@@ -66,6 +66,7 @@ export default function ApproveAction({
   return (
     <div className="mt-4 flex flex-wrap items-center gap-3">
       <button
+        id="approve-next"
         type="button"
         onClick={approve}
         disabled={approving}
