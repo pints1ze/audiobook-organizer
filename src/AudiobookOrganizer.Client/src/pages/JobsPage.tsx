@@ -30,7 +30,8 @@ function retryableIds(jobs: ProcessingJob[]): Set<number> {
 
 export default function JobsPage() {
   const [state, setState] = useState<JobsState>({ kind: 'loading' })
-  const [announcement, setAnnouncement] = useState('')
+  // A new object each time, so a repeated message still re-runs the focus effect.
+  const [announcement, setAnnouncement] = useState<{ text: string } | null>(null)
   const mounted = useRef(false)
   const pollTimer = useRef<number | undefined>(undefined)
   const statusRef = useRef<HTMLParagraphElement>(null)
@@ -64,7 +65,7 @@ export default function JobsPage() {
   }, [announcement])
 
   function handleQueued(title: string) {
-    setAnnouncement(`${title} is queued again.`)
+    setAnnouncement({ text: `${title} is queued again.` })
     void load()
   }
 
@@ -75,7 +76,7 @@ export default function JobsPage() {
       <h1 className="text-2xl font-semibold">Jobs</h1>
       {announcement && (
         <p ref={statusRef} role="status" tabIndex={-1} className="mt-2">
-          {announcement}
+          {announcement.text}
         </p>
       )}
       {state.kind === 'loading' && <p className="mt-4 text-muted">Loading jobs…</p>}
