@@ -4,7 +4,7 @@ import { CircleAlert } from 'lucide-react'
 import BookList, { bookTitle, stages } from '../components/review/BookList'
 import BookPane from '../components/review/BookPane'
 import ScanControl from '../components/review/ScanControl'
-import SelectionBar from '../components/review/SelectionBar'
+import SelectionBar, { type ApproveSelectedResult } from '../components/review/SelectionBar'
 import ShortcutsHelp from '../components/review/ShortcutsHelp'
 import { getReview } from '../services/api'
 import type { AcceptSuggestedResult, ReviewBook, ReviewList, ReviewStage } from '../types/review'
@@ -109,10 +109,13 @@ export default function ReviewPage() {
     setChecked(next)
   }
 
-  /** Unticks the accepted books, reloads the list, then remounts the pane so the shown book loads its new match. */
-  async function handleAccepted(results: AcceptSuggestedResult[]) {
-    const accepted = new Set(results.filter((r) => r.accepted).map((r) => r.groupId))
-    setChecked((current) => new Set([...current].filter((id) => !accepted.has(id))))
+  /**
+   * After a batch action: unticks the books it changed (accepted or queued), reloads the list, then remounts the pane
+   * so the shown book loads its new match or stage.
+   */
+  async function afterBatch(doneIds: number[]) {
+    const done = new Set(doneIds)
+    setChecked((current) => new Set([...current].filter((id) => !done.has(id))))
     await reload()
     if (mounted.current) setPaneVersion((version) => version + 1)
   }
@@ -200,13 +203,21 @@ export default function ReviewPage() {
           {state.kind === 'loaded' && (
             <SelectionBar
               selected={state.review.books.filter((b) => checked.has(b.groupId)).map((b) => b.groupId)}
+              readyIds={state.review.books
+                .filter((b) => checked.has(b.groupId) && b.stage === 'Ready')
+                .map((b) => b.groupId)}
               shownIds={state.review.books.filter((b) => !stage || b.stage === stage).map((b) => b.groupId)}
               titleFor={(groupId) => {
                 const book = state.review.books.find((b) => b.groupId === groupId)
                 return book ? bookTitle(book) : 'A book no longer listed'
               }}
               onSelectionChange={setChecked}
-              onAccepted={(results) => void handleAccepted(results)}
+              onAccepted={(results: AcceptSuggestedResult[]) =>
+                void afterBatch(results.filter((r) => r.accepted).map((r) => r.groupId))
+              }
+              onApproved={(results: ApproveSelectedResult[]) =>
+                void afterBatch(results.filter((r) => r.ok).map((r) => r.groupId))
+              }
             />
           )}
           {state.kind === 'loaded' && (
