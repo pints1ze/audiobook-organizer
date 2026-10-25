@@ -185,7 +185,7 @@ describe('PreviewPage', () => {
     renderPage()
 
     expect(await screen.findByText('No books to preview yet.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: /dashboard/i })).toHaveAttribute('href', '/dashboard')
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   })
 

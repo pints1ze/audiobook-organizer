@@ -97,7 +97,7 @@ function PreviewContent({ preview }: { preview: LibraryPreview }) {
       {books.length === 0 ? (
         <p className="mt-6">
           No books to preview yet.{' '}
-          <Link to="/" className="underline underline-offset-4">
+          <Link to="/dashboard" className="underline underline-offset-4">
             Scan incoming on the dashboard
           </Link>
         </p>

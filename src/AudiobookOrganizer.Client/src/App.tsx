@@ -7,13 +7,15 @@ import JobsPage from './pages/JobsPage'
 import NamesPage from './pages/NamesPage'
 import NotFoundPage from './pages/NotFoundPage'
 import PreviewPage from './pages/PreviewPage'
+import ReviewPage from './pages/ReviewPage'
 import SettingsPage from './pages/SettingsPage'
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/" element={<DashboardPage />} />
+        <Route path="/" element={<ReviewPage />} />
+        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/incoming" element={<IncomingPage />} />
         <Route path="/books/:groupId" element={<BookPage />} />
         <Route path="/people" element={<NamesPage key="people" kind="people" />} />

@@ -9,7 +9,8 @@ const idleClass = 'text-muted hover:text-foreground'
 const navLinkClass = ({ isActive }: { isActive: boolean }) => `${linkClass} ${isActive ? activeClass : idleClass}`
 
 const mainLinks = [
-  { to: '/', label: 'Dashboard' },
+  { to: '/', label: 'Review' },
+  { to: '/dashboard', label: 'Dashboard' },
   { to: '/incoming', label: 'Incoming' },
   { to: '/preview', label: 'Preview' },
   { to: '/jobs', label: 'Jobs' },

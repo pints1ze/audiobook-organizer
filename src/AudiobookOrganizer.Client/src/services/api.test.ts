@@ -9,6 +9,7 @@ import {
   excludeFiles,
   getDashboard,
   getPreview,
+  getReview,
   getGroup,
   getGroups,
   getHealth,
@@ -806,5 +807,40 @@ describe('getJobs', () => {
     mockFetch(500, { title: 'error' })
 
     await expect(getJobs()).rejects.toThrow()
+  })
+})
+
+describe('getReview', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('returns the parsed body on a 200', async () => {
+    const review = {
+      books: [
+        {
+          groupId: 1,
+          title: 'The Hobbit',
+          author: 'J.R.R. Tolkien',
+          narrator: null,
+          durationMs: 3600000,
+          fileCount: 2,
+          stage: 'NeedsMatch',
+          coverSource: null,
+          coverFileId: null,
+        },
+      ],
+      counts: { needsMatch: 1, needsReview: 0, ready: 0, queued: 0, failed: 0 },
+    }
+    const fetchMock = mockFetch(200, review)
+
+    await expect(getReview()).resolves.toEqual(review)
+    expect(fetchMock).toHaveBeenCalledWith('/api/review')
+  })
+
+  it('throws on any other status', async () => {
+    mockFetch(500, { title: 'Server error' })
+
+    await expect(getReview()).rejects.toThrow()
   })
 })

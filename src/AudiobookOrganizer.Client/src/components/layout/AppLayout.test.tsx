@@ -2,7 +2,17 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from '../../App'
-import { getDashboard, getEntries, getGroups, getHealth, getJobs, getPreview, getSettings, getSuggestions } from '../../services/api'
+import {
+  getDashboard,
+  getEntries,
+  getGroups,
+  getHealth,
+  getJobs,
+  getPreview,
+  getReview,
+  getSettings,
+  getSuggestions,
+} from '../../services/api'
 
 vi.mock('../../services/api', () => ({
   getHealth: vi.fn(),
@@ -20,6 +30,7 @@ vi.mock('../../services/api', () => ({
   getPreview: vi.fn(),
   getJobs: vi.fn(),
   approveBook: vi.fn(),
+  getReview: vi.fn(),
 }))
 
 function renderAt(path: string) {
@@ -61,6 +72,10 @@ describe('AppLayout', () => {
       counts: { files: 0, missing: 0, errors: 0, duplicates: 0, existing: 0 },
     })
     vi.mocked(getJobs).mockResolvedValue([])
+    vi.mocked(getReview).mockResolvedValue({
+      books: [],
+      counts: { needsMatch: 0, needsReview: 0, ready: 0, queued: 0, failed: 0 },
+    })
   })
 
   it('renders the skip link first, the header and the main landmark', async () => {
@@ -71,21 +86,34 @@ describe('AppLayout', () => {
     expect(document.querySelector('a, button, input')).toBe(skip)
     expect(screen.getByRole('link', { name: 'Audiobook Organizer' })).toHaveAttribute('href', '/')
     expect(screen.getByRole('main')).toHaveAttribute('id', 'main')
+    expect(screen.getByRole('heading', { level: 1, name: 'Review' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByText('No books to review yet.', { exact: false })).toBeInTheDocument()
+  })
+
+  it('shows the Dashboard on /dashboard', async () => {
+    renderAt('/dashboard')
+
+    const link = screen.getByRole('link', { name: 'Dashboard' })
+    expect(link).toHaveAttribute('href', '/dashboard')
+    expect(link).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Review' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
   })
 
-  it('lists Dashboard, Incoming, Preview and Jobs in the Main nav, with the rest under More', async () => {
+  it('lists Review, Dashboard, Incoming, Preview and Jobs in the Main nav, with the rest under More', async () => {
     renderAt('/incoming')
 
     const nav = screen.getByRole('navigation', { name: 'Main' })
     const navLinks = screen.getAllByRole('link').filter((l) => nav.contains(l))
-    expect(navLinks.map((l) => l.textContent)).toEqual(['Dashboard', 'Incoming', 'Preview', 'Jobs'])
+    expect(navLinks.map((l) => l.textContent)).toEqual(['Review', 'Dashboard', 'Incoming', 'Preview', 'Jobs'])
+    expect(screen.getByRole('link', { name: 'Review' })).toHaveAttribute('href', '/')
     expect(screen.queryByRole('link', { name: 'People' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Genres' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'More' })).toHaveAttribute('aria-haspopup', 'menu')
     expect(screen.getByRole('link', { name: 'Incoming' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Dashboard' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('link', { name: 'Review' })).not.toHaveAttribute('aria-current')
     expect(screen.getByRole('button', { name: 'More' })).not.toHaveAttribute('aria-current')
     expect(await screen.findByRole('heading', { level: 1, name: 'Incoming' })).toBeInTheDocument()
   })
@@ -169,10 +197,10 @@ describe('AppLayout', () => {
     expect(await screen.findByText(/No jobs yet\./)).toBeInTheDocument()
   })
 
-  it('shows "Page not found" with a link back to the dashboard for an unknown route', () => {
+  it('shows "Page not found" with a link to the dashboard for an unknown route', () => {
     renderAt('/nope')
 
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Back to the dashboard' })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('link', { name: 'Back to the dashboard' })).toHaveAttribute('href', '/dashboard')
   })
 })
