@@ -183,7 +183,7 @@ export default function CoverPicker({ groupId, reloadKey, onSaved }: Props) {
         <button
           type="submit"
           disabled={saving}
-          className="mt-7 rounded bg-foreground px-4 py-2 font-medium text-background disabled:opacity-60"
+          className="mt-7 rounded border border-foreground px-4 py-2 font-medium disabled:opacity-60"
         >
           Upload
         </button>

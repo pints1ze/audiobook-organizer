@@ -293,7 +293,7 @@ export default function MetadataEditor({ groupId, match, reloadKey, onSaved }: P
             <button
               type="submit"
               disabled={saving}
-              className="rounded bg-foreground px-4 py-2 font-medium text-background disabled:opacity-60"
+              className="rounded border border-foreground px-4 py-2 font-medium disabled:opacity-60"
             >
               Save
             </button>

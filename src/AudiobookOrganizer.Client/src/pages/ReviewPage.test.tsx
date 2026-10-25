@@ -634,6 +634,21 @@ describe('ReviewPage', () => {
       expect(button).toHaveAccessibleDescription('The Hobbit')
     })
 
+    it('is the only filled button in the pane, also while the metadata is being edited', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?book=1')
+
+      const pane = await screen.findByRole('region', { name: 'The Hobbit' })
+      fireEvent.click(await within(pane).findByRole('button', { name: 'Edit metadata' }))
+      await within(pane).findByRole('button', { name: 'Save' })
+
+      const filled = within(pane)
+        .getAllByRole('button')
+        .filter((b) => b.classList.contains('bg-foreground'))
+        .map((b) => b.textContent)
+      expect(filled).toEqual(['Approve & next'])
+    })
+
     it.each([
       ['NeedsReview', 'Fix the problems under Destination to approve.', false],
       ['NeedsMatch', 'Pick a match or enter the metadata to approve.', false],
