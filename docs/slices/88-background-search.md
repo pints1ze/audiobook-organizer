@@ -49,3 +49,29 @@
 - Existing integration tests run scans with real provider registrations; removing the worker by default is what keeps them off the network.
 - Files touched: `CandidateRepository.cs`, `CandidateSearchSettings.cs` (new), `CandidateSearchWorker.cs` (new), `ScanRunner.cs`, `Program.cs`, `AudiobookOrganizerWebApplicationFactory.cs`, `CandidateSearchWorkerTests.cs` (new): 7.
 - Later slices for this phase: select books and "Accept suggested match" in one action; select Ready books and approve in one action.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings; `-p:OutDir=<scratchpad>` because the running dev API locks `bin/Debug` |
+| Typecheck | Passed | |
+| Backend tests | 431 passed, 0 failed | |
+| Frontend tests | 359 passed, 0 failed | 21 files. During implementation one run failed `JobsPage.test.tsx > offers Retry only on a book's newest failed job and queues it again`: Failed (accepted), the slice 62 flake; no client code changed |
+| New tests | 4 of 4 present, passing | `CandidateSearchWorkerTests`: search after a scan without a POST; matched or searched books skipped; providers down stores errors and goes on; configured delay between searches |
+| Manual: scan new books with the dev API, suggestions appear ~2 s apart | Not run | needs the dev API restarted (`scripts/start.ps1`) and real books in incoming |
+
+## Outcome (2026-10-25, commit 17422a3)
+
+**Status:** Implemented
+**Summary:** A hosted `CandidateSearchWorker` searches every book with no stored search, no chosen match and no processing job, one at a time with `CandidateSearch:DelayMs` (2000) between searches, at startup and after each completed scan (`ScanRunner` wakes it). Failures are logged per book and the pass goes on; integration tests leave the worker off unless they turn it on.
+**Changed:** 7 code files (`Services/CandidateSearchWorker.cs` and `Configuration/CandidateSearchSettings.cs` new, `CandidateRepository.cs`, `ScanRunner.cs`, `Program.cs`, the test factory, `CandidateSearchWorkerTests.cs` new)
+**Done when:** all 6 met; manual check not run.
+**Deviations:**
+- Tests add one or two extra books (copies of the M4B fixture in subfolders): fine.
+- The "not searched again" test seeds on a host without the worker, then starts a second host on the same database with it: fine, tests the startup pass.
+- `RemoveCandidateSearchWorker` helper in the test factory, matching `RemoveProcessingWorker`: fine.
+**Follow-ups:**
+- A pass works from the id list it read at its start; groups replaced by a rescan mid-pass are skipped (still delayed for) and the scan's wake runs another pass. Fine for now.
