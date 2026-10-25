@@ -43,3 +43,30 @@
 - Conflict check: UIUX.md says "`Enter` accept the highlighted match", "Accept match when matching" as the filled primary action, and that shortcuts never replace a visible button. Here `Enter` is the native press of the visible, focused, highlighted Accept match button, so no global listener is needed and it can't fire while typing. On a Ready book that is being re-searched, the highlighted Accept match and Approve & next are both filled. In that state the user is matching, so this is accepted rather than adding a prop to `CatalogSearch`.
 - Moving focus out of Keywords after a search changes the Book page's flow too; slice 79 made the two share one component on purpose.
 - Files: `components/book/CatalogSearch.tsx`, `pages/BookPage.test.tsx`, `pages/ReviewPage.test.tsx`, `components/review/ShortcutsHelp.tsx`. 4 files, 3 tasks.
+
+## Test results (2026-10-25)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--artifacts-path`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 415 passed in 3 of 4 runs | 1st run: 1 unnamed failure, then 3 clean reruns; no backend change since slice 80's fix, so treated as the accepted unidentified intermittent backend failure (slice 49) |
+| Frontend tests | 339 passed, 0 failed | 20 files; 3 full runs, all green |
+| New tests | 4 of 4 present, passing | 4 new `BookPage.test.tsx` cases (focus + filled first, skip current match, arrows/ends + pick, no results keeps focus), 1 `ReviewPage.test.tsx` (`/`, search, Enter accepts, Match heading; popover Enter line); "Use this match" queries renamed |
+| Manual: review pane keyboard flow | Passed | book 337 "The Priory of the Orange Tree": `/` → Enter → focus on "Accept match: The Priory of the Orange Tree, result 1 of 7" (only filled button); ArrowDown → result 2 highlighted and filled, page didn't scroll; ArrowUp → back; Enter → "Match saved: The Priory of the Orange Tree", focus on the Match heading, chip → Ready |
+| Manual: Book page | Passed | `/books/337` search: result 1 is "Current match", focus lands on result 2 "A Day of Fallen Night" |
+
+**Dev data changed:** book 337 "The Priory of the Orange Tree" now has its correct Audible match (Samantha Shannon, Liyah Summers, 25:52:00 vs 25:52:45).
+
+## Outcome (2026-10-25, commit 59dbfc5)
+
+**Status:** Implemented
+**Summary:** Catalog search results now have one highlighted **Accept match** button (filled, row bordered and shaded). It takes focus after a search, skipping the current match. Arrow keys move the highlight, and `Enter` accepts natively, so `/`, type, `Enter`, `Enter` matches a book. This applies on the review pane and the Book page.
+**Changed:** 4 code files (`components/book/CatalogSearch.tsx`, `components/review/ShortcutsHelp.tsx`, `pages/BookPage.test.tsx`, `pages/ReviewPage.test.tsx`)
+**Done when:** all 5 met.
+**Deviations:**
+- Result rows are bordered boxes instead of divided by a bottom border: fine, it lets the highlight show as a border change, not colour alone.
+- If accepting fails, focus is lost because the pressed button is disabled during the save (pre-existing since slice 37's search): debt; move focus to the error alert in a later polish.
+**Follow-ups:** focus the pick error on a failed accept (polish, after phase 10).
