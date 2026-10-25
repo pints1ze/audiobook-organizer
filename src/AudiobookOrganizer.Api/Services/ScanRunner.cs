@@ -12,6 +12,7 @@ public class ScanRunner(
     ScanService scans,
     ScanRepository repository,
     IHostApplicationLifetime lifetime,
+    CandidateSearchWorker candidateSearch,
     ILogger<ScanRunner> logger)
 {
     private readonly Lock _lock = new();
@@ -40,7 +41,7 @@ public class ScanRunner(
     {
         try
         {
-            scans.Execute(run, lifetime.ApplicationStopping);
+            if (scans.Execute(run, lifetime.ApplicationStopping).Status == ScanRun.Completed) candidateSearch.Wake();
         }
         catch (Exception ex)
         {

@@ -16,6 +16,13 @@ public class AudiobookOrganizerWebApplicationFactory : WebApplicationFactory<Pro
     /// </summary>
     public bool RunProcessingWorker { get; init; }
 
+    /// <summary>
+    /// Off by default: the hosted <see cref="CandidateSearchWorker"/> searches the catalog after every scan, and most
+    /// tests scan with the real providers registered. Tests that turn it on fake the providers and shorten
+    /// CandidateSearch:DelayMs.
+    /// </summary>
+    public bool RunCandidateSearchWorker { get; init; }
+
     public string DatabasePath { get; } =
         Path.Combine(Path.GetTempPath(), $"audiobook-organizer-tests-{Guid.NewGuid():N}.db");
 
@@ -28,11 +35,16 @@ public class AudiobookOrganizerWebApplicationFactory : WebApplicationFactory<Pro
         builder.UseSetting("Database:Path", DatabasePath);
         builder.UseSetting("Logs:Path", Path.Combine(LogDirectory, "app-.log"));
         if (!RunProcessingWorker) builder.ConfigureTestServices(RemoveProcessingWorker);
+        if (!RunCandidateSearchWorker) builder.ConfigureTestServices(RemoveCandidateSearchWorker);
     }
 
     /// <summary>Removes the worker's hosted-service registration; throws if it isn't registered.</summary>
     public static void RemoveProcessingWorker(IServiceCollection services) => services.Remove(services.Single(d =>
         d.ServiceType == typeof(IHostedService) && d.ImplementationFactory?.Method.ReturnType == typeof(ProcessingWorker)));
+
+    /// <summary>Removes the background search's hosted-service registration; throws if it isn't registered.</summary>
+    public static void RemoveCandidateSearchWorker(IServiceCollection services) => services.Remove(services.Single(d =>
+        d.ServiceType == typeof(IHostedService) && d.ImplementationFactory?.Method.ReturnType == typeof(CandidateSearchWorker)));
 
     protected override void Dispose(bool disposing)
     {

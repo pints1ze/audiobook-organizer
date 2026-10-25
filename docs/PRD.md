@@ -76,6 +76,6 @@ Full background: `overview.md` (v0.1 draft). This PRD supersedes it where they d
 
 ## Open questions
 - [NEEDS CLARIFICATION: exact ID3 frames and MP4 atoms Audiobookshelf reads for narrator, series, series part, ASIN (resolve with fixtures in the processing phase)]
-- [NEEDS CLARIFICATION: Audible catalog API rate limits and terms; how much throttling is enough]
+- Background search throttle (developer, 2026-10-25): one search at a time with a 2-second gap. Audible publishes no limit; revisit if it throttles or blocks.
 - [NEEDS CLARIFICATION: edition handling for multiple narrators, abridged vs unabridged, regional releases. Is "user picks the match" enough for v1?]
 - [NEEDS CLARIFICATION: genre source and taxonomy (deferred; manual in v1)]

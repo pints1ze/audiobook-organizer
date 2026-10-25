@@ -28,6 +28,22 @@ public class CandidateRepository(SqliteConnectionFactory connections)
         transaction.Commit();
     }
 
+    /// <summary>
+    /// Ids of the groups never searched that have no chosen match and no processing job of any status, by id.
+    /// </summary>
+    public IReadOnlyList<long> GetUnsearchedGroupIds()
+    {
+        using var connection = connections.Open();
+        return connection.Query<long>(
+            """
+            SELECT g.Id FROM FileGroup g
+            WHERE NOT EXISTS (SELECT 1 FROM CandidateSearch s WHERE s.GroupId = g.Id)
+              AND NOT EXISTS (SELECT 1 FROM Audiobook a JOIN MetadataMatch m ON m.AudiobookId = a.Id WHERE a.GroupId = g.Id)
+              AND NOT EXISTS (SELECT 1 FROM ProcessingJob j WHERE j.GroupId = g.Id)
+            ORDER BY g.Id
+            """).ToList();
+    }
+
     /// <summary>The group's last search and its candidates by rank; null when the group was never searched.</summary>
     public (CandidateSearch Search, IReadOnlyList<MetadataCandidate> Candidates)? Get(long groupId)
     {

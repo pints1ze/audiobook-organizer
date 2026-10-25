@@ -28,16 +28,15 @@ Phase 11, Parallel identification, is in progress: candidates are searched on re
 
 ## Last slice / next slice
 - Last: 87 suggested-matches, Implemented
-- Next: none written; background search after a scan waits on the throttle and "new book" answers (Open questions)
+- Next: 88 background-search
 
 ## Open questions
-- How much throttling the background search needs (Audible rate limits; PRD `[NEEDS CLARIFICATION]`), and what "new book" means when uncorrected groups get new ids on every rescan (raised in slice 86)
-- Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
+- 2026-10-25 (developer, after slice 87): the background search runs one search at a time with a 2-second gap, and after each scan it searches every unprocessed book with no stored search and no chosen match; uncorrected books regrouped by a rescan are searched again.
 - 2026-10-25 (developer, slice 85): the top bar is Review, Jobs, More; Incoming, Preview and Dashboard move under More (pages kept). The Review header gets a Scan incoming button with the last scan's status.
 - 2026-10-25 (slice 83): the review list stays a list of links, one tab stop per book, not a `role="listbox"`; `j`/`k` give fast movement.
 - 2026-10-25 (developer, slice 78): the app is used on desktop browsers; the narrow (<1024px) layout isn't a target, so slice 78's "Back to list" check was waived.
