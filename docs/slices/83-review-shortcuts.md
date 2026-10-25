@@ -45,3 +45,42 @@
 - The UIUX list decision: links, not `role="listbox"`. It's recorded here, and in CURRENT-STATE Decisions at review.
 - Split: PLAN.md's "keyboard shortcuts (83)" includes `Enter` to accept the highlighted match, which needs a highlight model in the search results. That goes to **84** with the filled Accept match button, and scan in the header moves to **85**.
 - Files: `utils/isTypingTarget.ts`, `utils/isTypingTarget.test.ts`, `components/ui/popover.tsx`, `components/review/ShortcutsHelp.tsx`, `pages/ReviewPage.tsx`, `components/review/ApproveAction.tsx`, `pages/ReviewPage.test.tsx`. 7 files, 4 tasks.
+
+## Test results (2026-10-25)
+
+**Regressions:** none in the suites. **One Done when item failed manually** (below): rapid `j`/`k` presses lost steps; fixed after testing.
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | 0 warnings, 0 errors (`--artifacts-path`) |
+| Typecheck | Passed | `npx tsc -b --noEmit` exit 0 |
+| Backend tests | 415 passed, 0 failed | |
+| Frontend tests | 333 passed, 0 failed | 20 files; 3 full runs, all green |
+| New tests | 4 of 4 present, passing | `isTypingTarget.test.ts` (5); `ReviewPage.test.tsx` shortcuts (7) |
+| Manual: `k` with nothing selected | Passed | `/` → `k` selects the last book (Wings of Fire bk 7), focuses its link, list scrolled to it (in view); `j` on the last book stays put |
+| Manual: `k`/`j` one at a time | Passed | each press moves one book, pane follows |
+| Manual: two quick presses | **Failed** | two `k` presses in a row moved one book (bk 7 → bk 5, not bk 4); two synchronous `j` keydowns from 347 landed on 345, one step. Each keydown computes from the last render's selection, so key repeat (holding `j`) stalls |
+| Manual: `/` then typing `j` in Keywords | Passed | focus in Keywords, no "/" typed, `j` typed into the field, selection unchanged |
+| Manual: `?` popover | Passed | dialog "Keyboard shortcuts" lists j, k, a, /, Enter, ? with descriptions |
+| Manual: `Esc` returns focus to the button | Passed | opened with `?` and with a click: focus moves content → trigger button (focus events logged). A first reading of "body" was a measurement error: it read `activeElement` before Radix returns focus |
+| Manual: `a` | Not run | no Ready book in the dev data, and approving processes a real book |
+| Manual: screen reader | Not run | accessibility tree only: the popover is a `dialog` with its heading and a `<dl>` of terms and definitions |
+
+Noticed: a Needs match book with a clean preview shows "Ready to approve." under Destination next to "Pick a match or enter the metadata to approve." in the action line, which reads as a contradiction.
+
+**Fix after testing (2026-10-25, developer's OK):** `j`/`k` step from a ref holding the latest selection, so quick presses and key repeat each move one book. New test, seen failing first ("expected '1' to be '2'"): `ReviewPage.test.tsx` "steps once per press even when presses come faster than renders (key repeat)". Browser re-check: three quick `k` from bk 4 → Bk 12 (three steps), three `j` back to bk 4. Destination's clean message is now "No problems with the destination." (developer's choice), so it doesn't contradict a Needs match book's action line. Typecheck clean; build 0 warnings; frontend 334 passed in 2 of 3 runs, the 3rd failed only the accepted `JobsPage` same-title re-focus flake.
+
+## Outcome (2026-10-25, commit 29adfa3; fix 196e2ba)
+
+**Status:** Implemented
+**Summary:** The Review page has `j`/`k` (next/previous book in the shown list, focusing and scrolling to its link), `a` (Approve & next on a Ready book), `/` (focus the catalog search) and `?` (a Radix-backed "Keyboard shortcuts" popover, also opened by a visible button). None of them fire while typing or with a modifier. A follow-up fix makes quick or repeated `j`/`k` presses each count, and rewords Destination's clean state.
+**Changed:** 8 code files in the feat commit (key: `pages/ReviewPage.tsx`, `components/review/ShortcutsHelp.tsx`, `components/ui/popover.tsx`, `utils/isTypingTarget.ts`, `BookList.tsx` `data-group-id`, `ApproveAction.tsx` id, with tests); 3 in the fix (`ReviewPage.tsx`, `Destination.tsx`, `ReviewPage.test.tsx`)
+**Done when:** all 5 met; scroll-into-view confirmed manually.
+**Deviations:**
+- `BookList.tsx` links gained `data-group-id` (8th file): fine, the slice allowed it.
+- `isTypingTarget` also checks the `contenteditable` attribute (jsdom lacks `isContentEditable`): fine.
+- Stale selection on quick `j`/`k`: bug, fixed with the developer's OK.
+- Destination wording changed from "Ready to approve.": improvement, developer's choice.
+- `j`/`k` still fire while the header's More menu is open (not a typing target): debt, minor.
+**Follow-ups:** none new. `a` wasn't tried manually (no Ready dev book); its test covers it.
+**Decisions:** the review list stays a list of links (one tab stop per book) rather than a `role="listbox"`; `j`/`k` give fast movement (UIUX "decided in the slice").
