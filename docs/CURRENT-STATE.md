@@ -24,17 +24,16 @@ Phase 9, Hardening & release, is in progress: M4B copies without chapters (63), 
 
 ## Last slice / next slice
 - Last: 72 log-files, Implemented
-- Next: 73 deploy docs for the Audiobookshelf server (Windows Docker Desktop, image built there, `/incoming` and `/library` bind-mounted from local disks); then the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover").
+- Next: 73 audiobookshelf-server-deploy (written): deploy docs for the Audiobookshelf server (Windows Docker Desktop, image built there, `/incoming` and `/library` bind-mounted from local disks); then the carried-in polish items (Jobs status re-focus, Incoming load-error focus, cover picker "Current cover").
 
 ## Open questions
-- Where on the Audiobookshelf server does the repo clone live, and are `D:udiobooks_incoming` and `D:udiobooks` the bind-mount sources? (slice 73)
 - Audible catalog API rate limits and terms (phase 5)
 - Edition handling: multiple narrators, abridged vs unabridged, regional releases (phase 5)
 - Genre source and taxonomy (deferred; manual in v1)
 - Should the user be able to dismiss a suggestion ("not the same") so it stops reappearing? Proposed for phase 9 polish (raised in slice 41)
 
 ## Decisions
-- 2026-10-23 (developer): the host is the Audiobookshelf server: Windows with Docker Desktop, image built there from the repo, `/incoming` and `/library` bind-mounted from local disks, replacing slice 71's CIFS setup. AGENTS.md, PLAN.md and DEPLOY.md to be updated in slice 73.
+- 2026-10-23 (developer): the host is the Audiobookshelf server: Windows with Docker Desktop, image built there from the repo, `/incoming` and `/library` bind-mounted from local disks (`D:\audiobooks_incoming`, `D:\audiobooks`), replacing slice 71's CIFS setup; the repo is at `D:\workspace\audiobook-organizer` there. AGENTS.md, PLAN.md and DEPLOY.md to be updated in slice 73.
 - 2026-10-23 (slice 72): `AddSerilog(..., preserveStaticLogger: true)`, so each host disposes its own logger and parallel test hosts don't leave log files open.
 - 2026-10-23 (developer): the deployed container works (run on the Audiobookshelf server). The carried-in polish items stay in phase 9. Logs are written to rolling files under `/data/logs` with Serilog's file sink, already a dependency of `Serilog.AspNetCore` (slice 72).
 - 2026-10-22 (developer): the app is hosted in Docker Desktop on the developer's Windows machine, compose under `C:\docker\audiobook-organizer\`, image built from the repo; `/data` is a named volume; `/incoming` and `/library` are CIFS volumes on `\\cookserv\d` (mapped as `Y:`). AGENTS.md, the PRD and PLAN.md updated with the developer's OK (slice 71).

@@ -1,4 +1,4 @@
-# Copy to C:\docker\audiobook-organizer\compose.yaml, next to a .env made from .env.example.
+# Copy to C:\docker\audiobook-organizer\compose.yaml on the Audiobookshelf server, next to a .env made from .env.example.
 # Runs the image built in the repo with `docker compose build`; there is no build: here.
 name: audiobook-organizer
 services:
@@ -8,24 +8,10 @@ services:
       - "8080:8080"
     volumes:
       - audiobook-data:/data
-      - incoming:/incoming
-      - library:/library
+      - ${INCOMING_DIR}:/incoming
+      - ${LIBRARY_DIR}:/library
     restart: unless-stopped
 
 volumes:
   # SQLite database. A named volume, because SQLite locking over a Windows bind mount isn't reliable.
   audiobook-data:
-  # CIFS options are fixed when a volume is created: after changing a share or credentials,
-  # run `docker compose down` and `docker volume rm` these two (never audiobook-data).
-  incoming:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: ${INCOMING_SHARE}
-      o: addr=${SMB_SERVER},username=${SMB_USERNAME},password=${SMB_PASSWORD},vers=3.0,file_mode=0777,dir_mode=0777
-  library:
-    driver: local
-    driver_opts:
-      type: cifs
-      device: ${LIBRARY_SHARE}
-      o: addr=${SMB_SERVER},username=${SMB_USERNAME},password=${SMB_PASSWORD},vers=3.0,file_mode=0777,dir_mode=0777

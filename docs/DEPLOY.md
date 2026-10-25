@@ -1,9 +1,9 @@
 # Deploying AudiobookOrganizer
 
-AudiobookOrganizer runs as one Linux container in Docker Desktop on a Windows machine, started with Docker Compose. The image holds the API, the built web client and ffmpeg/ffprobe. It's built from the repo and run from its own folder, `C:\docker\audiobook-organizer\`.
+AudiobookOrganizer runs as one Linux container in Docker Desktop on the Audiobookshelf server (Windows), started with Docker Compose. The image holds the API, the built web client and ffmpeg/ffprobe. It's built on the server from the repo at `D:\workspace\audiobook-organizer` and run from its own folder, `C:\docker\audiobook-organizer\`.
 
 - `/data` (the SQLite database) is a Docker named volume.
-- `/incoming` and `/library` are CIFS volumes on an SMB share (for example `\\cookserv\d`).
+- `/incoming` and `/library` are bind mounts of the server's local folders `D:\audiobooks_incoming` and `D:\audiobooks`. The library is the same folder Audiobookshelf reads.
 
 The app has no login. Run it only on a trusted LAN, and never expose port 8080 to the internet.
 
@@ -13,18 +13,21 @@ All commands are PowerShell.
 
 - Docker Desktop with the WSL2 backend. In Docker Desktop's settings, turn on **Start Docker Desktop when you sign in**, so the app comes back after a reboot.
 - Git, to clone and update the repo.
-- The SMB server reachable from Windows (for example `Test-NetConnection cookserv -Port 445`), and an SMB account that can read and write both share folders:
-  - **incoming:** where new MP3/M4B audiobooks land.
-  - **library:** where the app writes organized, tagged books.
+- Two folders on the server's `D:` disk:
+  - **incoming** (`D:\audiobooks_incoming`): where new MP3/M4B audiobooks land.
+  - **library** (`D:\audiobooks`): where the app writes organized, tagged books, and where Audiobookshelf reads them.
 
   The library must not be inside incoming, and incoming must not be inside the library: Settings refuses that.
-- Port 8080 free on the Windows machine.
+- Port 8080 free on the server.
 
 ## 2. Build the image
 
-In the repo:
+Clone the repo once, or pull it if it's already there, then build:
 
 ```powershell
+git clone <repo-url> D:\workspace\audiobook-organizer   # first time only
+Set-Location D:\workspace\audiobook-organizer
+git pull
 docker compose build
 ```
 
@@ -38,22 +41,20 @@ The repo's `docker-compose.yml` is for trying the image locally with folders und
 
    ```powershell
    New-Item -ItemType Directory -Force C:\docker\audiobook-organizer
-   Copy-Item docs\deploy\compose.yaml C:\docker\audiobook-organizer\compose.yaml
-   Copy-Item docs\deploy\.env.example C:\docker\audiobook-organizer\.env
+   Copy-Item D:\workspace\audiobook-organizer\docs\deploy\compose.yaml C:\docker\audiobook-organizer\compose.yaml
+   Copy-Item D:\workspace\audiobook-organizer\docs\deploy\.env.example C:\docker\audiobook-organizer\.env
    ```
 
-2. Edit `C:\docker\audiobook-organizer\.env`:
+2. Check the paths in `C:\docker\audiobook-organizer\.env`:
 
    | Variable | Meaning |
    |---|---|
-   | `SMB_SERVER` | The SMB server's name, or its IP address if the name doesn't resolve from Docker |
-   | `SMB_USERNAME`, `SMB_PASSWORD` | The SMB account. A comma in the password breaks the mount options. |
-   | `INCOMING_SHARE` | Share folder mounted at `/incoming`, for example `//cookserv/d/audiobooks_incoming` |
-   | `LIBRARY_SHARE` | Share folder mounted at `/library`, for example `//cookserv/d/audiobooks` |
+   | `INCOMING_DIR` | Local folder bind-mounted at `/incoming`, for example `D:\audiobooks_incoming` |
+   | `LIBRARY_DIR` | Local folder bind-mounted at `/library`, for example `D:\audiobooks` |
 
-   Use the `//server/share/folder` form with forward slashes. A mapped drive letter like `Y:` can't be mounted. The credentials live only in this `.env`; never copy them into the repo.
+   Both folders must already exist. Docker Desktop must be allowed to share drive `D:`; if it asks, allow it under **Settings → Resources → File sharing**.
 
-3. Check the result. `docker compose config` shows the three volumes with targets `/data`, `/incoming` and `/library`:
+3. Check the result. `docker compose config` shows `/data` as a volume and `/incoming` and `/library` as bind mounts:
 
    ```powershell
    Set-Location C:\docker\audiobook-organizer
@@ -68,23 +69,15 @@ The repo's `docker-compose.yml` is for trying the image locally with folders und
 
    It restarts on its own after a crash or a reboot (`restart: unless-stopped`, once Docker Desktop is running) until you stop it with `docker compose down` or `docker compose stop`.
 
-### Changing a share or the credentials
+### Changing a folder
 
-CIFS volume options are fixed when Docker creates the volume, so editing `.env` alone changes nothing. In `C:\docker\audiobook-organizer`:
-
-```powershell
-docker compose down
-docker volume rm audiobook-organizer_incoming audiobook-organizer_library
-docker compose up -d
-```
-
-Never remove `audiobook-organizer_audiobook-data`: it holds the database.
+Edit the path in `.env`, then run `docker compose up -d` in `C:\docker\audiobook-organizer`: it recreates the container with the new bind mount. The database volume is kept; never remove `audiobook-organizer_audiobook-data`, it holds the database.
 
 ## 4. First-run settings
 
-1. Open `http://localhost:8080` (or `http://<windows-pc>:8080` from another LAN device, see section 6).
+1. Open `http://localhost:8080` (or `http://<server>:8080` from another LAN device, see section 6).
 2. Go to **Settings** (`/settings`).
-3. Set **Incoming directory** to `/incoming` and **Library directory** to `/library`. These are the paths inside the container, not the share paths.
+3. Set **Incoming directory** to `/incoming` and **Library directory** to `/library`. These are the paths inside the container, not `D:\audiobooks_incoming` and `D:\audiobooks`.
 4. Leave **Directory template** and **File template** at their defaults or change them.
 5. Choose **Keep source files after processing**. It's off by default: after a book is copied, tagged and verified, its source files are deleted.
 6. Save. Settings checks that both folders exist and can be read, that they don't overlap, and that the library can be written to.
@@ -109,7 +102,7 @@ Windows Firewall blocks port 8080 from other devices by default. To allow it, ru
 New-NetFirewallRule -DisplayName "AudiobookOrganizer 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow -Profile Private
 ```
 
-Then open `http://<windows-pc>:8080` from the other device. Keep the network profile Private; don't open the port on public networks.
+Then open `http://<server>:8080` from the other device. Keep the network profile Private; don't open the port on public networks.
 
 ## 7. Logs
 
@@ -131,7 +124,7 @@ Running locally, the same files go to `<repo>/data/logs/` (ignored by git).
 ## 8. Updating
 
 ```powershell
-# in the repo
+Set-Location D:\workspace\audiobook-organizer
 git pull
 docker compose build
 
@@ -165,7 +158,7 @@ docker run --rm -v audiobook-organizer_audiobook-data:/data -v C:\backups\audiob
 docker compose start
 ```
 
-Back up the library folder on the server with your usual tools; the app only adds to it.
+Back up the library folder (`D:\audiobooks`) with your usual tools; the app only adds to it.
 
 ## 10. Running the backend suite in the image
 
@@ -187,8 +180,8 @@ The normal `docker compose build` doesn't run this stage.
 
 - **Scans only read.** A scan never changes, tags or moves files in incoming.
 - **Processing copies first.** Each file is copied to the library, tagged and read back. A source file is never tagged in place, and an existing library file is never overwritten.
-- **Sources are deleted only with keep-source off,** and only after the whole book verified. The emptied source folders (and parents left empty) are removed too, never the incoming folder itself. So with keep-source off, the incoming share must be writable.
-- **The library share must be writable.** Settings refuses a library it can't write to.
-- **Share permissions come from the SMB account.** The volumes mount with `file_mode=0777,dir_mode=0777`, so inside the container every file looks writable; what the server actually allows is decided by the account in `.env`. Give it read and write on both folders (write on incoming is needed when keep-source is off). Files the app writes on the share belong to that account.
+- **Sources are deleted only with keep-source off,** and only after the whole book verified. The emptied source folders (and parents left empty) are removed too, never the incoming folder itself. So with keep-source off, the incoming folder must be writable.
+- **The library folder must be writable.** Settings refuses a library it can't write to.
+- **Folder permissions are Windows's.** The bind mounts use the Windows folder permissions of the user running Docker Desktop. That user needs read and write on both folders (write on incoming is needed when keep-source is off).
 - **Restarts during processing are safe.** If the container stops mid-job, the next start fails the interrupted job and removes its partial copies. The sources are untouched; use Retry on the Jobs page to approve the book again. If the job had already verified every copy and started deleting sources, startup finishes deleting the remaining unchanged sources and marks the job succeeded.
-- **Network speed.** Scans and copies go over the network, so a large incoming folder scans slower than a local disk.
+- **Audiobookshelf sees a book once it's in place.** Copies are written as `.partial` files and renamed into `D:\audiobooks` when complete, so Audiobookshelf finds each file as soon as it's renamed into place, never half-written.
