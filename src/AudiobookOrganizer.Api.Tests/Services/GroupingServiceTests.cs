@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using AudiobookOrganizer.Api.Data;
 using AudiobookOrganizer.Api.Models.Api;
+using AudiobookOrganizer.Api.Models.Local;
 using AudiobookOrganizer.Api.Services;
 using AudiobookOrganizer.Api.Services.Grouping;
 using Dapper;
@@ -170,6 +171,72 @@ public class GroupingServiceTests : IDisposable
         Assert.Contains(["book a/track1.mp3", "book a/track2.mp3"], StoredGroups());
         Assert.Empty(list.Unresolved);
         Assert.All(list.Groups.Where(g => g.Id != id), g => Assert.False(g.UserCorrected));
+    }
+
+    private long GroupRowCount(long id)
+    {
+        using var connection = _connections.Open();
+        return connection.ExecuteScalar<long>(
+            "SELECT (SELECT COUNT(*) FROM FileGroup WHERE Id = @id) + (SELECT COUNT(*) FROM FileGroupFile WHERE GroupId = @id)",
+            new { id });
+    }
+
+    [Fact]
+    public void Corrected_group_whose_files_are_all_gone_is_deleted_by_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var id = GroupIdOf("book a/track1.mp3");
+        Assert.NotNull(_grouping.Rename(id, new UpdateGroupDto("My Book", "Me")).Group);
+        Directory.Delete(Path.Combine(_incoming, "book a"), recursive: true);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        var list = _grouping.List();
+        Assert.DoesNotContain(list.Groups, g => g.Id == id);
+        Assert.Null(_grouping.GetDetail(id));
+        Assert.Equal(0, GroupRowCount(id));
+        Assert.Equal([["single.m4b"]], StoredGroups());
+        Assert.False(Assert.Single(list.Groups).UserCorrected);
+    }
+
+    [Fact]
+    public void Corrected_group_with_one_file_left_is_kept_unchanged_by_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var id = GroupIdOf("book a/track1.mp3");
+        Assert.NotNull(_grouping.Rename(id, new UpdateGroupDto("My Book", "Me")).Group);
+        var before = _grouping.GetDetail(id)!;
+        File.Delete(Path.Combine(_incoming, "book a", "track2.mp3"));
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        var after = _grouping.GetDetail(id);
+        Assert.Equal(before, after, new DetailComparer());
+        Assert.Equal(("My Book", "Me"), (after!.Title, after.Author));
+        Assert.Contains("book a/track1.mp3", after.Files.Select(f => f.RelativePath));
+    }
+
+    [Fact]
+    public void Corrected_group_whose_files_are_all_gone_but_has_a_job_is_kept_by_a_rescan()
+    {
+        var scanner = NewScanService(_grouping);
+        scanner.Run(CancellationToken.None);
+        var id = GroupIdOf("book a/track1.mp3");
+        Assert.NotNull(_grouping.Rename(id, new UpdateGroupDto("My Book", "Me")).Group);
+        using (var connection = _connections.Open())
+            connection.Execute(
+                "INSERT INTO ProcessingJob (GroupId, Title, Status, CreatedAtUtc, Error) VALUES (@id, 'My Book', @status, '2026-10-26T00:00:00Z', 'x')",
+                new { id, status = ProcessingJob.Failed });
+        Directory.Delete(Path.Combine(_incoming, "book a"), recursive: true);
+
+        Assert.Equal("Completed", scanner.Run(CancellationToken.None).Status);
+
+        var group = _grouping.GetDetail(id);
+        Assert.NotNull(group);
+        Assert.Equal(("My Book", 2), (group.Title, group.Files.Count));
+        Assert.Contains(_grouping.List().Groups, g => g.Id == id);
     }
 
     [Fact]
