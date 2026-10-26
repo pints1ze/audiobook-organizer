@@ -53,8 +53,17 @@ public static partial class GroupingEngine
                 groups.Add((container.Key, Build(ordered, isRoot, wholeFolder), ordered[0].Input.RelativePath));
             }
 
-            foreach (var m4b in all.Where(p => p.IsM4b))
-                Add([m4b], all.Count == 1);
+            // An M4B is a book on its own, unless several share an album tag and number 1 to N in their track tags:
+            // a book split into parts. The track check keeps apart books whose album tag is only the series.
+            foreach (var album in all.Where(p => p.IsM4b).GroupBy(p => p.AlbumKey))
+            {
+                var parts = album.ToList();
+                if (album.Key is not null && parts.Count > 1 && TagTracksContinuous(parts))
+                    Add(parts, parts.Count == all.Count);
+                else
+                    foreach (var m4b in parts)
+                        Add([m4b], all.Count == 1);
+            }
 
             var mp3s = all.Where(p => !p.IsM4b).ToList();
             foreach (var album in mp3s.Where(p => p.AlbumKey is not null).GroupBy(p => p.AlbumKey))
@@ -175,7 +184,7 @@ public static partial class GroupingEngine
         var first = files[0];
         var useFolder = !isRoot && wholeFolder;
 
-        if (first.IsM4b)
+        if (first.IsM4b && files.Count == 1)
         {
             evidence.Add($"Single M4B file \"{first.FileName}\"");
             signals++;
@@ -215,16 +224,12 @@ public static partial class GroupingEngine
         }
 
         // Tag track numbers are independent of the filename; numbers parsed from filenames are part of the filename signal.
-        if (files.Count > 1 && files.All(p => p.TrackFromTag))
+        if (files.Count > 1 && TagTracksContinuous(files))
         {
-            var byDisc = files.GroupBy(p => p.Disc ?? 0).ToList();
-            if (byDisc.All(d => d.Select(p => p.Track!.Value).Order().SequenceEqual(Enumerable.Range(1, d.Count()))))
-            {
-                evidence.Add(byDisc.Count == 1
-                    ? $"Track numbers 1–{files.Count} continuous"
-                    : "Track numbers continuous on each disc");
-                signals++;
-            }
+            evidence.Add(files.All(p => (p.Disc ?? 0) == (first.Disc ?? 0))
+                ? $"Track numbers 1–{files.Count} continuous"
+                : "Track numbers continuous on each disc");
+            signals++;
         }
 
         var tracks = files.Where(p => p.Track is not null).Select(p => p.Track!.Value).ToList();
@@ -256,6 +261,12 @@ public static partial class GroupingEngine
             files.Select(p => new GroupedFile(p.Input.FileId, p.Disc, p.Track)).ToList(),
             files.Sum(p => p.Input.DurationMs ?? 0));
     }
+
+    /// <summary>Every file has a tag track number, and on each disc they run 1 to N with no gaps or repeats.</summary>
+    private static bool TagTracksContinuous(IEnumerable<Parsed> files) =>
+        files.All(p => p.TrackFromTag)
+        && files.GroupBy(p => p.Disc ?? 0)
+            .All(d => d.Select(p => p.Track!.Value).Order().SequenceEqual(Enumerable.Range(1, d.Count())));
 
     /// <summary>"title - author" folder names give both parts; anything else gives neither.</summary>
     private static (string? Title, string? Author) SplitFolderName(string? name)
