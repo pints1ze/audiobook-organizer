@@ -44,3 +44,29 @@
 - Developer request, 2026-10-26: added to phase 11 with the developer's OK, after combining books left files in the order they were added rather than track order; path and filename usually match the track order.
 - Conflict check: reordering is already a user correction (`Reorder` marks the group user-corrected), so a rescan keeps the sorted order. No new dependency (`Intl.Collator` is built in; `ArrowDownAZ` is in lucide-react).
 - Files touched: `utils/sortByPath.ts` (new), `utils/sortByPath.test.ts` (new), `components/incoming/GroupFiles.tsx`, `components/incoming/GroupFiles.test.tsx`: 4.
+
+## Test results (2026-10-26)
+
+**Regressions:** none in this run. During implementation one full frontend run failed `ReviewPage.test.tsx > keyboard shortcuts > a approves a Ready book and moves on; Ctrl+a does not`: Failed (accepted) as a flake by the developer, 2026-10-26; ReviewPage doesn't use the changed files and it passed every later run.
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API and test project 0 warnings; `-p:OutDir=<scratchpad>` |
+| Typecheck | Passed | |
+| Backend tests | 442 passed, 0 failed | |
+| Frontend tests | 377 passed, 0 failed | 22 files, 3 full runs; 2 more after the review fix 9ada106 |
+| New tests | 4 of 4 present, passing | `sortByPath.test.ts` (4); `GroupFiles.test.tsx` "Sort by path": sorts, saves, announces and keeps focus; already sorted sends nothing; no button for one file; failed save alerts and reloads |
+| Manual: sort combined M4B parts on Incoming | Not run | needs the dev API and client restarted (`scripts/start.ps1`) |
+| Manual: keyboard and screen reader | Not run | same |
+
+## Outcome (2026-10-26, commit 4c39ff8)
+
+**Status:** Implemented
+**Summary:** A book's file list on Incoming has a "Sort by path" button (2 or more files) that orders the files by relative path with numeric, case-insensitive comparison (`utils/sortByPath.ts`) and saves the order through `reorderGroup`; an already sorted list sends nothing and says so. The review fix `9ada106` makes the button `aria-disabled` while saving so focus stays on it.
+**Changed:** 4 code files (`utils/sortByPath.ts` and its test new, `GroupFiles.tsx`, `GroupFiles.test.tsx`)
+**Done when:** all 5 met (focus after the review fix); manual checks not run.
+**Deviations:**
+- The button was first `disabled` while saving, which drops keyboard focus in a real browser: bug, fixed in `9ada106` with `aria-disabled` as in slice 90 (developer, 2026-10-26).
+- The save path of `move` is shared as `saveOrder(ids, onSaved)`: fine, as the slice allowed.
+**Follow-ups:**
+- Pressing "Sort by path" again on a sorted list sets the same live-region text, so a screen reader may not announce it twice. Minor; fix if it bothers in use.
