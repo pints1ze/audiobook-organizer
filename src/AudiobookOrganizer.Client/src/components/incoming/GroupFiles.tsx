@@ -126,7 +126,7 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
   }
 
   function sortFiles() {
-    if (!files) return
+    if (!files || saving) return
     const ids = sortByPath(files).map((f) => f.fileId)
     if (ids.every((id, i) => id === files[i].fileId)) {
       setAnnouncement('The files are already sorted by path.')
@@ -213,7 +213,13 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
         </label>
       )}
       {files && files.length >= 2 && (
-        <button type="button" onClick={sortFiles} disabled={saving} className={`mt-2 ${moveButtonClass}`}>
+        // aria-disabled rather than disabled, so focus stays on the button while it saves.
+        <button
+          type="button"
+          onClick={sortFiles}
+          aria-disabled={saving ? 'true' : undefined}
+          className={`mt-2 ${moveButtonClass} aria-disabled:opacity-50`}
+        >
           <ArrowDownAZ aria-hidden="true" className="size-3" />
           Sort by path
         </button>

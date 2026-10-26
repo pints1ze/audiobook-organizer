@@ -168,7 +168,10 @@ describe('GroupFiles', () => {
       fireEvent.click(sort)
 
       expect(reorderGroupMock).toHaveBeenCalledWith(9, [3, 2, 1])
-      expect(sort).toBeDisabled()
+      expect(sort).toHaveAttribute('aria-disabled', 'true')
+      expect(sort).toHaveFocus()
+      fireEvent.click(sort)
+      expect(reorderGroupMock).toHaveBeenCalledTimes(1)
       screen.getAllByRole('button', { name: /^Move .* (up|down)$/ }).forEach((button) => expect(button).toBeDisabled())
 
       resolve({ ok: true, group: saved })
@@ -176,7 +179,7 @@ describe('GroupFiles', () => {
       await waitFor(() => expect(itemNames()).toEqual(['part 1.m4b', 'part 2.m4b', 'part 10.m4b']))
       expect(onReordered).toHaveBeenCalledWith(saved)
       expect(screen.getByText('Sorted 3 files by path.')).toHaveAttribute('aria-live', 'polite')
-      expect(screen.getByRole('button', { name: 'Sort by path' })).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Sort by path' })).not.toHaveAttribute('aria-disabled')
       expect(screen.getByRole('button', { name: 'Sort by path' })).toHaveFocus()
     })
 
@@ -210,7 +213,7 @@ describe('GroupFiles', () => {
 
       expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be saved/)
       await waitFor(() => expect(getGroupMock).toHaveBeenCalledTimes(2))
-      await waitFor(() => expect(screen.getByRole('button', { name: 'Sort by path' })).toBeEnabled())
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Sort by path' })).not.toHaveAttribute('aria-disabled'))
       expect(itemNames()).toEqual(['part 10.m4b', 'part 2.m4b', 'part 1.m4b'])
       expect(onReordered).not.toHaveBeenCalled()
     })
