@@ -151,7 +151,9 @@ public class CoverService(GroupingService grouping, GroupRepository groups, Audi
             var picture = file.Tag.Pictures.FirstOrDefault();
             return picture is null ? null : new EmbeddedPicture(picture.Data.Data, picture.MimeType ?? "");
         }
-        catch (Exception e) when (e is TagLib.CorruptFileException or TagLib.UnsupportedFormatException or IOException)
+        // TagLibSharp throws many exception types on files it can't parse (the scan reads those through ffprobe), and
+        // a missing cover is the right answer for any of them.
+        catch (Exception)
         {
             return null;
         }

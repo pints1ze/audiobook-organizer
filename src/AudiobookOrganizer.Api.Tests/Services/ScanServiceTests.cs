@@ -20,6 +20,7 @@ public class ScanServiceTests : IDisposable
     private readonly string _library;
     private readonly SettingsService _settings;
     private readonly ScanRepository _repository;
+    private readonly GroupRepository _groups;
     private readonly GroupingService _grouping;
     private readonly ScanService _service;
 
@@ -38,7 +39,8 @@ public class ScanServiceTests : IDisposable
         new DatabaseInitializer(connections).Initialize();
         _settings = new SettingsService(new SettingsRepository(connections));
         _repository = new ScanRepository(connections);
-        _grouping = new GroupingService(_settings, _repository, new GroupRepository(connections));
+        _groups = new GroupRepository(connections);
+        _grouping = new GroupingService(_settings, _repository, _groups);
         _service = new ScanService(_settings, _repository, AudioFileReaderTests.NewReader(), _grouping,
             NullLogger<ScanService>.Instance);
     }
@@ -132,6 +134,26 @@ public class ScanServiceTests : IDisposable
         Assert.Equal("mp3", broken.Extension);
         Assert.Null(broken.Title);
         Assert.Null(Rows()["chapters.mp3"].ScanError);
+    }
+
+    [Fact]
+    public void File_TagLibSharp_cannot_parse_is_read_through_ffprobe_and_grouped()
+    {
+        ConfigureIncoming();
+        var folder = Directory.CreateDirectory(Path.Combine(_incoming, "broken book")).FullName;
+        AudioFileReaderTests.WriteBrokenMp3(Path.Combine(folder, "broken.mp3"));
+
+        var run = _service.Run(CancellationToken.None);
+
+        Assert.Equal("Completed", run.Status);
+        Assert.Equal((3, 3, 0), (run.FilesFound, run.FilesAdded, run.FilesFailed));
+        var broken = Rows()["broken.mp3"];
+        Assert.Null(broken.ScanError);
+        Assert.Equal("Fixture Book", broken.Title);
+        Assert.Equal("Fixture Author", broken.Artist);
+        Assert.InRange(broken.DurationMs!.Value, 29_500, 30_500);
+        Assert.False(broken.HasCover);
+        Assert.Contains(_groups.GetGroups(), g => _groups.GetGroupFiles(g.Id).Any(f => f.FileId == broken.Id));
     }
 
     [Fact]

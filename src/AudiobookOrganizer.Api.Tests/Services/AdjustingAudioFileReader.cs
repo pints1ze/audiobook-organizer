@@ -1,4 +1,5 @@
 using AudiobookOrganizer.Api.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AudiobookOrganizer.Api.Tests.Services;
 
@@ -8,7 +9,7 @@ namespace AudiobookOrganizer.Api.Tests.Services;
 /// </summary>
 internal sealed class AdjustingAudioFileReader(
     ChapterReader chapters, FfmpegRunner ffmpeg, Func<string, AudioFileMetadata, AudioFileMetadata> adjust)
-    : AudioFileReader(chapters, ffmpeg)
+    : AudioFileReader(chapters, ffmpeg, NullLogger<AudioFileReader>.Instance)
 {
     public override AudioFileMetadata Read(string path) => adjust(path, base.Read(path));
 }
