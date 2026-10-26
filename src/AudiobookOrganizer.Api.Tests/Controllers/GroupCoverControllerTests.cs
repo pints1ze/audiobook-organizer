@@ -180,6 +180,27 @@ public class GroupCoverControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_file_cover_of_a_file_TagLibSharp_cannot_parse_is_a_404_not_a_500()
+    {
+        var client = Client();
+        var dir = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "broken")).FullName;
+        AudioFileReaderTests.WriteBrokenMp3(Path.Combine(dir, "track1.mp3"));
+        var books = await ScanBooks(client);
+        var brokenId = books.FileIds["broken/track1.mp3"];
+        long? groupId = null;
+        foreach (var group in (await ScansControllerTests.ReadJson(await client.GetAsync("/api/groups"))).GetProperty("groups")
+                     .EnumerateArray())
+            if ((await FileIds(client, group.GetProperty("id").GetInt64())).ContainsValue(brokenId))
+                groupId = group.GetProperty("id").GetInt64();
+        Assert.NotNull(groupId);
+
+        var response = await client.GetAsync($"/api/groups/{groupId}/files/{brokenId}/cover");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty((await GetCover(client, groupId.Value)).GetProperty("embedded").EnumerateArray());
+    }
+
+    [Fact]
     public async Task Get_file_cover_serves_only_jpeg_or_png_whatever_type_the_tag_claims()
     {
         var client = Client();

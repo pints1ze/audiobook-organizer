@@ -65,6 +65,8 @@ export default function BookList({
   counts,
   stage,
   selectedId,
+  selectedIds,
+  onToggle,
   onStageChange,
   bookHref,
 }: {
@@ -72,6 +74,9 @@ export default function BookList({
   counts: ReviewCounts
   stage: ReviewStage | null
   selectedId: number | null
+  /** The books ticked for a batch action; separate from `selectedId`, the book shown in the pane. */
+  selectedIds: ReadonlySet<number>
+  onToggle: (groupId: number) => void
   onStageChange: (stage: ReviewStage | null) => void
   bookHref: (groupId: number) => To
 }) {
@@ -114,13 +119,20 @@ export default function BookList({
         {shown.map((book) => {
           const selected = book.groupId === selectedId
           return (
-            <li key={book.groupId}>
+            <li key={book.groupId} className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                checked={selectedIds.has(book.groupId)}
+                onChange={() => onToggle(book.groupId)}
+                aria-label={`Select ${bookTitle(book)}`}
+                className="mt-6 size-4 shrink-0"
+              />
               <Link
                 to={bookHref(book.groupId)}
                 data-group-id={book.groupId}
                 aria-current={selected ? 'true' : undefined}
                 className={cn(
-                  'flex gap-3 rounded border-l-4 p-2',
+                  'flex min-w-0 flex-1 gap-3 rounded border-l-4 p-2',
                   selected ? 'border-foreground bg-accent' : 'border-transparent hover:bg-accent',
                 )}
               >
@@ -134,6 +146,9 @@ export default function BookList({
                   <span className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">
                     <StageChip stage={book.stage} />
                     <span className="tabular-nums">{formatDuration(book.durationMs)}</span>
+                    {book.stage === 'NeedsMatch' && book.suggestedScore !== null && (
+                      <span className="tabular-nums">Suggestion {book.suggestedScore}</span>
+                    )}
                   </span>
                 </span>
               </Link>

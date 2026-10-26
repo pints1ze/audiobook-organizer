@@ -223,6 +223,48 @@ public class ReviewControllerTests : IDisposable
         Assert.True(second > first);
     }
 
+    [Fact]
+    public async Task A_searched_book_lists_its_best_candidate_score_and_an_unsearched_book_lists_null()
+    {
+        var client = _factory.CreateClient();
+        var groups = await ScanTwoBooks(client);
+        var searched = groups[0].GetProperty("id").GetInt64();
+        ReviewAcceptSuggestedControllerTests.SeedCandidates(_factory, searched, ("Best", 81), ("Second", 40));
+
+        var review = await Review(client);
+
+        Assert.Equal(81, Book(review, searched).GetProperty("suggestedScore").GetInt32());
+        Assert.Equal(JsonValueKind.Null,
+            Book(review, groups[1].GetProperty("id").GetInt64()).GetProperty("suggestedScore").ValueKind);
+    }
+
+    [Fact]
+    public async Task A_corrected_book_whose_folder_is_deleted_is_gone_after_a_rescan()
+    {
+        var client = _factory.CreateClient();
+        var groups = await ScanTwoBooks(client);
+        long alpha = 0;
+        foreach (var id in groups.Select(g => g.GetProperty("id").GetInt64()))
+        {
+            var detail = await ScansControllerTests.ReadJson(await client.GetAsync($"/api/groups/{id}"));
+            if (detail.GetProperty("files")[0].GetProperty("relativePath").GetString()!.StartsWith("alpha/")) alpha = id;
+        }
+        Assert.NotEqual(0, alpha);
+        Assert.Equal(HttpStatusCode.OK,
+            (await client.PutAsJsonAsync($"/api/groups/{alpha}", new { title = "Alpha", author = "Ann" })).StatusCode);
+        Directory.Delete(Path.Combine(_folders.Incoming, "alpha"), recursive: true);
+
+        Assert.Equal(HttpStatusCode.Accepted, (await client.PostAsync("/api/scans", null)).StatusCode);
+        Assert.Equal("Completed", (await ScanTestFolders.WaitForFinish(client)).GetProperty("status").GetString());
+
+        var review = await Review(client);
+        Assert.DoesNotContain(review.GetProperty("books").EnumerateArray(), b => b.GetProperty("groupId").GetInt64() == alpha);
+        Assert.Single(review.GetProperty("books").EnumerateArray());
+        var after = (await ScansControllerTests.ReadJson(await client.GetAsync("/api/groups"))).GetProperty("groups");
+        Assert.DoesNotContain(after.EnumerateArray(), g => g.GetProperty("id").GetInt64() == alpha);
+        Assert.Equal(1, after.GetArrayLength());
+    }
+
     public void Dispose()
     {
         _factory.Dispose();

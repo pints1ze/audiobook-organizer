@@ -25,11 +25,24 @@ public class GroupRepository(SqliteConnectionFactory connections)
             new { scanId }).ToList();
     }
 
-    /// <summary>Deletes every group the user hasn't corrected and inserts <paramref name="groups"/>, in one transaction.</summary>
+    /// <summary>
+    /// Deletes every group the user hasn't corrected, and every corrected group with no job none of whose files was seen
+    /// in <paramref name="scanRunId"/> (its folder is gone), then inserts <paramref name="groups"/>, in one transaction.
+    /// </summary>
     public void ReplaceProposed(IReadOnlyList<ProposedGroup> groups, long scanRunId)
     {
         using var connection = connections.Open();
         using var transaction = connection.BeginTransaction();
+        // Cascades to FileGroupFile, the book's match, metadata and cover, and its stored candidates.
+        connection.Execute(
+            """
+            DELETE FROM FileGroup
+            WHERE UserCorrected = 1
+                AND NOT EXISTS (SELECT 1 FROM FileGroupFile gf JOIN AudioFile a ON a.Id = gf.AudioFileId
+                                WHERE gf.GroupId = FileGroup.Id AND a.LastSeenScanId = @scanRunId)
+                AND NOT EXISTS (SELECT 1 FROM ProcessingJob j WHERE j.GroupId = FileGroup.Id)
+            """,
+            new { scanRunId }, transaction);
         connection.Execute("DELETE FROM FileGroup WHERE UserCorrected = 0", transaction: transaction); // cascades to FileGroupFile
 
         foreach (var group in groups)

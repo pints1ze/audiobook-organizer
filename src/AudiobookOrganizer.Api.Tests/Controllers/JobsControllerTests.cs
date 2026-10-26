@@ -496,6 +496,35 @@ public class JobsControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task A_book_of_an_mp3_TagLibSharp_cannot_parse_processes_to_Succeeded_tagged_and_its_source_is_deleted()
+    {
+        var client = _factory.CreateClient();
+        await SaveTemplates(client, "%artist%/%album%", CleanFileTemplate);
+        var book = Directory.CreateDirectory(Path.Combine(_folders.Incoming, "broken-book")).FullName;
+        var source = Path.Combine(book, "book.mp3");
+        AudioFileReaderTests.WriteBrokenMp3(source);
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.mp3"));
+        File.Delete(Path.Combine(_folders.Incoming, "chapters.m4b"));
+        await Scan(client);
+        var groupId = Assert.Single(await GroupIds(client));
+        var renamed = await client.PutAsJsonAsync($"/api/groups/{groupId}", new { title = "Broken Book", author = "Ann Author" });
+        Assert.Equal(HttpStatusCode.OK, renamed.StatusCode);
+
+        var created = await ApproveJob(client, groupId);
+        var job = await WaitForJob(client, created.GetProperty("id").GetInt64());
+
+        Assert.Equal(("Succeeded", JsonValueKind.Null), (job.GetProperty("status").GetString(), job.GetProperty("error").ValueKind));
+        var file = Assert.Single(job.GetProperty("files").EnumerateArray());
+        Assert.Equal("SourceDeleted", file.GetProperty("status").GetString());
+        Assert.False(File.Exists(source));
+        var destination = file.GetProperty("destinationPath").GetString()!;
+        using (var tagged = TagLib.File.Create(destination))
+            Assert.Equal(("Broken Book", "Ann Author", 1u), (tagged.Tag.Title, tagged.Tag.FirstPerformer, tagged.Tag.Track));
+        Assert.Equal(3, ChapterReaderTests.NewReader().Read(destination).Count);
+        Assert.Empty(PartialFiles());
+    }
+
+    [Fact]
     public async Task A_failed_read_back_fails_the_job_naming_the_check_and_leaves_no_copy_and_every_source()
     {
         var realChapters = -1;

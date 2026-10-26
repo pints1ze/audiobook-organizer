@@ -7,6 +7,7 @@ import MetadataEditor from '../book/MetadataEditor'
 import ApproveAction from './ApproveAction'
 import { BookCover, StageChip, bookTitle } from './BookList'
 import Destination from './Destination'
+import SuggestedMatches from './SuggestedMatches'
 import { getMatch } from '../../services/api'
 import type { BookMatch } from '../../types/metadata'
 import type { ReviewBook } from '../../types/review'
@@ -127,6 +128,7 @@ export default function BookPane({
             </div>
           </div>
         )}
+        <SuggestedMatches groupId={book.groupId} currentMatch={currentMatch} onPicked={handlePicked} />
         <CatalogSearch
           initialKeywords={[book.title, book.author].filter((part) => part?.trim()).join(' ')}
           groupId={book.groupId}

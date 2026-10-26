@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, CircleAlert } from 'lucide-react'
+import { ArrowDown, ArrowDownAZ, ArrowUp, CircleAlert } from 'lucide-react'
 import { getGroup, reorderGroup } from '../../services/api'
 import type { GroupDetail, GroupFile } from '../../types/groups'
+import { sortByPath } from '../../utils/sortByPath'
 import MoveBar, { type MoveTarget } from './MoveBar'
 
 export type { MoveTarget }
@@ -84,14 +85,8 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
     setPendingFocus(null)
   }, [files, pendingFocus])
 
-  async function move(index: number, direction: Direction) {
-    if (!files) return
-    const target = direction === 'up' ? index - 1 : index + 1
-    const ids = files.map((f) => f.fileId)
-    const movedId = ids[index]
-    ;[ids[index], ids[target]] = [ids[target], ids[index]]
-    const names = displayNames(files)
-
+  // Saves the new order; on success shows it and calls onSaved, otherwise shows the alert and reloads.
+  async function saveOrder(ids: number[], onSaved: (group: GroupDetail) => void) {
     setSaving(true)
     setSaveFailed(false)
     setMoveFailed(false)
@@ -104,18 +99,40 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
     }
     if (!mounted.current) return
     if (result?.ok) {
-      const newFiles = result.group.files
-      const position = newFiles.findIndex((f) => f.fileId === movedId) + 1
-      setFiles(newFiles)
+      setFiles(result.group.files)
       setSaving(false)
-      setAnnouncement(`Moved ${names.get(movedId)} to position ${position}`)
-      setPendingFocus({ fileId: movedId, direction })
+      onSaved(result.group)
       onReordered(result.group)
       return
     }
     // The group may have changed or gone since it loaded, so show its current files.
     setSaveFailed(true)
     load()
+  }
+
+  function move(index: number, direction: Direction) {
+    if (!files) return
+    const target = direction === 'up' ? index - 1 : index + 1
+    const ids = files.map((f) => f.fileId)
+    const movedId = ids[index]
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    const names = displayNames(files)
+
+    return saveOrder(ids, (group) => {
+      const position = group.files.findIndex((f) => f.fileId === movedId) + 1
+      setAnnouncement(`Moved ${names.get(movedId)} to position ${position}`)
+      setPendingFocus({ fileId: movedId, direction })
+    })
+  }
+
+  function sortFiles() {
+    if (!files || saving) return
+    const ids = sortByPath(files).map((f) => f.fileId)
+    if (ids.every((id, i) => id === files[i].fileId)) {
+      setAnnouncement('The files are already sorted by path.')
+      return
+    }
+    return saveOrder(ids, (group) => setAnnouncement(`Sorted ${group.files.length} files by path.`))
   }
 
   const someSelected = selected.size > 0 && !!files && selected.size < files.length
@@ -194,6 +211,18 @@ export default function GroupFiles({ groupId, onReordered, targets, onMoveStart,
           />
           Select all files
         </label>
+      )}
+      {files && files.length >= 2 && (
+        // aria-disabled rather than disabled, so focus stays on the button while it saves.
+        <button
+          type="button"
+          onClick={sortFiles}
+          aria-disabled={saving ? 'true' : undefined}
+          className={`mt-2 ${moveButtonClass} aria-disabled:opacity-50`}
+        >
+          <ArrowDownAZ aria-hidden="true" className="size-3" />
+          Sort by path
+        </button>
       )}
       {files && (
         <ol className="mt-1 list-decimal space-y-2 pl-6">

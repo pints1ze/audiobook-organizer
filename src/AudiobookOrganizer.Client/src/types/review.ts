@@ -14,6 +14,8 @@ export interface ReviewBook {
   coverFileId: number | null
   /** When the chosen cover was chosen; null unless coverSource is "chosen". Versions the cover URL. */
   coverChosenAtUtc: string | null
+  /** The score of the book's best stored candidate, or null when it has none. */
+  suggestedScore: number | null
 }
 
 export interface ReviewCounts {
@@ -27,4 +29,11 @@ export interface ReviewCounts {
 export interface ReviewList {
   books: ReviewBook[]
   counts: ReviewCounts
+}
+
+/** One book's outcome from POST /api/review/accept-suggested. */
+export interface AcceptSuggestedResult {
+  groupId: number
+  accepted: boolean
+  error: string | null
 }

@@ -11,6 +11,10 @@ public class GroupingEngineTests
         string? albumArtist = null, int? track = null, int? disc = null, long? durationMs = null) =>
         new(Interlocked.Increment(ref _nextId), path, "mp3", null, album, artist, albumArtist, track, disc, durationMs);
 
+    private static GroupingInput M4b(string path, string? album = null, string? artist = null,
+        string? albumArtist = null, int? track = null, long? durationMs = null) =>
+        new(Interlocked.Increment(ref _nextId), path, "m4b", null, album, artist, albumArtist, track, null, durationMs);
+
     private static long[] Ids(ProposedGroup group) => group.Files.Select(f => f.FileId).ToArray();
 
     [Fact]
@@ -225,5 +229,58 @@ public class GroupingEngineTests
 
         Assert.Equal([p1.FileId, p2.FileId, p10.FileId], Ids(group));
         Assert.All(group.Files, f => Assert.Null(f.Track));
+    }
+
+    [Fact]
+    public void M4b_parts_with_one_album_and_continuous_tag_tracks_are_one_book_in_track_order()
+    {
+        const string album = "Blood of Tyrants - Temeraire Series Book 8 (Unabridged) M4B";
+        var parts = new[] { 3, 1, 5, 2, 4 }
+            .Select(n => M4b($"naomi novik/blood of tyrants/{album}, Part {n}.m4b", album, "Naomi Novik", "Simon Vance",
+                track: n, durationMs: n * 10))
+            .ToList();
+
+        var result = GroupingEngine.Group(parts);
+
+        var group = Assert.Single(result.Groups);
+        Assert.Equal(parts.OrderBy(p => p.Track).Select(p => p.FileId), Ids(group));
+        Assert.Equal([1, 2, 3, 4, 5], group.Files.Select(f => f.Track!.Value));
+        Assert.Equal(album, group.EstimatedTitle);
+        Assert.Equal("Simon Vance", group.EstimatedAuthor);
+        Assert.Equal(GroupConfidence.High, group.Confidence);
+        Assert.Contains($"Album tag \"{album}\" on all 5 files", group.Evidence);
+        Assert.Contains("Track numbers 1–5 continuous", group.Evidence);
+        Assert.Equal(150, group.TotalDurationMs);
+        Assert.Empty(result.Unresolved);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(1, 1)]
+    [InlineData(1, 3)]
+    public void M4b_files_sharing_an_album_without_continuous_tag_tracks_stay_separate_books(int? first, int? second)
+    {
+        var a = M4b("temeraire/his majesty's dragon.m4b", "Temeraire", "Naomi Novik", track: first);
+        var b = M4b("temeraire/throne of jade.m4b", "Temeraire", "Naomi Novik", track: second);
+
+        var result = GroupingEngine.Group([a, b]);
+
+        Assert.Equal(2, result.Groups.Count);
+        Assert.All(result.Groups, g => Assert.Single(g.Files));
+        Assert.All(result.Groups, g => Assert.Contains(g.Evidence, e => e.StartsWith("Single M4B file")));
+    }
+
+    [Fact]
+    public void M4b_parts_group_only_with_their_own_album_in_a_shared_folder()
+    {
+        var p1 = M4b("novik/book a, part 1.m4b", "Book A", "Naomi Novik", track: 1);
+        var p2 = M4b("novik/book a, part 2.m4b", "Book A", "Naomi Novik", track: 2);
+        var other = M4b("novik/book b.m4b", "Book B", "Naomi Novik", track: 1);
+
+        var result = GroupingEngine.Group([other, p2, p1]);
+
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Contains(result.Groups, g => Ids(g).SequenceEqual([p1.FileId, p2.FileId]));
+        Assert.Contains(result.Groups, g => Ids(g).SequenceEqual([other.FileId]));
     }
 }

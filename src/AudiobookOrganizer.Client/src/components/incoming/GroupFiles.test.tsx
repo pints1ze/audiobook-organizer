@@ -150,6 +150,75 @@ describe('GroupFiles', () => {
     expect(onReordered).not.toHaveBeenCalled()
   })
 
+  describe('sorting by path', () => {
+    const p10 = file(1, 'part 10.m4b', 1)
+    const p2 = file(2, 'part 2.m4b', 2)
+    const p1 = file(3, 'part 1.m4b', 3)
+
+    it('saves the files in path order, shows it, keeps focus and announces it', async () => {
+      getGroupMock.mockResolvedValue(detail([p10, p2, p1]))
+      const saved = detail([{ ...p1, position: 1 }, { ...p2, position: 2 }, { ...p10, position: 3 }], true)
+      let resolve: (value: Awaited<ReturnType<typeof reorderGroup>>) => void = () => {}
+      reorderGroupMock.mockReturnValue(new Promise((r) => (resolve = r)))
+      const onReordered = vi.fn()
+      render(<GroupFiles groupId={9} onReordered={onReordered} targets={[]} onMoveStart={vi.fn()} onMoved={vi.fn()} />)
+
+      const sort = await screen.findByRole('button', { name: 'Sort by path' })
+      sort.focus()
+      fireEvent.click(sort)
+
+      expect(reorderGroupMock).toHaveBeenCalledWith(9, [3, 2, 1])
+      expect(sort).toHaveAttribute('aria-disabled', 'true')
+      expect(sort).toHaveFocus()
+      fireEvent.click(sort)
+      expect(reorderGroupMock).toHaveBeenCalledTimes(1)
+      screen.getAllByRole('button', { name: /^Move .* (up|down)$/ }).forEach((button) => expect(button).toBeDisabled())
+
+      resolve({ ok: true, group: saved })
+
+      await waitFor(() => expect(itemNames()).toEqual(['part 1.m4b', 'part 2.m4b', 'part 10.m4b']))
+      expect(onReordered).toHaveBeenCalledWith(saved)
+      expect(screen.getByText('Sorted 3 files by path.')).toHaveAttribute('aria-live', 'polite')
+      expect(screen.getByRole('button', { name: 'Sort by path' })).not.toHaveAttribute('aria-disabled')
+      expect(screen.getByRole('button', { name: 'Sort by path' })).toHaveFocus()
+    })
+
+    it('sends nothing and says so when the files are already in path order', async () => {
+      getGroupMock.mockResolvedValue(detail([p1, p2, p10]))
+      const onReordered = vi.fn()
+      render(<GroupFiles groupId={9} onReordered={onReordered} targets={[]} onMoveStart={vi.fn()} onMoved={vi.fn()} />)
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Sort by path' }))
+
+      expect(await screen.findByText('The files are already sorted by path.')).toHaveAttribute('aria-live', 'polite')
+      expect(reorderGroupMock).not.toHaveBeenCalled()
+      expect(onReordered).not.toHaveBeenCalled()
+    })
+
+    it('is not shown for a book with one file', async () => {
+      getGroupMock.mockResolvedValue(detail([p1]))
+      render(<GroupFiles groupId={9} onReordered={vi.fn()} targets={[]} onMoveStart={vi.fn()} onMoved={vi.fn()} />)
+
+      await screen.findByRole('list')
+      expect(screen.queryByRole('button', { name: 'Sort by path' })).not.toBeInTheDocument()
+    })
+
+    it('shows the save alert and reloads the files when the save is rejected', async () => {
+      getGroupMock.mockResolvedValue(detail([p10, p2, p1]))
+      reorderGroupMock.mockRejectedValue(new Error('offline'))
+      const onReordered = vi.fn()
+      render(<GroupFiles groupId={9} onReordered={onReordered} targets={[]} onMoveStart={vi.fn()} onMoved={vi.fn()} />)
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Sort by path' }))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/couldn't be saved/)
+      await waitFor(() => expect(getGroupMock).toHaveBeenCalledTimes(2))
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Sort by path' })).not.toHaveAttribute('aria-disabled'))
+      expect(itemNames()).toEqual(['part 10.m4b', 'part 2.m4b', 'part 1.m4b'])
+      expect(onReordered).not.toHaveBeenCalled()
+    })
+  })
+
   it('shows an alert when the files cannot be loaded', async () => {
     getGroupMock.mockRejectedValue(new Error('boom'))
     render(<GroupFiles groupId={9} onReordered={vi.fn()} targets={[]} onMoveStart={vi.fn()} onMoved={vi.fn()} />)

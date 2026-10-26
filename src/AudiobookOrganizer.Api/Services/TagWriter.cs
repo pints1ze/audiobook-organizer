@@ -61,7 +61,9 @@ public class TagTargetExistsException(string path, Exception? inner = null) : IO
 /// <summary>
 /// Writes a tagged copy of a source file to a new path. The source is only read. MP3 copies are tagged with
 /// TagLibSharp; M4B copies are first remuxed by ffmpeg (<c>-c copy</c>) with no chapters at all, so no Nero
-/// <c>chpl</c> atom for TagLibSharp to corrupt, and then tagged the same way. MP3 copies keep their chapters.
+/// <c>chpl</c> atom for TagLibSharp to corrupt, and then tagged the same way. MP3 copies keep their chapters. An MP3
+/// whose tags TagLibSharp can't parse (such as a broken chapter table) is remuxed by ffmpeg (<c>-c copy</c>, ID3v2.3)
+/// instead of byte-copied, and that copy is tagged the same way.
 /// </summary>
 public class TagWriter(FfmpegRunner ffmpeg)
 {
@@ -79,7 +81,7 @@ public class TagWriter(FfmpegRunner ffmpeg)
             WriteMp3(sourcePath, tempPath, tags);
     }
 
-    private static void WriteMp3(string sourcePath, string tempPath, BookTags tags)
+    private void WriteMp3(string sourcePath, string tempPath, BookTags tags)
     {
         using (var source = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
@@ -89,11 +91,42 @@ public class TagWriter(FfmpegRunner ffmpeg)
         if (new FileInfo(tempPath).Length != new FileInfo(sourcePath).Length)
             throw new IOException($"The copy of {sourcePath} isn't the same size as the source.");
 
-        // The .partial name has no audio extension, so the type is named.
-        using var file = TagLib.File.Create(tempPath, "audio/mpeg", TagLib.ReadStyle.Average);
+        using var file = OpenMp3(tempPath) ?? RemuxMp3(sourcePath, tempPath);
         ApplyTags(file, tags, joinLists: false);
         ApplyMp3BookFrames((TagLib.Id3v2.Tag)file.GetTag(TagLib.TagTypes.Id3v2, true), tags);
         file.Save();
+    }
+
+    /// <summary>The MP3 copy opened by TagLibSharp, or null when it can't parse the tags (I/O errors still throw).</summary>
+    private static TagLib.File? OpenMp3(string path)
+    {
+        try
+        {
+            // The .partial name has no audio extension, so the type is named.
+            return TagLib.File.Create(path, "audio/mpeg", TagLib.ReadStyle.Average);
+        }
+        catch (Exception ex) when (ex is not (IOException or UnauthorizedAccessException or FfmpegException))
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Replaces the byte copy at <paramref name="tempPath"/> with an ffmpeg remux of the source (<c>-c copy</c>: the
+    /// audio, any attached picture, the source's tags and chapters, rewritten as ID3v2.3), so TagLibSharp gets clean
+    /// tags to open. A remux it still can't open throws.
+    /// </summary>
+    private TagLib.File RemuxMp3(string sourcePath, string tempPath)
+    {
+        File.Delete(tempPath);
+        // As in WriteM4b: the CreateNew placeholder proves the path is this writer's before ffmpeg replaces it (-y).
+        CreateNew(tempPath).Dispose();
+        ffmpeg.Ffmpeg(
+        [
+            "-y", "-v", "error", "-i", sourcePath, "-map", "0:a", "-map", "0:v?", "-c", "copy", "-map_metadata", "0",
+            "-id3v2_version", "3", "-f", "mp3", tempPath,
+        ]);
+        return TagLib.File.Create(tempPath, "audio/mpeg", TagLib.ReadStyle.Average);
     }
 
     private void WriteM4b(string sourcePath, string tempPath, BookTags tags)

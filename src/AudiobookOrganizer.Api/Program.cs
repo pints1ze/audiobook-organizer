@@ -83,6 +83,12 @@ builder.Services.AddHttpClient<CoverDownloadClient>(http =>
 builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<AudibleClient>());
 builder.Services.AddTransient<IMetadataProvider>(services => services.GetRequiredService<OpenLibraryClient>());
 builder.Services.AddTransient<MetadataSearchService>();
+builder.Services.AddSingleton<CandidateRepository>();
+builder.Services.AddTransient<CandidateService>();
+builder.Services.Configure<CandidateSearchSettings>(builder.Configuration.GetSection(CandidateSearchSettings.SectionName));
+// One instance: ScanRunner wakes the same worker the host runs.
+builder.Services.AddSingleton<CandidateSearchWorker>();
+builder.Services.AddHostedService(services => services.GetRequiredService<CandidateSearchWorker>());
 
 builder.Services.AddControllers();
 

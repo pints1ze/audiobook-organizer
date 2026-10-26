@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using AudiobookOrganizer.Api.Configuration;
 using AudiobookOrganizer.Api.Services;
 
 namespace AudiobookOrganizer.Api.Tests.Services;
@@ -133,6 +134,44 @@ public class TagWriterTests : IDisposable
         Assert.Equal(TagRoundTripTests.CoverJpeg, picture.Data.Data);
         Assert.Equal("Source comment", tag.Comment);
         Assert.Equal(sourceHash, Hash(source));
+    }
+
+    [Fact]
+    public void An_mp3_TagLibSharp_cannot_parse_is_remuxed_into_a_tagged_copy_with_its_chapters_and_audio()
+    {
+        var source = Path.Combine(_dir, "broken.mp3");
+        AudioFileReaderTests.WriteBrokenMp3(source);
+        Assert.ThrowsAny<Exception>(() => TagLib.File.Create(source).Dispose());
+        var sourceHash = Hash(source);
+        var temp = Temp("out.mp3");
+
+        _writer.Write(source, temp, Full);
+
+        using (var file = TagLib.File.Create(temp, "audio/mpeg", TagLib.ReadStyle.Average))
+        {
+            Assert.Equal("The Book", file.Tag.Title);
+            Assert.Equal("Ann Author", file.Tag.FirstPerformer);
+            Assert.Equal(2u, file.Tag.Track);
+        }
+        // Duration through ffprobe, as the job's read-back does: TagLibSharp misreads MPEG-2 MP3 duration.
+        var read = AudioFileReaderTests.NewReader().Read(temp);
+        Assert.InRange(read.DurationMs, 29_000, 31_000);
+        Assert.Equal(3, read.ChapterCount);
+        Assert.Equal(3, ChapterReaderTests.NewReader().Read(temp).Count);
+        Assert.Equal(sourceHash, Hash(source));
+    }
+
+    [Fact]
+    public void An_mp3_TagLibSharp_can_parse_is_a_byte_copy_without_ffmpeg()
+    {
+        var source = Mp3Source();
+        var before = TagRoundTripTests.Snapshot(source, TagRoundTripTests.Mp3PayloadHash);
+        var temp = Temp("out.mp3");
+        var withoutFfmpeg = new TagWriter(FfmpegRunnerTests.Runner(new ToolSettings { FfmpegPath = "no-such-ffmpeg-executable" }));
+
+        withoutFfmpeg.Write(source, temp, Full);
+
+        Assert.Equal(before, TagRoundTripTests.Snapshot(temp, TagRoundTripTests.Mp3PayloadHash));
     }
 
     [Fact]

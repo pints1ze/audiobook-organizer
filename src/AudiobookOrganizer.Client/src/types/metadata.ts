@@ -40,6 +40,20 @@ export interface BookMatch {
   pickedAtUtc: string
 }
 
+/** A stored candidate and its 0–100 score against the book. */
+export interface ScoredCandidate {
+  candidate: MetadataCandidate
+  score: number
+}
+
+/** A book's stored candidate search: best first, with the errors of providers (or the search) that failed. */
+export interface BookCandidates {
+  groupId: number
+  searchedAtUtc: string
+  candidates: ScoredCandidate[]
+  errors: string[]
+}
+
 export type PickMatchResult =
   | { ok: true; match: BookMatch }
   | { ok: false; errors: Record<string, string[]> }

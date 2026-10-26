@@ -15,6 +15,7 @@ import type {
 import type { HealthResponse } from '../types/health'
 import type { ApproveBookResult, ProcessingJob } from '../types/jobs'
 import type {
+  BookCandidates,
   BookCovers,
   BookMatch,
   BookMetadata,
@@ -38,7 +39,7 @@ import type {
   SaveEntryResult,
 } from '../types/names'
 import type { BookPreview, LibraryPreview } from '../types/preview'
-import type { ReviewList } from '../types/review'
+import type { AcceptSuggestedResult, ReviewList } from '../types/review'
 import type { SaveSettingsResult, Settings, SettingsFieldErrors } from '../types/settings'
 
 // The only place the client calls the backend.
@@ -108,6 +109,23 @@ export async function getReview(): Promise<ReviewList> {
     throw new Error(`Loading the review list failed with status ${response.status}`)
   }
   return (await response.json()) as ReviewList
+}
+
+/** Accepts each listed book's best stored candidate; one result per id, in order. A 400 throws with the API's reason. */
+export async function acceptSuggested(groupIds: number[]): Promise<AcceptSuggestedResult[]> {
+  const response = await fetch('/api/review/accept-suggested', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupIds }),
+  })
+  if (response.status === 200) {
+    return ((await response.json()) as { results: AcceptSuggestedResult[] }).results
+  }
+  if (response.status === 400) {
+    const problem = (await response.json()) as { errors?: { groupIds?: string[] } }
+    throw new Error(problem.errors?.groupIds?.[0] ?? "The suggested matches couldn't be accepted.")
+  }
+  throw new Error(`Accepting the suggested matches failed with status ${response.status}`)
 }
 
 /** Every processing job, newest first. */
@@ -315,6 +333,23 @@ export async function pickMatch(groupId: number, candidate: MetadataCandidate): 
     return { ok: false, notFound: true }
   }
   throw new Error(`Saving the match failed with status ${response.status}`)
+}
+
+export async function getCandidates(groupId: number): Promise<BookCandidates | null> {
+  const response = await fetch(`/api/groups/${groupId}/candidates`)
+  if (response.status === 204) return null
+  if (response.status !== 200) {
+    throw new Error(`Loading the suggested matches failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookCandidates
+}
+
+export async function findCandidates(groupId: number): Promise<BookCandidates> {
+  const response = await fetch(`/api/groups/${groupId}/candidates`, { method: 'POST' })
+  if (response.status !== 200) {
+    throw new Error(`Finding suggested matches failed with status ${response.status}`)
+  }
+  return (await response.json()) as BookCandidates
 }
 
 export async function getMetadata(groupId: number): Promise<BookMetadata> {

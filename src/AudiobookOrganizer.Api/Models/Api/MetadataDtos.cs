@@ -26,6 +26,13 @@ public record BookMatchDto(long GroupId, MetadataCandidateDto Match, DateTimeOff
 /// <summary>Candidates from the first provider that found any, plus the errors of providers that failed before it.</summary>
 public record MetadataSearchResultDto(IReadOnlyList<MetadataCandidateDto> Candidates, IReadOnlyList<string> ProviderErrors);
 
+/// <summary>A stored candidate and its score (0–100) against the book's title, authors and runtime.</summary>
+public record ScoredCandidateDto(MetadataCandidateDto Candidate, int Score);
+
+/// <summary>A book's last catalog search: its top candidates, best first, and the provider errors.</summary>
+public record BookCandidatesDto(long GroupId, DateTimeOffset SearchedAtUtc, IReadOnlyList<ScoredCandidateDto> Candidates,
+    IReadOnlyList<string> Errors);
+
 /// <summary>One metadata value and where it came from: origin "file", "provider", "user" or null; Provider only for "provider".</summary>
 public record MetadataFieldDto<T>(T Value, string? Origin, string? Provider);
 

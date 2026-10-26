@@ -7,7 +7,7 @@ namespace AudiobookOrganizer.Api.Tests.Services;
 /// returned, the next read signals <see cref="Blocked"/> and waits for <see cref="Release"/>, so a scan can be held
 /// open deterministically.
 /// </summary>
-internal sealed class GatedAudioFileReader(int blockAfter = int.MaxValue) : AudioFileReader(null!, null!)
+internal sealed class GatedAudioFileReader(int blockAfter = int.MaxValue) : AudioFileReader(null!, null!, null!)
 {
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
     private readonly ManualResetEventSlim _blocked = new();

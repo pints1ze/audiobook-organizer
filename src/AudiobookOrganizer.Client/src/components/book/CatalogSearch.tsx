@@ -18,7 +18,7 @@ type SearchOutcome =
 type PickError = { kind: 'message'; text: string } | { kind: 'notFound' }
 
 /** A result is the current match when provider, ASIN, ISBN and title all equal the chosen match's. */
-function isSameCandidate(a: MetadataCandidate, b: MetadataCandidate | null) {
+export function isSameCandidate(a: MetadataCandidate, b: MetadataCandidate | null) {
   return !!b && a.provider === b.provider && a.asin === b.asin && a.isbn === b.isbn && a.title === b.title
 }
 

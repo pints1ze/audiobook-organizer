@@ -2,11 +2,13 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  acceptSuggested,
   approveBook,
   chooseCover,
   chosenCoverUrl,
   fileCoverUrl,
   getBookPreview,
+  getCandidates,
   getCovers,
   getLatestScan,
   getMatch,
@@ -28,8 +30,11 @@ import ReviewPage from './ReviewPage'
 
 vi.mock('../services/api', () => ({
   getReview: vi.fn(),
+  acceptSuggested: vi.fn(),
   approveBook: vi.fn(),
   getMatch: vi.fn(),
+  getCandidates: vi.fn(),
+  findCandidates: vi.fn(),
   searchMetadata: vi.fn(),
   pickMatch: vi.fn(),
   getCovers: vi.fn(),
@@ -46,7 +51,9 @@ vi.mock('../services/api', () => ({
 }))
 
 const getReviewMock = vi.mocked(getReview)
+const acceptSuggestedMock = vi.mocked(acceptSuggested)
 const getMatchMock = vi.mocked(getMatch)
+const getCandidatesMock = vi.mocked(getCandidates)
 const searchMock = vi.mocked(searchMetadata)
 const pickMock = vi.mocked(pickMatch)
 const getCoversMock = vi.mocked(getCovers)
@@ -151,6 +158,7 @@ function book(overrides: Partial<ReviewBook> & { groupId: number }): ReviewBook 
     coverSource: null,
     coverFileId: null,
     coverChosenAtUtc: null,
+    suggestedScore: null,
     ...overrides,
   }
 }
@@ -237,8 +245,11 @@ function search() {
 describe('ReviewPage', () => {
   beforeEach(() => {
     getReviewMock.mockReset()
+    acceptSuggestedMock.mockReset()
     getMatchMock.mockReset()
     getMatchMock.mockResolvedValue(null)
+    getCandidatesMock.mockReset()
+    getCandidatesMock.mockResolvedValue(null)
     searchMock.mockReset()
     pickMock.mockReset()
     getCoversMock.mockReset()
@@ -403,6 +414,22 @@ describe('ReviewPage', () => {
     expect(await within(match).findByText('The Hobbit')).toBeInTheDocument()
     expect(match).toHaveTextContent('Andy Serkis')
     expect(screen.queryByText('No match chosen yet.')).not.toBeInTheDocument()
+  })
+
+  it("shows the selected book's stored suggestions under Match", async () => {
+    getReviewMock.mockResolvedValue(review)
+    getCandidatesMock.mockResolvedValue({
+      groupId: 2,
+      searchedAtUtc: '2026-10-25T10:00:00Z',
+      candidates: [{ candidate: candidate({ title: 'Dune', authors: ['Frank Herbert'] }), score: 92 }],
+      errors: [],
+    })
+    renderAt('/?book=2')
+
+    const suggestions = await screen.findByRole('region', { name: 'Suggested matches' })
+    expect(within(screen.getByRole('region', { name: 'Match' })).getByRole('region', { name: 'Suggested matches' })).toBe(suggestions)
+    expect(await within(suggestions).findByRole('button', { name: 'Accept match: Dune, score 92 of 100' })).toBeInTheDocument()
+    expect(getCandidatesMock).toHaveBeenCalledWith(2)
   })
 
   it('shows an error line when the match fails to load', async () => {
@@ -1107,6 +1134,256 @@ describe('ReviewPage', () => {
       await advance(5000)
 
       expect(getLatestScanMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('selection bar', () => {
+    function selectionBar() {
+      return screen.getByRole('group', { name: 'Selected books' })
+    }
+
+    function checkbox(title: string) {
+      return within(bookList()).getByRole('checkbox', { name: `Select ${title}` })
+    }
+
+    function acceptButton() {
+      return within(selectionBar()).getByRole('button', { name: 'Accept suggested match' })
+    }
+
+    it('selects books by checkbox and counts them', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt()
+      await screen.findByRole('list', { name: 'Books' })
+
+      expect(selectionBar()).toHaveTextContent('0 selected')
+      expect(acceptButton()).toHaveAttribute('aria-disabled', 'true')
+
+      fireEvent.click(checkbox('The Hobbit'))
+      fireEvent.click(checkbox('Dune'))
+
+      expect(selectionBar()).toHaveTextContent('2 selected')
+      expect(checkbox('The Hobbit')).toBeChecked()
+      expect(checkbox('The Lost World')).not.toBeChecked()
+      expect(acceptButton()).not.toHaveAttribute('aria-disabled')
+
+      fireEvent.click(within(selectionBar()).getByRole('button', { name: 'Clear selection' }))
+      expect(selectionBar()).toHaveTextContent('0 selected')
+      expect(checkbox('Dune')).not.toBeChecked()
+    })
+
+    it('selects all shown books under a stage filter and shows the mixed state', async () => {
+      getReviewMock.mockResolvedValue(review)
+      renderAt('/?stage=NeedsMatch')
+      await screen.findByRole('list', { name: 'Books' })
+
+      const all = within(selectionBar()).getByRole('checkbox', { name: 'Select all shown' })
+      expect(all).not.toBeChecked()
+      fireEvent.click(all)
+
+      expect(selectionBar()).toHaveTextContent('2 selected')
+      expect(checkbox('Dune')).toBeChecked()
+      expect(checkbox('The Lost World')).toBeChecked()
+      expect(all).toBeChecked()
+
+      fireEvent.click(checkbox('Dune'))
+      expect(selectionBar()).toHaveTextContent('1 selected')
+      expect(all).toBePartiallyChecked()
+
+      // Showing every stage: the Hobbit was never selected.
+      fireEvent.click(screen.getByRole('button', { name: 'All 3' }))
+      expect(checkbox('The Hobbit')).not.toBeChecked()
+      expect(checkbox('The Lost World')).toBeChecked()
+    })
+
+    it('accepts the suggested matches, reports skipped books and keeps only them selected', async () => {
+      getReviewMock.mockResolvedValueOnce(review).mockResolvedValue(reviewAfterPick)
+      acceptSuggestedMock.mockResolvedValue([
+        { groupId: 2, accepted: true, error: null },
+        { groupId: 3, accepted: false, error: 'No suggested match.' },
+      ])
+      renderAt('/?book=2')
+      await screen.findByRole('list', { name: 'Books' })
+      await waitFor(() => expect(getMatchMock).toHaveBeenCalledWith(2))
+      const matchCalls = getMatchMock.mock.calls.length
+
+      fireEvent.click(checkbox('Dune'))
+      fireEvent.click(checkbox('The Lost World'))
+      acceptButton().focus()
+      fireEvent.click(acceptButton())
+
+      const status = await within(selectionBar().parentElement!).findByRole('status')
+      await waitFor(() => expect(status).toHaveTextContent('Accepted 1 suggested match.'))
+      expect(status).toHaveTextContent('The Lost World: No suggested match.')
+      expect(acceptSuggestedMock).toHaveBeenCalledWith([2, 3])
+      expect(getReviewMock).toHaveBeenCalledTimes(2)
+
+      await waitFor(() => expect(selectionBar()).toHaveTextContent('1 selected'))
+      expect(checkbox('Dune')).not.toBeChecked()
+      expect(checkbox('The Lost World')).toBeChecked()
+      expect(acceptButton()).toHaveFocus()
+      // The pane remounts, so the selected book loads its new match.
+      await waitFor(() => expect(getMatchMock.mock.calls.length).toBeGreaterThan(matchCalls))
+    })
+
+    it('shows an alert and keeps the selection when accepting fails', async () => {
+      getReviewMock.mockResolvedValue(review)
+      acceptSuggestedMock.mockRejectedValue(new Error('status 500'))
+      renderAt()
+      await screen.findByRole('list', { name: 'Books' })
+
+      fireEvent.click(checkbox('Dune'))
+      fireEvent.click(acceptButton())
+
+      const alert = await within(selectionBar().parentElement!).findByRole('alert')
+      expect(alert).toHaveTextContent("The suggested matches couldn't be accepted.")
+      expect(selectionBar()).toHaveTextContent('1 selected')
+      expect(checkbox('Dune')).toBeChecked()
+      expect(getReviewMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('drops books no longer listed from the selection after a reload', async () => {
+      getReviewMock
+        .mockResolvedValueOnce(review)
+        .mockResolvedValue({ ...review, books: [hobbit, lostWorld] })
+      acceptSuggestedMock.mockResolvedValue([{ groupId: 3, accepted: false, error: 'No suggested match.' }])
+      renderAt()
+      await screen.findByRole('list', { name: 'Books' })
+
+      fireEvent.click(checkbox('Dune'))
+      fireEvent.click(checkbox('The Lost World'))
+      expect(selectionBar()).toHaveTextContent('2 selected')
+      // Accepting reloads the list; Dune has gone from it.
+      fireEvent.click(acceptButton())
+
+      await waitFor(() => expect(within(bookList()).queryByRole('checkbox', { name: 'Select Dune' })).toBeNull())
+      expect(selectionBar()).toHaveTextContent('1 selected')
+    })
+
+    describe('approve selected', () => {
+      // Hobbit and Dune Ready, the Lost World Needs match.
+      const readyReview: ReviewList = {
+        books: [hobbit, { ...dune, stage: 'Ready' }, lostWorld],
+        counts: { needsMatch: 1, needsReview: 0, ready: 2, queued: 0, failed: 0 },
+      }
+
+      function approveSelected() {
+        return within(selectionBar()).getByRole('button', { name: /^Approve/ })
+      }
+
+      function confirmation() {
+        return screen.queryByRole('group', { name: 'Confirm approval' })
+      }
+
+      it('counts only the selected Ready books, and says why when none are', async () => {
+        getReviewMock.mockResolvedValue(readyReview)
+        renderAt()
+        await screen.findByRole('list', { name: 'Books' })
+
+        fireEvent.click(checkbox('The Lost World'))
+        expect(approveSelected()).toHaveAccessibleName('Approve selected')
+        expect(approveSelected()).toHaveAttribute('aria-disabled', 'true')
+        expect(selectionBar()).toHaveTextContent('No Ready books selected.')
+        fireEvent.click(approveSelected())
+        expect(confirmation()).toBeNull()
+
+        fireEvent.click(checkbox('The Hobbit'))
+        fireEvent.click(checkbox('Dune'))
+        expect(approveSelected()).toHaveAccessibleName('Approve 2 Ready books')
+        expect(approveSelected()).not.toHaveAttribute('aria-disabled')
+        expect(selectionBar()).not.toHaveTextContent('No Ready books selected.')
+      })
+
+      it('opens the confirmation with focus on Approve; Esc closes it and returns focus', async () => {
+        getReviewMock.mockResolvedValue(readyReview)
+        renderAt()
+        await screen.findByRole('list', { name: 'Books' })
+
+        fireEvent.click(checkbox('The Hobbit'))
+        fireEvent.click(checkbox('Dune'))
+        fireEvent.click(approveSelected())
+
+        const group = confirmation()!
+        expect(group).toHaveTextContent("Approve 2 books? They'll be copied, tagged and moved into the library.")
+        expect(within(group).getByRole('button', { name: 'Approve' })).toHaveFocus()
+        expect(within(group).getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+
+        fireEvent.keyDown(within(group).getByRole('button', { name: 'Approve' }), { key: 'Escape' })
+        expect(confirmation()).toBeNull()
+        expect(approveSelected()).toHaveFocus()
+        expect(approveMock).not.toHaveBeenCalled()
+
+        fireEvent.click(approveSelected())
+        fireEvent.click(within(confirmation()!).getByRole('button', { name: 'Cancel' }))
+        expect(confirmation()).toBeNull()
+        expect(approveSelected()).toHaveFocus()
+        expect(approveMock).not.toHaveBeenCalled()
+      })
+
+      it('queues the Ready books only, reports the refused one and keeps it and the others selected', async () => {
+        getReviewMock
+          .mockResolvedValueOnce(readyReview)
+          .mockResolvedValue({ ...readyReview, books: [{ ...hobbit, stage: 'Queued' }, readyReview.books[1], lostWorld] })
+        approveMock.mockImplementation(async (groupId) =>
+          groupId === 1
+            ? { ok: true, job: { id: 9, groupId: 1, title: 'The Hobbit', status: 'Queued', createdAtUtc: '', startedAtUtc: null, finishedAtUtc: null, error: null, files: [] } }
+            : { ok: false, message: 'This book has destination problems.' },
+        )
+        renderAt('/?book=2')
+        await screen.findByRole('list', { name: 'Books' })
+        await waitFor(() => expect(getMatchMock).toHaveBeenCalledWith(2))
+        const matchCalls = getMatchMock.mock.calls.length
+
+        fireEvent.click(checkbox('The Hobbit'))
+        fireEvent.click(checkbox('Dune'))
+        fireEvent.click(checkbox('The Lost World'))
+        fireEvent.click(approveSelected())
+        fireEvent.click(within(confirmation()!).getByRole('button', { name: 'Approve' }))
+
+        const status = within(selectionBar().parentElement!).getByRole('status')
+        await waitFor(() => expect(status).toHaveTextContent('Queued 1 book.'))
+        expect(status).toHaveTextContent('Dune: This book has destination problems.')
+        expect(approveMock.mock.calls).toEqual([[1], [2]])
+        expect(confirmation()).toBeNull()
+        await waitFor(() => expect(getReviewMock).toHaveBeenCalledTimes(2))
+
+        await waitFor(() => expect(selectionBar()).toHaveTextContent('2 selected'))
+        expect(checkbox('The Hobbit')).not.toBeChecked()
+        expect(checkbox('Dune')).toBeChecked()
+        expect(checkbox('The Lost World')).toBeChecked()
+        expect(approveSelected()).toHaveFocus()
+        await waitFor(() => expect(getMatchMock.mock.calls.length).toBeGreaterThan(matchCalls))
+      })
+
+      it('reports a book whose request failed and still sends the rest', async () => {
+        getReviewMock.mockResolvedValue(readyReview)
+        approveMock.mockRejectedValueOnce(new Error('status 500')).mockResolvedValueOnce({ ok: false, message: 'Already queued.' })
+        renderAt()
+        await screen.findByRole('list', { name: 'Books' })
+
+        fireEvent.click(checkbox('The Hobbit'))
+        fireEvent.click(checkbox('Dune'))
+        fireEvent.click(approveSelected())
+        fireEvent.click(within(confirmation()!).getByRole('button', { name: 'Approve' }))
+
+        const status = within(selectionBar().parentElement!).getByRole('status')
+        await waitFor(() => expect(status).toHaveTextContent('Queued 0 books.'))
+        expect(status).toHaveTextContent("The Hobbit: The book couldn't be approved. Check the connection and try again.")
+        expect(status).toHaveTextContent('Dune: Already queued.')
+        expect(approveMock).toHaveBeenCalledTimes(2)
+      })
+    })
+
+    it("shows a Needs match book's suggestion score", async () => {
+      getReviewMock.mockResolvedValue({
+        ...review,
+        books: [{ ...hobbit, suggestedScore: 95 }, { ...dune, suggestedScore: 87 }, lostWorld],
+      })
+      renderAt()
+
+      const items = await within(await screen.findByRole('list', { name: 'Books' })).findAllByRole('listitem')
+      expect(items[1]).toHaveTextContent('Suggestion 87')
+      expect(items[0]).not.toHaveTextContent('Suggestion')
+      expect(items[2]).not.toHaveTextContent('Suggestion')
     })
   })
 })
