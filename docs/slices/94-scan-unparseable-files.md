@@ -44,3 +44,29 @@
 - The real file is never used in tests; the broken copy is built from the fixture in a temp directory.
 - `ChapterReader.Read` opens the file with TagLibSharp too, so the fallback must catch around both the tag read and the chapter read, and count chapters from ffprobe.
 - Files touched: `AudioFileReader.cs`, `CoverService.cs`, `Program.cs` only if the reader's registration needs it, `AudioFileReaderTests.cs`, a scan test file, a cover test file, plus construction sites of `AudioFileReader` in tests (`GatedAudioFileReader.cs`, `AdjustingAudioFileReader.cs`): about 8.
+
+## Test results (2026-10-26)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API and test project 0 warnings; `-p:OutDir=<scratchpad>` |
+| Typecheck | Passed | |
+| Backend tests | 450 passed, 0 failed | 2 full runs |
+| Frontend tests | 377 passed, 0 failed | 22 files |
+| New tests | 4 of 4 present, passing | `AudioFileReaderTests`: broken-CTOC copy read through ffprobe (TagLib throws first; title, artist, ~30 s, 3 chapters, no cover, one warning); random bytes still throw. `ScanServiceTests`: the broken copy is stored without `ScanError` and grouped. `GroupCoverControllerTests`: its file cover is a 404, not a 500 |
+| Manual: rescan the real incoming, the Grisham MP3 appears as a book | Not run | needs the dev API restarted |
+
+## Outcome (2026-10-26, commit f5d5d88)
+
+**Status:** Implemented
+**Summary:** When TagLibSharp throws on a file (other than I/O, access or ffmpeg errors), `AudioFileReader.Read` reads its tags, duration and chapter count from one ffprobe JSON call, reports no cover and logs one warning; if ffprobe fails too, the TagLibSharp error is recorded as before. `CoverService.ReadPicture` returns no embedded cover for any TagLibSharp failure instead of a 500.
+**Changed:** 7 code files (`AudioFileReader.cs`, `CoverService.cs`, `AudioFileReaderTests.cs`, `ScanServiceTests.cs`, `GroupCoverControllerTests.cs`, `AdjustingAudioFileReader.cs`, `GatedAudioFileReader.cs`)
+**Done when:** all 5 met; manual check not run.
+**Deviations:**
+- `TryReadWithFfprobe` logs the ffprobe error at Debug and returns null so the original exception rethrows with its stack: improvement.
+- An extra assertion on the single warning, with a small in-file `ListLogger`: improvement.
+- No test that an I/O error skips the ffprobe retry (the exception filter enforces it): fine.
+**Follow-ups:**
+- Slice 95: process such files (remux the MP3 copy with ffmpeg before TagLibSharp tags it).
