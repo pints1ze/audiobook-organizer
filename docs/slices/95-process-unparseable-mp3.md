@@ -43,3 +43,30 @@
 - `AGENTS.md` says MP3 copies are tagged by TagLibSharp and keep their chapters; both still hold. Its External tools line lists only the M4B remux, so this slice proposes adding "and the remux of MP3s TagLibSharp can't parse" there (gate 4: the developer edits AGENTS.md).
 - Risk: ffmpeg rewrites the MP3's Xing header on remux; the ±1 s duration read-back catches a real difference and fails the job rather than shipping a bad copy.
 - Files touched: `TagWriter.cs`, `TagWriterTests.cs`, `AudioFileReaderTests.cs`, `JobsControllerTests.cs`, possibly a new `BrokenMp3.cs` helper: 5.
+
+## Test results (2026-10-26)
+
+**Regressions:** none
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API and test project 0 warnings; `-p:OutDir=<scratchpad>` |
+| Typecheck | Passed | |
+| Backend tests | 453 passed, 0 failed | 2 full runs |
+| Frontend tests | 377 passed, 0 failed | 22 files |
+| New tests | 3 of 3 present, passing | `TagWriterTests`: broken-CTOC copy remuxed and tagged (title, artist, track, 3 chapters, ~30 s through ffprobe, source unchanged); a normal MP3 still byte-copied (ffmpeg path missing, payload identical). `JobsControllerTests`: a book of the broken copy is approved, its job succeeds, the source is deleted, the destination is tagged with 3 chapters |
+| Manual: the slice's ffmpeg remux on the real Grisham MP3, into the scratchpad | Passed | duration 44006.765714 s before and after, cover stream kept, 0 chapters both (ffmpeg doesn't read the broken table either); copy deleted |
+| Manual: approve and process "The French Illusion" on the dev API | Not run | needs the dev API restarted |
+
+## Outcome (2026-10-26, commit e33036b)
+
+**Status:** Implemented
+**Summary:** `TagWriter.WriteMp3` byte-copies as before, but when TagLibSharp can't open the copy it replaces it with an ffmpeg `-c copy` remux of the source (audio, attached picture, tags and chapters, ID3v2.3) and tags that as any MP3 copy; the existing read-back passes unchanged. MP3s TagLibSharp reads and M4Bs are untouched.
+**Changed:** 3 code files (`TagWriter.cs`, `TagWriterTests.cs`, `JobsControllerTests.cs`)
+**Done when:** all 5 met; dev-app manual check not run.
+**Deviations:**
+- `WriteBrokenMp3` stays on `AudioFileReaderTests` (already `internal static`), as the slice's first option allowed: fine.
+- The TagWriter test checks duration through `AudioFileReader` (ffprobe) since TagLibSharp under-reports the fixture's MPEG-2 duration: fine.
+- `RemuxMp3` deletes the byte copy and recreates the placeholder before ffmpeg `-y`; the copy is already the writer's, so ffmpeg could overwrite it directly: debt, small; drop the delete/recreate when this code is next touched.
+**Follow-ups:**
+- Proposed `AGENTS.md` wording (developer's to make): in External tools, "They handle the M4B remux" → "They handle the M4B remux and the remux of MP3s TagLibSharp can't parse".
