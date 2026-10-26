@@ -44,3 +44,27 @@
 - A cancelled or failed scan doesn't regroup, so it never deletes anything.
 - Files touched: `GroupRepository.cs`, `GroupingServiceTests.cs`, `ReviewControllerTests.cs`: 3.
 - Later slice for this phase: 94, read files TagLibSharp can't parse through ffprobe and list failed files on Incoming.
+
+## Test results (2026-10-26)
+
+**Regressions:** none. During implementation one filtered run failed `GroupPreviewControllerTests.With_no_library_path_each_file_has_an_error_and_null_paths` (untouched by this slice): Failed (accepted) as a flake by the developer, 2026-10-26; it passed alone and in 3 full runs.
+
+| Check | Result | Notes |
+|---|---|---|
+| Build | Passed | API and test project 0 warnings; `-p:OutDir=<scratchpad>` |
+| Typecheck | Passed | |
+| Backend tests | 446 passed, 0 failed | 2 full runs |
+| Frontend tests | 376 passed, 1 failed | `JobsPage.test.tsx > focuses the status line again when a second book with the same title is queued`: Failed (accepted), the slice 78 flake; no client code changed |
+| New tests | 4 of 4 present, passing | `GroupingServiceTests`: vanished corrected group deleted, M4B group kept; one file left keeps the group; a group with a job is kept. `ReviewControllerTests`: vanished corrected book leaves `GET /api/review` and `GET /api/groups` |
+| Manual: rescan the real incoming, groups 65 and 498 gone | Not run | needs the dev API restarted; neither group has a job (checked `GET /api/jobs`) |
+
+## Outcome (2026-10-26, commit 7f659f0)
+
+**Status:** Implemented
+**Summary:** `GroupRepository.ReplaceProposed` now also deletes, in the regroup's transaction, every user-corrected group with no job none of whose files was seen in the completed scan; its match, metadata, cover and candidates cascade. Partly missing books and books with any job stay.
+**Changed:** 3 code files (`GroupRepository.cs`, `GroupingServiceTests.cs`, `ReviewControllerTests.cs`)
+**Done when:** all 5 met; manual check not run.
+**Deviations:**
+- The tests rely on the existing `ON DELETE CASCADE` keys for the match, cover, metadata and candidates rather than checking each table: fine.
+**Follow-ups:**
+- Slice 94 (developer, 2026-10-26): scan files TagLibSharp can't parse through ffprobe; slice 95: process them by remuxing the MP3 copy with ffmpeg first.
